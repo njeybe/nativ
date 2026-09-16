@@ -107,6 +107,150 @@ export function detectProject(targetDir: string): ProjectInfo {
   }
 
   // -------------------------------------------------------------
+  // Dynamic Polyrepo & Multi-Service Discovery
+  // -------------------------------------------------------------
+  interface SubServiceInfo {
+    name: string;
+    dirPath: string;
+    manifests: string[];
+    runtime?: string;
+    framework?: string;
+    orm?: string;
+    ormConfig?: string;
+  }
+  const independentServices: SubServiceInfo[] = [];
+
+  try {
+    const rootItems = fs.readdirSync(resolvedTarget);
+    for (const item of rootItems) {
+      if (
+        item.startsWith('.') ||
+        item === 'node_modules' ||
+        item === 'vendor' ||
+        item === 'dist' ||
+        item === 'build' ||
+        item === 'templates' ||
+        item === 'bin' ||
+        item === 'public'
+      ) {
+        continue;
+      }
+
+      const itemPath = path.join(resolvedTarget, item);
+      if (fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory()) {
+        const subManifests: string[] = [];
+        if (fs.existsSync(path.join(itemPath, 'package.json'))) subManifests.push('package.json');
+        if (fs.existsSync(path.join(itemPath, 'composer.json'))) subManifests.push('composer.json');
+        if (fs.existsSync(path.join(itemPath, 'go.mod'))) subManifests.push('go.mod');
+        if (fs.existsSync(path.join(itemPath, 'Cargo.toml'))) subManifests.push('Cargo.toml');
+        if (fs.existsSync(path.join(itemPath, 'pom.xml'))) subManifests.push('pom.xml');
+        if (fs.existsSync(path.join(itemPath, 'build.gradle'))) subManifests.push('build.gradle');
+        if (fs.existsSync(path.join(itemPath, 'build.gradle.kts'))) subManifests.push('build.gradle.kts');
+        if (fs.existsSync(path.join(itemPath, 'pyproject.toml'))) subManifests.push('pyproject.toml');
+        if (fs.existsSync(path.join(itemPath, 'requirements.txt'))) subManifests.push('requirements.txt');
+
+        if (subManifests.length > 0) {
+          if (!keyDirectories.includes(item)) {
+            keyDirectories.push(item);
+          }
+
+          let subRuntime = '';
+          let subFramework = '';
+          let subOrm = '';
+          let subOrmConfig = '';
+
+          // Inspect sub-service stack
+          if (subManifests.includes('package.json')) {
+            subRuntime = 'Node.js';
+            try {
+              const subPkg = JSON.parse(readFileSafe(path.join(itemPath, 'package.json')));
+              const subDeps = { ...subPkg.dependencies, ...subPkg.devDependencies };
+              if (subDeps.typescript || fs.existsSync(path.join(itemPath, 'tsconfig.json'))) {
+                subRuntime = 'Node.js (TypeScript)';
+              }
+              if (subDeps.next) subFramework = 'Next.js';
+              else if (subDeps.nuxt) subFramework = 'Nuxt';
+              else if (subDeps.vite) subFramework = 'Vite / React/Vue';
+              else if (subDeps.express) subFramework = 'Express.js';
+              else if (subDeps.fastify) subFramework = 'Fastify';
+              else if (subDeps['@nestjs/core']) subFramework = 'NestJS';
+              else if (subDeps.react) subFramework = 'React';
+              else if (subDeps.vue) subFramework = 'Vue';
+              else if (subDeps.svelte || subDeps['@sveltejs/kit']) subFramework = 'Svelte';
+
+              if (subDeps.prisma || fs.existsSync(path.join(itemPath, 'prisma/schema.prisma'))) {
+                subOrm = 'Prisma ORM';
+                subOrmConfig = `${item}/prisma/schema.prisma`;
+              } else if (subDeps['drizzle-orm'] || fs.existsSync(path.join(itemPath, 'drizzle.config.ts'))) {
+                subOrm = 'Drizzle ORM';
+                subOrmConfig = `${item}/drizzle.config.ts`;
+              } else if (subDeps.typeorm) {
+                subOrm = 'TypeORM';
+              } else if (subDeps.mongoose) {
+                subOrm = 'Mongoose';
+              }
+            } catch {}
+          } else if (subManifests.includes('composer.json')) {
+            subRuntime = 'PHP';
+            try {
+              const subComposer = JSON.parse(readFileSafe(path.join(itemPath, 'composer.json')));
+              const allReq = { ...subComposer.require, ...subComposer['require-dev'] };
+              if (allReq['laravel/framework']) {
+                subFramework = 'Laravel';
+                subOrm = 'Eloquent ORM';
+              } else if (allReq['symfony/framework-bundle']) {
+                subFramework = 'Symfony';
+                subOrm = 'Doctrine ORM';
+              }
+            } catch {}
+            if (fs.existsSync(path.join(itemPath, 'database/migrations'))) {
+              subOrmConfig = `${item}/database/migrations`;
+              if (!subOrm) subOrm = 'SQL Migrations';
+            }
+          } else if (subManifests.includes('pyproject.toml') || subManifests.includes('requirements.txt')) {
+            subRuntime = 'Python';
+            const pyStr = readFileSafe(path.join(itemPath, 'requirements.txt')) + readFileSafe(path.join(itemPath, 'pyproject.toml'));
+            if (pyStr.includes('fastapi')) subFramework = 'FastAPI';
+            else if (pyStr.includes('django')) {
+              subFramework = 'Django';
+              subOrm = 'Django ORM';
+            } else if (pyStr.includes('flask')) subFramework = 'Flask';
+
+            if (pyStr.includes('sqlalchemy') || fs.existsSync(path.join(itemPath, 'alembic.ini'))) {
+              subOrm = 'SQLAlchemy';
+              if (fs.existsSync(path.join(itemPath, 'alembic.ini'))) {
+                subOrmConfig = `${item}/alembic.ini`;
+              }
+            }
+          } else if (subManifests.includes('go.mod')) {
+            subRuntime = 'Go';
+            const goStr = readFileSafe(path.join(itemPath, 'go.mod'));
+            if (goStr.includes('gin-gonic/gin')) subFramework = 'Gin';
+            else if (goStr.includes('gofiber/fiber')) subFramework = 'Fiber';
+            if (goStr.includes('gorm.io/gorm')) subOrm = 'GORM';
+          }
+
+          independentServices.push({
+            name: item,
+            dirPath: itemPath,
+            manifests: subManifests,
+            runtime: subRuntime,
+            framework: subFramework,
+            orm: subOrm,
+            ormConfig: subOrmConfig,
+          });
+
+          if (!monorepoWorkspaces.includes(`${item}/*`) && !candidateWorkspaceDirs.includes(item)) {
+            monorepoWorkspaces.push(`${item}/*`);
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore read error
+  }
+
+  // -------------------------------------------------------------
   // 2. Language & Framework Profiling Across Ecosystems
   // -------------------------------------------------------------
 
@@ -431,6 +575,35 @@ export function detectProject(targetDir: string): ProjectInfo {
     if (detectedSubpackagesCount > 0) {
       architecturePattern = 'Monorepo / Multi-Package Modular';
     }
+  } else if (ecosystemManifests.length === 0 && independentServices.length > 0) {
+    // Polyrepo / Multi-Service with no root manifest
+    repositoryType = 'Polyrepo / Multi-Service Workspace';
+    projectType = 'Multi-Service Application Suite';
+    architecturePattern = 'Polyrepo (Independent Sub-services)';
+
+    const serviceRuntimes = [...new Set(independentServices.map((s) => s.runtime).filter(Boolean))];
+    runtime = serviceRuntimes.length > 0 ? serviceRuntimes.join(' + ') : 'Polyglot / Multi-Runtime';
+
+    const serviceSummaries = independentServices.map((s) => {
+      const details = [s.framework, s.runtime].filter(Boolean).join(', ');
+      return details ? `${s.name} (${details})` : s.name;
+    });
+    framework = `Services detected: ${serviceSummaries.join(' | ')}`;
+
+    const serviceOrms = [...new Set(independentServices.map((s) => s.orm).filter(Boolean))];
+    if (serviceOrms.length > 0) {
+      databaseOrm = serviceOrms.join(' + ');
+    }
+
+    const serviceConfigs = independentServices.map((s) => s.ormConfig).filter(Boolean);
+    if (serviceConfigs.length > 0 && !detectedOrmConfig) {
+      detectedOrmConfig = serviceConfigs.join(', ');
+    }
+
+    const allSubManifests = independentServices.flatMap((s) => s.manifests.map((m) => `${s.name}/${m}`));
+    ecosystemManifests.push(...allSubManifests);
+
+    verificationCommand = independentServices.map((s) => `cd ${s.name} && test`).join('; ');
   } else if (ecosystemManifests.length > 0) {
     repositoryType = 'Standard Monolith';
   } else {
