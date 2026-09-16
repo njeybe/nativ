@@ -53,10 +53,25 @@ export async function runValidate(targetDirArg?: string) {
   }
 
   console.log(pc.bold('\n3. Sub-agent Profiles:'));
+  console.log(pc.dim('  Core Units:'));
   checkFile('.ai/subagents/database.md');
   checkFile('.ai/subagents/backend.md');
   checkFile('.ai/subagents/frontend.md');
   checkFile('.ai/subagents/qa-tester.md');
+
+  console.log(pc.dim('  Specialized Units:'));
+  const specializedProfiles = [
+    'flutter-developer.md',
+    'devops-agent.md',
+    'security-auditor.md',
+    'db-migration.md',
+  ];
+  for (const profile of specializedProfiles) {
+    const rel = `.ai/subagents/${profile}`;
+    if (fs.existsSync(path.join(targetDir, rel))) {
+      checkFile(rel);
+    }
+  }
 
   if (hasErrors) {
     console.log(pc.bold(pc.red('\n✖ Workflow contracts validation failed with errors.')));

@@ -81,7 +81,16 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   }
 
   // 7. Write Sub-agent specifications
-  const subagentFiles = ['backend.md', 'frontend.md', 'database.md', 'qa-tester.md'];
+  const subagentFiles = [
+    'backend.md',
+    'frontend.md',
+    'database.md',
+    'qa-tester.md',
+    'flutter-developer.md',
+    'devops-agent.md',
+    'security-auditor.md',
+    'db-migration.md',
+  ];
   for (const file of subagentFiles) {
     const src = path.join(templatesDir, 'dot-ai/subagents', file);
     const dest = path.join(subagentsDir, file);

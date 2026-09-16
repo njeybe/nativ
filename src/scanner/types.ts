@@ -14,11 +14,28 @@ export interface ProjectInfo {
   verificationCommand: string;
 }
 
+export type SubagentType =
+  // Core development & database units
+  | 'backend'
+  | 'frontend'
+  | 'database'
+  | 'qa-tester'
+  // Specialized functional units
+  | 'flutter-developer'
+  | 'devops-agent'
+  | 'security-auditor'
+  | 'db-migration'
+  // Compatibility aliases
+  | 'database-agent'
+  | 'backend-agent'
+  | 'frontend-agent'
+  | 'qa-agent';
+
 export interface MasterPlanTask {
   id: string;
   title: string;
   description: string;
-  assignedSubagent: 'database-agent' | 'backend-agent' | 'frontend-agent' | 'qa-agent';
+  assignedSubagent: SubagentType;
   dependencies: string[];
   targetFiles: string[];
   status: 'pending' | 'in_progress' | 'completed' | 'blocked';
