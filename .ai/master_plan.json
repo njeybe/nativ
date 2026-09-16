@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "projectName": "ai-agent-workflow",
+  "lastUpdated": "2026-09-16T12:03:45.804Z",
+  "overallStatus": "pending",
+  "activeMilestoneId": "m1",
+  "milestones": [
+    {
+      "id": "m1",
+      "name": "Initial Setup & Contract Verification",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "task-01",
+          "title": "Verify Environment & Dependencies",
+          "description": "Ensure package manager and required dependencies install and build cleanly.",
+          "assignedSubagent": "qa-agent",
+          "dependencies": [],
+          "targetFiles": ["package.json"],
+          "status": "pending",
+          "verificationCommand": "npm run build",
+          "notes": ""
+        }
+      ]
+    }
+  ]
+}

@@ -21,13 +21,14 @@ A portable, multi-tier autonomous software engineering harness that connects **A
                                  |
                Dispatches tasks to sub-agents
                                  v
-   +---------------+-------------+--------------+---------------+
-   |               |                            |               |
-   v               v                            v               v
-+----------+ +-----------+                 +----------+ +---------------+
-| Database | |  Backend  |                 | Frontend | |   QA/Tester   |
-|Sub-agent | | Sub-agent |                 |Sub-agent | |   Sub-agent   |
-+----------+ +-----------+                 +----------+ +---------------+
+   +-------------------------------+-------------------------------+
+   |                                                               |
+   v                                                               v
+[ Core Development Units ]                       [ Specialized Functional Units ]
+* Database (db & models)                         * Flutter Developer (mobile / widgets)
+* Backend (APIs & business logic)                * DevOps Agent (Docker, CI/CD, dynos)
+* Frontend (web UI & layout specs)               * Security Auditor (vulns & auth audits)
+* QA / Tester (test suites & regression)         * DB Migration (zero-downtime & indexing)
 ```
 
 ---
@@ -53,7 +54,7 @@ node /path/to/ai-agent-workflow/bin/cli.js init
    - `.ai/db_schema.json`: Strict JSON schema contract for database models and relationships.
    - `.ai/ui_specs.md`: Design system rules, component tree, interaction states, and accessibility specs.
    - `.ai/master_plan.json`: Execution milestones, dependency graph, assigned sub-agents, and verification commands.
-   - `.ai/subagents/`: Role guides for `backend.md`, `frontend.md`, `database.md`, and `qa-tester.md`.
+   - `.ai/subagents/`: Role guides for Core units (`backend.md`, `frontend.md`, `database.md`, `qa-tester.md`) and Specialized units (`flutter-developer.md`, `devops-agent.md`, `security-auditor.md`, `db-migration.md`).
 3. **Generates Directives:**
    - `CLAUDE.md`: Instructs **Claude Code CLI** to act as Project Manager, read `.ai/master_plan.json`, dispatch work to sub-agents, and track progress.
    - `GEMINI.md`: Instructs **Antigravity** to act as Macro-Architect, conduct Phase 1 intake, enforce database and UI/UX checkpoints, and export `.ai/` contracts.
@@ -119,10 +120,14 @@ ai-agent-workflow/
 │       ├── ui_specs.md           # UI/UX layout specification
 │       ├── master_plan.json      # Milestone & task dependency graph
 │       └── subagents/            # Sub-agent role specifications
-│           ├── backend.md
-│           ├── frontend.md
-│           ├── database.md
-│           └── qa-tester.md
+│           ├── backend.md            # Backend & API development
+│           ├── frontend.md           # Web UI/UX components & pages
+│           ├── database.md           # Schema migrations & ORM models
+│           ├── qa-tester.md          # Verification & automated test suites
+│           ├── flutter-developer.md  # Mobile screens, widgets & state
+│           ├── devops-agent.md       # Docker, CI/CD & deployment scripts
+│           ├── security-auditor.md   # Vulnerability scans & auth audit
+│           └── db-migration.md       # Zero-downtime & advanced indexing
 ├── package.json
 └── tsconfig.json
 ```
