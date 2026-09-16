@@ -113,6 +113,7 @@ export function detectProject(targetDir: string): ProjectInfo {
     name: string;
     dirPath: string;
     manifests: string[];
+    tech: string;
     runtime?: string;
     framework?: string;
     orm?: string;
@@ -138,45 +139,126 @@ export function detectProject(targetDir: string): ProjectInfo {
 
       const itemPath = path.join(resolvedTarget, item);
       if (fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory()) {
+        const subPathItem = (filename: string) => fs.existsSync(path.join(itemPath, filename));
+
         const subManifests: string[] = [];
-        if (fs.existsSync(path.join(itemPath, 'package.json'))) subManifests.push('package.json');
-        if (fs.existsSync(path.join(itemPath, 'composer.json'))) subManifests.push('composer.json');
-        if (fs.existsSync(path.join(itemPath, 'go.mod'))) subManifests.push('go.mod');
-        if (fs.existsSync(path.join(itemPath, 'Cargo.toml'))) subManifests.push('Cargo.toml');
-        if (fs.existsSync(path.join(itemPath, 'pom.xml'))) subManifests.push('pom.xml');
-        if (fs.existsSync(path.join(itemPath, 'build.gradle'))) subManifests.push('build.gradle');
-        if (fs.existsSync(path.join(itemPath, 'build.gradle.kts'))) subManifests.push('build.gradle.kts');
-        if (fs.existsSync(path.join(itemPath, 'pyproject.toml'))) subManifests.push('pyproject.toml');
-        if (fs.existsSync(path.join(itemPath, 'requirements.txt'))) subManifests.push('requirements.txt');
+        if (subPathItem('package.json')) subManifests.push('package.json');
+        if (subPathItem('composer.json')) subManifests.push('composer.json');
+        if (subPathItem('go.mod')) subManifests.push('go.mod');
+        if (subPathItem('Cargo.toml')) subManifests.push('Cargo.toml');
+        if (subPathItem('pom.xml')) subManifests.push('pom.xml');
+        if (subPathItem('build.gradle')) subManifests.push('build.gradle');
+        if (subPathItem('build.gradle.kts')) subManifests.push('build.gradle.kts');
+        if (subPathItem('pyproject.toml')) subManifests.push('pyproject.toml');
+        if (subPathItem('requirements.txt')) subManifests.push('requirements.txt');
+        if (subPathItem('pubspec.yaml')) subManifests.push('pubspec.yaml');
+        if (subPathItem('Podfile')) subManifests.push('Podfile');
+        if (subPathItem('AndroidManifest.xml')) subManifests.push('AndroidManifest.xml');
 
         if (subManifests.length > 0) {
           if (!keyDirectories.includes(item)) {
             keyDirectories.push(item);
           }
 
+          let subTech = 'Service';
           let subRuntime = '';
           let subFramework = '';
           let subOrm = '';
           let subOrmConfig = '';
 
-          // Inspect sub-service stack
-          if (subManifests.includes('package.json')) {
+          // Check mobile & ecosystem profiles
+          if (subPathItem('pubspec.yaml')) {
+            subTech = 'Flutter Mobile App';
+            subRuntime = 'Dart / Flutter';
+            subFramework = 'Flutter';
+          } else if (subPathItem('Podfile') || subPathItem('Info.plist') || fs.existsSync(path.join(itemPath, 'ios'))) {
+            subTech = 'Native iOS App (Swift/Obj-C)';
+            subRuntime = 'Swift / Objective-C';
+            subFramework = 'iOS Native';
+          } else if (subPathItem('AndroidManifest.xml') || (subPathItem('build.gradle') && !subPathItem('package.json'))) {
+            subTech = 'Native Android App (Kotlin/Java)';
+            subRuntime = 'Kotlin / Java (Android)';
+            subFramework = 'Android Native';
+          } else if (subPathItem('composer.json')) {
+            subRuntime = 'PHP';
+            subTech = 'PHP Backend';
+            try {
+              const subComposer = JSON.parse(readFileSafe(path.join(itemPath, 'composer.json')));
+              const allReq = { ...subComposer.require, ...subComposer['require-dev'] };
+              if (allReq['laravel/framework']) {
+                subFramework = 'Laravel';
+                subTech = 'Laravel Backend (PHP)';
+                subOrm = 'Eloquent ORM';
+              } else if (allReq['symfony/framework-bundle']) {
+                subFramework = 'Symfony';
+                subTech = 'Symfony Backend (PHP)';
+                subOrm = 'Doctrine ORM';
+              }
+            } catch {}
+            if (fs.existsSync(path.join(itemPath, 'database/migrations'))) {
+              subOrmConfig = `${item}/database/migrations`;
+              if (!subOrm) subOrm = 'SQL Migrations';
+            }
+          } else if (subPathItem('pyproject.toml') || subPathItem('requirements.txt')) {
+            subRuntime = 'Python';
+            subTech = 'Python Backend';
+            const pyStr = readFileSafe(path.join(itemPath, 'requirements.txt')) + readFileSafe(path.join(itemPath, 'pyproject.toml'));
+            if (pyStr.includes('fastapi')) {
+              subFramework = 'FastAPI';
+              subTech = 'FastAPI Backend (Python)';
+            } else if (pyStr.includes('django')) {
+              subFramework = 'Django';
+              subTech = 'Django Backend (Python)';
+              subOrm = 'Django ORM';
+            } else if (pyStr.includes('flask')) {
+              subFramework = 'Flask';
+              subTech = 'Flask Backend (Python)';
+            }
+
+            if (pyStr.includes('sqlalchemy') || fs.existsSync(path.join(itemPath, 'alembic.ini'))) {
+              subOrm = 'SQLAlchemy';
+              if (fs.existsSync(path.join(itemPath, 'alembic.ini'))) {
+                subOrmConfig = `${item}/alembic.ini`;
+              }
+            }
+          } else if (subPathItem('go.mod')) {
+            subRuntime = 'Go';
+            subTech = 'Go Backend';
+            const goStr = readFileSafe(path.join(itemPath, 'go.mod'));
+            if (goStr.includes('gin-gonic/gin')) {
+              subFramework = 'Gin';
+              subTech = 'Gin Backend (Go)';
+            } else if (goStr.includes('gofiber/fiber')) {
+              subFramework = 'Fiber';
+              subTech = 'Fiber Backend (Go)';
+            }
+            if (goStr.includes('gorm.io/gorm')) subOrm = 'GORM';
+          } else if (subPathItem('package.json')) {
             subRuntime = 'Node.js';
+            subTech = 'Node.js Service';
             try {
               const subPkg = JSON.parse(readFileSafe(path.join(itemPath, 'package.json')));
               const subDeps = { ...subPkg.dependencies, ...subPkg.devDependencies };
               if (subDeps.typescript || fs.existsSync(path.join(itemPath, 'tsconfig.json'))) {
                 subRuntime = 'Node.js (TypeScript)';
               }
-              if (subDeps.next) subFramework = 'Next.js';
-              else if (subDeps.nuxt) subFramework = 'Nuxt';
-              else if (subDeps.vite) subFramework = 'Vite / React/Vue';
-              else if (subDeps.express) subFramework = 'Express.js';
-              else if (subDeps.fastify) subFramework = 'Fastify';
-              else if (subDeps['@nestjs/core']) subFramework = 'NestJS';
-              else if (subDeps.react) subFramework = 'React';
-              else if (subDeps.vue) subFramework = 'Vue';
-              else if (subDeps.svelte || subDeps['@sveltejs/kit']) subFramework = 'Svelte';
+
+              if (subDeps['react-native'] || subDeps['expo']) {
+                subTech = 'React Native / Expo Mobile App';
+                subFramework = subDeps.expo ? 'Expo Mobile App' : 'React Native';
+              } else if (subDeps.next) {
+                subTech = 'Next.js Web App';
+                subFramework = 'Next.js';
+              } else if (subDeps.nuxt) {
+                subTech = 'Nuxt Web App';
+                subFramework = 'Nuxt';
+              } else if (subDeps.vite || subDeps.react || subDeps.vue) {
+                subTech = 'React / Web Frontend';
+                subFramework = subDeps.vite ? 'Vite Frontend' : (subDeps.react ? 'React SPA' : 'Vue SPA');
+              } else if (subDeps.express || subDeps['@nestjs/core'] || subDeps.fastify) {
+                subTech = 'Node.js Backend';
+                subFramework = subDeps['@nestjs/core'] ? 'NestJS' : (subDeps.fastify ? 'Fastify' : 'Express.js');
+              }
 
               if (subDeps.prisma || fs.existsSync(path.join(itemPath, 'prisma/schema.prisma'))) {
                 subOrm = 'Prisma ORM';
@@ -189,51 +271,16 @@ export function detectProject(targetDir: string): ProjectInfo {
               } else if (subDeps.mongoose) {
                 subOrm = 'Mongoose';
               }
-            } catch {}
-          } else if (subManifests.includes('composer.json')) {
-            subRuntime = 'PHP';
-            try {
-              const subComposer = JSON.parse(readFileSafe(path.join(itemPath, 'composer.json')));
-              const allReq = { ...subComposer.require, ...subComposer['require-dev'] };
-              if (allReq['laravel/framework']) {
-                subFramework = 'Laravel';
-                subOrm = 'Eloquent ORM';
-              } else if (allReq['symfony/framework-bundle']) {
-                subFramework = 'Symfony';
-                subOrm = 'Doctrine ORM';
-              }
-            } catch {}
-            if (fs.existsSync(path.join(itemPath, 'database/migrations'))) {
-              subOrmConfig = `${item}/database/migrations`;
-              if (!subOrm) subOrm = 'SQL Migrations';
+            } catch {
+              subTech = 'Node.js / Web App';
             }
-          } else if (subManifests.includes('pyproject.toml') || subManifests.includes('requirements.txt')) {
-            subRuntime = 'Python';
-            const pyStr = readFileSafe(path.join(itemPath, 'requirements.txt')) + readFileSafe(path.join(itemPath, 'pyproject.toml'));
-            if (pyStr.includes('fastapi')) subFramework = 'FastAPI';
-            else if (pyStr.includes('django')) {
-              subFramework = 'Django';
-              subOrm = 'Django ORM';
-            } else if (pyStr.includes('flask')) subFramework = 'Flask';
-
-            if (pyStr.includes('sqlalchemy') || fs.existsSync(path.join(itemPath, 'alembic.ini'))) {
-              subOrm = 'SQLAlchemy';
-              if (fs.existsSync(path.join(itemPath, 'alembic.ini'))) {
-                subOrmConfig = `${item}/alembic.ini`;
-              }
-            }
-          } else if (subManifests.includes('go.mod')) {
-            subRuntime = 'Go';
-            const goStr = readFileSafe(path.join(itemPath, 'go.mod'));
-            if (goStr.includes('gin-gonic/gin')) subFramework = 'Gin';
-            else if (goStr.includes('gofiber/fiber')) subFramework = 'Fiber';
-            if (goStr.includes('gorm.io/gorm')) subOrm = 'GORM';
           }
 
           independentServices.push({
             name: item,
             dirPath: itemPath,
             manifests: subManifests,
+            tech: subTech,
             runtime: subRuntime,
             framework: subFramework,
             orm: subOrm,
@@ -286,7 +333,9 @@ export function detectProject(targetDir: string): ProjectInfo {
       }
 
       // Frameworks
-      if (deps.next) framework = `Next.js (${deps.next})`;
+      if (deps['react-native'] || deps.expo) {
+        framework = deps.expo ? 'Expo Mobile App' : 'React Native';
+      } else if (deps.next) framework = `Next.js (${deps.next})`;
       else if (deps.nuxt) framework = `Nuxt (${deps.nuxt})`;
       else if (deps.remix || deps['@remix-run/react']) framework = 'Remix';
       else if (deps.astro) framework = 'Astro';
@@ -518,6 +567,18 @@ export function detectProject(targetDir: string): ProjectInfo {
     }
   }
 
+  // --- Ecosystem G: Mobile / Flutter (pubspec.yaml) ---
+  if (fileExists('pubspec.yaml')) {
+    ecosystemManifests.push('pubspec.yaml');
+    if (runtime === 'Unknown / Greenfield') {
+      runtime = 'Dart / Flutter';
+      framework = 'Flutter Mobile App';
+      projectType = 'Mobile Application (Flutter)';
+      packageManager = 'flutter pub';
+      verificationCommand = 'flutter test';
+    }
+  }
+
   // -------------------------------------------------------------
   // 3. Database & ORM Layer Detection (Config files & Migrations)
   // -------------------------------------------------------------
@@ -584,10 +645,7 @@ export function detectProject(targetDir: string): ProjectInfo {
     const serviceRuntimes = [...new Set(independentServices.map((s) => s.runtime).filter(Boolean))];
     runtime = serviceRuntimes.length > 0 ? serviceRuntimes.join(' + ') : 'Polyglot / Multi-Runtime';
 
-    const serviceSummaries = independentServices.map((s) => {
-      const details = [s.framework, s.runtime].filter(Boolean).join(', ');
-      return details ? `${s.name} (${details})` : s.name;
-    });
+    const serviceSummaries = independentServices.map((s) => `${s.name} (${s.tech})`);
     framework = `Services detected: ${serviceSummaries.join(' | ')}`;
 
     const serviceOrms = [...new Set(independentServices.map((s) => s.orm).filter(Boolean))];
