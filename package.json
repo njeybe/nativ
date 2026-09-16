@@ -1,0 +1,41 @@
+{
+  "name": "ai-agent-workflow",
+  "version": "1.0.0",
+  "description": "Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "ai-agent-workflow": "./bin/cli.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prepare": "npm run build",
+    "start": "node bin/cli.js"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "workflow",
+    "claude-code",
+    "antigravity",
+    "orchestration",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "typescript": "^5.5.4"
+  }
+}

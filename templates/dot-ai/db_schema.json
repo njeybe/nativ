@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "projectName": "{{PROJECT_NAME}}",
+  "updatedAt": "{{TIMESTAMP}}",
+  "engine": "{{DETECTED_DATABASE_ENGINE}}",
+  "tables": [
+    {
+      "name": "example_entity",
+      "description": "Demonstration table definition. Antigravity updates this during Phase 1A.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primaryKey": true,
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "primaryKey": false,
+          "nullable": false,
+          "default": "NOW()"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "primaryKey": false,
+          "nullable": false,
+          "default": "NOW()"
+        }
+      ],
+      "indexes": [],
+      "foreignKeys": []
+    }
+  ],
+  "migrations": []
+}
