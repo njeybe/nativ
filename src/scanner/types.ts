@@ -12,6 +12,10 @@ export interface ProjectInfo {
   architecturePattern: string;
   keyDirectories: string[];
   verificationCommand: string;
+  repositoryType: string;
+  monorepoWorkspaces: string[];
+  detectedOrmConfig: string;
+  ecosystemManifests: string[];
 }
 
 export type SubagentType =

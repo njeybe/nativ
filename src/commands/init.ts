@@ -27,8 +27,22 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   console.log(pc.yellow('🔍 Scanning repository structure & tech stack...'));
   const projectInfo = detectProject(targetDir);
 
-  console.log(pc.green(`✔ Identified: ${pc.bold(projectInfo.projectName)} (${projectInfo.projectType})`));
-  console.log(pc.dim(`  Runtime: ${projectInfo.runtime} | Framework: ${projectInfo.framework} | ORM: ${projectInfo.databaseOrm}`));
+  console.log(pc.green(`✔ Identified: ${pc.bold(projectInfo.projectName)} (${pc.cyan(projectInfo.repositoryType)})`));
+  console.log(pc.dim('  ├─ Workspace Topology: ') + pc.white(projectInfo.repositoryType));
+  if (projectInfo.monorepoWorkspaces.length > 0) {
+    console.log(pc.dim('  │  └─ Workspaces: ') + pc.white(projectInfo.monorepoWorkspaces.join(', ')));
+  }
+  console.log(pc.dim('  ├─ Runtime & Language: ') + pc.white(projectInfo.runtime));
+  console.log(pc.dim('  ├─ Framework: ') + pc.white(projectInfo.framework));
+  const ormDisplay = projectInfo.detectedOrmConfig
+    ? `${projectInfo.databaseOrm} (${projectInfo.detectedOrmConfig})`
+    : projectInfo.databaseOrm;
+  console.log(pc.dim('  ├─ Database & ORM: ') + pc.white(ormDisplay));
+  if (projectInfo.ecosystemManifests.length > 0) {
+    console.log(pc.dim('  ├─ Manifests Scanned: ') + pc.dim(projectInfo.ecosystemManifests.join(', ')));
+  }
+  console.log(pc.dim('  └─ Verification Gate: ') + pc.cyan(projectInfo.verificationCommand));
+  console.log();
 
   // 2. Prepare directories
   const aiDir = path.join(targetDir, '.ai');
