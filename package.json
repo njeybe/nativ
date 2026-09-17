@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "agentj": "./bin/cli.js",
     "ai-agent-workflow": "./bin/cli.js"
   },
   "files": [

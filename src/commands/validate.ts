@@ -42,12 +42,22 @@ export async function runValidate(targetDirArg?: string) {
   console.log(pc.bold('\n2. Core Specification Contracts:'));
   checkFile('.ai/context.md');
   checkFile('.ai/db_schema.json', true);
+  checkFile('.ai/api_contracts.json', true);
   checkFile('.ai/ui_specs.md');
   const plan = checkFile('.ai/master_plan.json', true);
 
   if (plan) {
     if (!Array.isArray(plan.milestones)) {
       console.log(pc.red('  ✖ .ai/master_plan.json missing `milestones` array'));
+      hasErrors = true;
+    }
+  }
+
+  const escalationPath = path.join(targetDir, '.ai/escalation.json');
+  if (fs.existsSync(escalationPath)) {
+    const escData = checkFile('.ai/escalation.json', true);
+    if (escData && !Array.isArray(escData.escalations)) {
+      console.log(pc.red('  ✖ .ai/escalation.json missing `escalations` array'));
       hasErrors = true;
     }
   }
