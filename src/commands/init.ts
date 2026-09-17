@@ -74,7 +74,18 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
     console.log(pc.green('✔ Created .ai/db_schema.json'));
   }
 
-  // 5. Write .ai/ui_specs.md
+  // 5. Write .ai/api_contracts.json
+  const apiTemplate = fs.readFileSync(path.join(templatesDir, 'dot-ai/api_contracts.json'), 'utf8');
+  const apiContent = apiTemplate
+    .replace(/\{\{PROJECT_NAME\}\}/g, projectInfo.projectName)
+    .replace(/\{\{TIMESTAMP\}\}/g, timestamp);
+  const apiPath = path.join(aiDir, 'api_contracts.json');
+  if (!fs.existsSync(apiPath) || options.force) {
+    fs.writeFileSync(apiPath, apiContent, 'utf8');
+    console.log(pc.green('✔ Created .ai/api_contracts.json'));
+  }
+
+  // 6. Write .ai/ui_specs.md
   const uiTemplate = fs.readFileSync(path.join(templatesDir, 'dot-ai/ui_specs.md'), 'utf8');
   const uiPath = path.join(aiDir, 'ui_specs.md');
   if (!fs.existsSync(uiPath) || options.force) {
@@ -82,7 +93,7 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
     console.log(pc.green('✔ Created .ai/ui_specs.md'));
   }
 
-  // 6. Write .ai/master_plan.json
+  // 7. Write .ai/master_plan.json
   const planTemplate = fs.readFileSync(path.join(templatesDir, 'dot-ai/master_plan.json'), 'utf8');
   const planContent = planTemplate
     .replace(/\{\{PROJECT_NAME\}\}/g, projectInfo.projectName)
@@ -133,6 +144,6 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   console.log(pc.bold(pc.cyan('\n✨ Pipeline Scaffolding Completed Successfully!\n')));
   console.log(pc.bold('Next Steps in the 3-Tier Workflow:'));
   console.log(pc.white(` 1. Open ${pc.magenta('Antigravity')} (Tier 1 Macro-Architect) to conduct feature intake & design checkpoints.`));
-  console.log(pc.white(` 2. Antigravity finalizes ${pc.cyan('.ai/db_schema.json')}, ${pc.cyan('.ai/ui_specs.md')}, and ${pc.cyan('.ai/master_plan.json')}.`));
+  console.log(pc.white(` 2. Antigravity finalizes ${pc.cyan('.ai/db_schema.json')}, ${pc.cyan('.ai/api_contracts.json')}, ${pc.cyan('.ai/ui_specs.md')}, and ${pc.cyan('.ai/master_plan.json')}.`));
   console.log(pc.white(` 3. Run ${pc.green('claude')} in this directory to let the Middle-Tier PM autonomously execute tasks with sub-agents!\n`));
 }

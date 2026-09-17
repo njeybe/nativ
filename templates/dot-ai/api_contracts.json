@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "projectName": "{{PROJECT_NAME}}",
+  "updatedAt": "{{TIMESTAMP}}",
+  "baseUrl": "/api/v1",
+  "authScheme": "Bearer JWT",
+  "endpoints": [
+    {
+      "id": "health-check",
+      "path": "/health",
+      "method": "GET",
+      "description": "System health and runtime status check",
+      "auth": false,
+      "request": {
+        "headers": {},
+        "queryParams": {},
+        "pathParams": {},
+        "body": null
+      },
+      "responses": {
+        "200": {
+          "description": "System is healthy and operational",
+          "body": {
+            "status": "ok",
+            "uptime": "number",
+            "timestamp": "string"
+          }
+        }
+      }
+    },
+    {
+      "id": "example-entity-list",
+      "path": "/entities",
+      "method": "GET",
+      "description": "Demonstration collection endpoint. Antigravity updates this during Phase 1 API design.",
+      "auth": true,
+      "request": {
+        "headers": {
+          "Authorization": "Bearer <token>"
+        },
+        "queryParams": {
+          "limit": "integer (optional, default 20)",
+          "offset": "integer (optional, default 0)"
+        },
+        "pathParams": {},
+        "body": null
+      },
+      "responses": {
+        "200": {
+          "description": "List of entities matching query filter",
+          "body": {
+            "data": "array of example_entity",
+            "total": "integer"
+          }
+        },
+        "401": {
+          "description": "Unauthorized access missing or invalid token",
+          "body": {
+            "error": "Unauthorized"
+          }
+        }
+      }
+    }
+  ]
+}

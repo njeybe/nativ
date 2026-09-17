@@ -52,12 +52,13 @@ node /path/to/ai-agent-workflow/bin/cli.js init
 2. **Scaffolds `.ai/` Contract Directory:**
    - `.ai/context.md`: Project description, tech stack, architecture, and engineering guardrails.
    - `.ai/db_schema.json`: Strict JSON schema contract for database models and relationships.
+   - `.ai/api_contracts.json`: Formal REST/GraphQL endpoints, payload structures, and response schemas.
    - `.ai/ui_specs.md`: Design system rules, component tree, interaction states, and accessibility specs.
    - `.ai/master_plan.json`: Execution milestones, dependency graph, assigned sub-agents, and verification commands.
    - `.ai/subagents/`: Role guides for Core units (`backend.md`, `frontend.md`, `database.md`, `qa-tester.md`) and Specialized units (`flutter-developer.md`, `devops-agent.md`, `security-auditor.md`, `db-migration.md`).
 3. **Generates Directives:**
    - `CLAUDE.md`: Instructs **Claude Code CLI** to act as Project Manager, read `.ai/master_plan.json`, dispatch work to sub-agents, and track progress.
-   - `GEMINI.md`: Instructs **Antigravity** to act as Macro-Architect, conduct Phase 1 intake, enforce database and UI/UX checkpoints, and export `.ai/` contracts.
+   - `GEMINI.md`: Instructs **Antigravity** to act as Macro-Architect, conduct Phase 1 intake, enforce database, API, and UI/UX checkpoints, and export `.ai/` contracts.
 
 ---
 
@@ -67,12 +68,15 @@ node /path/to/ai-agent-workflow/bin/cli.js init
 1. Antigravity inspects `.ai/context.md` and interviews the user about the requested feature or objective.
 2. **Database Schema Design:** Antigravity outlines the database tables and halts for user confirmation.
    - 🛑 *Stopping Point: Awaiting database schema approval.*
-3. **UI/UX Layout Design:** Antigravity designs component trees and styling layouts, then halts for user confirmation.
+3. **API Contract Design:** Antigravity specifies endpoints, route params, request bodies, and response schemas.
+   - 🛑 *Stopping Point: Awaiting API contract approval.*
+4. **UI/UX Layout Design:** Antigravity designs component trees and styling layouts, then halts for user confirmation.
    - 🛑 *Stopping Point: Awaiting UI/UX approval.*
 
 ### Phase 2: State Export & Contract Generation (Antigravity)
 Upon receiving approvals, Antigravity exports the finalized specifications:
 - `.ai/db_schema.json`
+- `.ai/api_contracts.json`
 - `.ai/ui_specs.md`
 - `.ai/master_plan.json`
 
@@ -81,7 +85,7 @@ Open Claude Code CLI in your project terminal:
 ```bash
 claude
 ```
-Claude Code automatically reads `CLAUDE.md`, evaluates `.ai/master_plan.json`, assumes the assigned sub-agent roles, implements code changes, runs tests, and checks off tasks until the milestone is complete!
+Claude Code reads `CLAUDE.md`, calls `npx ai-agent-workflow task next` to fetch only the active work item and its recommended contract slice (JIT context slicing), implements the scoped changes, verifies them via automated test runs, and updates status programmatically via `task complete`!
 
 ---
 
@@ -92,6 +96,14 @@ Claude Code automatically reads `CLAUDE.md`, evaluates `.ai/master_plan.json`, a
 | `ai-agent-workflow init [targetDir]` | Scans target project and generates `.ai/`, `CLAUDE.md`, and `GEMINI.md`. Use `-f` / `--force` to overwrite. |
 | `ai-agent-workflow status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
 | `ai-agent-workflow validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
+| `ai-agent-workflow task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
+| `ai-agent-workflow task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
+| `ai-agent-workflow task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
+| `ai-agent-workflow task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
+| `ai-agent-workflow task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
+| `ai-agent-workflow worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
+| `ai-agent-workflow worktree list` | Lists all active agent git worktrees. |
+| `ai-agent-workflow worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
 
 ---
 
@@ -106,7 +118,9 @@ ai-agent-workflow/
 │   ├── commands/
 │   │   ├── init.ts               # Project initialization command
 │   │   ├── status.ts             # Status report command
-│   │   └── validate.ts           # Schema validation command
+│   │   ├── validate.ts           # Schema validation command
+│   │   ├── task.ts               # JIT task lifecycle commands (next/start/complete/block/escalate)
+│   │   └── worktree.ts           # Parallel agent Git worktree isolation (create/list/merge)
 │   └── scanner/
 │       ├── types.ts              # TypeScript interfaces
 │       ├── detector.ts           # Multi-ecosystem tech stack scanner
@@ -117,6 +131,7 @@ ai-agent-workflow/
 │   └── dot-ai/
 │       ├── context.md            # Auto-generated project context & guardrails
 │       ├── db_schema.json        # Database schema contract
+│       ├── api_contracts.json    # REST/GraphQL API endpoint & payload contract
 │       ├── ui_specs.md           # UI/UX layout specification
 │       ├── master_plan.json      # Milestone & task dependency graph
 │       └── subagents/            # Sub-agent role specifications

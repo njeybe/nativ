@@ -63,3 +63,33 @@ export interface MasterPlan {
   activeMilestoneId: string;
   milestones: MasterPlanMilestone[];
 }
+
+export type EscalationType =
+  | 'contract_drift'
+  | 'schema_flaw'
+  | 'missing_credential'
+  | 'dependency_conflict'
+  | 'architectural_ambiguity';
+
+export interface EscalationRecord {
+  id: string;
+  taskId: string;
+  type: EscalationType;
+  reportedBy: SubagentType;
+  timestamp: string;
+  summary: string;
+  details?: string;
+  affectedContracts: string[];
+  recommendedAction?: string;
+  status: 'pending_review' | 'resolved' | 'dismissed';
+  resolutionNotes?: string;
+}
+
+export interface EscalationFile {
+  $schema?: string;
+  version: string;
+  projectName: string;
+  lastUpdated: string;
+  escalations: EscalationRecord[];
+}
+
