@@ -3,6 +3,7 @@ import { runInit } from './commands/init.js';
 import { runStatus } from './commands/status.js';
 import { runValidate } from './commands/validate.js';
 import {
+  runTaskList,
   runTaskNext,
   runTaskStart,
   runTaskComplete,
@@ -54,9 +55,31 @@ export function createProgram(): Command {
       await runValidate(targetDir);
     });
 
+  program
+    .command('tasks [targetDir]')
+    .description('List all project tasks with optional filters (--available, --status, --milestone, --json)')
+    .option('-a, --available', 'Show only available unblocked tasks ready for execution')
+    .option('-s, --status <status>', 'Filter tasks by status (pending, in_progress, completed, blocked)')
+    .option('-m, --milestone <id>', 'Filter tasks by milestone ID or name')
+    .option('--json', 'Output filtered tasks as JSON')
+    .action(async (targetDir, options) => {
+      await runTaskList(targetDir, options);
+    });
+
   const task = program
     .command('task')
     .description('Manage task lifecycle and JIT context slicing in .ai/master_plan.json');
+
+  task
+    .command('list [targetDir]')
+    .description('List all project tasks with optional filters (--available, --status, --milestone, --json)')
+    .option('-a, --available', 'Show only available unblocked tasks ready for execution')
+    .option('-s, --status <status>', 'Filter tasks by status (pending, in_progress, completed, blocked)')
+    .option('-m, --milestone <id>', 'Filter tasks by milestone ID or name')
+    .option('--json', 'Output filtered tasks as JSON')
+    .action(async (targetDir, options) => {
+      await runTaskList(targetDir, options);
+    });
 
   task
     .command('next [targetDir]')

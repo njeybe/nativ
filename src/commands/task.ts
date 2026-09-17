@@ -86,6 +86,130 @@ export function getRecommendedContractSlice(assignedSubagent: SubagentType): str
   return '.ai/context.md';
 }
 
+export async function runTaskList(
+  targetDirArg?: string,
+  options: {
+    available?: boolean;
+    status?: string;
+    milestone?: string;
+    json?: boolean;
+  } = {}
+) {
+  const { planPath } = getPlanPath(targetDirArg);
+  const plan = loadPlan(planPath);
+  if (!plan) {
+    process.exitCode = 1;
+    return;
+  }
+
+  const completedTaskIds = new Set<string>();
+  for (const m of plan.milestones) {
+    for (const t of m.tasks) {
+      if (t.status === 'completed') {
+        completedTaskIds.add(t.id);
+      }
+    }
+  }
+
+  const results: Array<{
+    task: MasterPlanTask;
+    milestoneId: string;
+    milestoneName: string;
+    isAvailable: boolean;
+  }> = [];
+
+  for (const m of plan.milestones) {
+    if (options.milestone && m.id !== options.milestone && !m.name.toLowerCase().includes(options.milestone.toLowerCase())) {
+      continue;
+    }
+
+    for (const t of m.tasks) {
+      const deps = t.dependencies || [];
+      const depsSatisfied = deps.every((d) => completedTaskIds.has(d));
+      const isAvailable = (t.status === 'pending' || t.status === 'in_progress') && depsSatisfied;
+
+      if (options.available && !isAvailable) {
+        continue;
+      }
+      if (options.status && t.status !== options.status) {
+        continue;
+      }
+
+      results.push({
+        task: t,
+        milestoneId: m.id,
+        milestoneName: m.name,
+        isAvailable,
+      });
+    }
+  }
+
+  if (options.json) {
+    const jsonOutput = results.map(({ task, milestoneId, milestoneName, isAvailable }) => ({
+      ...task,
+      milestoneId,
+      milestoneName,
+      isAvailable,
+      roleGuide: getRoleGuide(task.assignedSubagent),
+      contractSlice: getRecommendedContractSlice(task.assignedSubagent),
+    }));
+    console.log(JSON.stringify(jsonOutput, null, 2));
+    return;
+  }
+
+  console.log(pc.bold(pc.cyan(`\n📋 AgentJ Tasks: ${plan.projectName}`)));
+  console.log(pc.dim(`Overall Status: ${plan.overallStatus.toUpperCase()} | Active Milestone: ${plan.activeMilestoneId}\n`));
+
+  if (results.length === 0) {
+    console.log(pc.yellow('  No tasks match the specified filters.\n'));
+    return;
+  }
+
+  const grouped = new Map<string, typeof results>();
+  for (const item of results) {
+    const key = `[${item.milestoneId}] ${item.milestoneName}`;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+    }
+    grouped.get(key)!.push(item);
+  }
+
+  for (const [milestoneTitle, items] of grouped.entries()) {
+    console.log(pc.bold(`🚩 Milestone ${milestoneTitle}`));
+    for (const { task: t, isAvailable } of items) {
+      let statusBadge = pc.gray('○ pending');
+      if (t.status === 'completed') {
+        statusBadge = pc.green('✔ completed');
+      } else if (t.status === 'in_progress') {
+        statusBadge = pc.yellow('▶ in_progress');
+      } else if (t.status === 'blocked') {
+        statusBadge = pc.red('✖ blocked');
+      }
+
+      const readyBadge = isAvailable && t.status === 'pending' ? pc.bgGreen(pc.black(' READY ')) + ' ' : '';
+      console.log(`  ${statusBadge} ${readyBadge}${pc.bold(t.id)}: ${t.title}`);
+      const depText = t.dependencies && t.dependencies.length > 0 ? pc.dim(`deps: ${t.dependencies.join(', ')}`) : pc.dim('no deps');
+      const filesText = t.targetFiles && t.targetFiles.length > 0 ? pc.cyan(t.targetFiles.join(', ')) : pc.dim('none');
+      console.log(pc.dim(`    Agent: `) + pc.magenta(`[${t.assignedSubagent}]`) + pc.dim(` | ${depText} | Files: ${filesText}`));
+      if (t.notes) {
+        console.log(pc.dim(`    Note: `) + (t.status === 'blocked' ? pc.red(t.notes) : pc.dim(t.notes)));
+      }
+    }
+    console.log();
+  }
+
+  const completedCount = results.filter((r) => r.task.status === 'completed').length;
+  const inProgressCount = results.filter((r) => r.task.status === 'in_progress').length;
+  const pendingCount = results.filter((r) => r.task.status === 'pending').length;
+  const blockedCount = results.filter((r) => r.task.status === 'blocked').length;
+
+  console.log(pc.dim(`Showing ${results.length} tasks: `) +
+    pc.green(`${completedCount} completed`) + pc.dim(', ') +
+    pc.yellow(`${inProgressCount} in progress`) + pc.dim(', ') +
+    pc.gray(`${pendingCount} pending`) + pc.dim(', ') +
+    pc.red(`${blockedCount} blocked`) + '\n');
+}
+
 export async function runTaskNext(targetDirArg?: string, options: { json?: boolean } = {}) {
   const { planPath } = getPlanPath(targetDirArg);
   const plan = loadPlan(planPath);

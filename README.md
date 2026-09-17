@@ -99,6 +99,7 @@ Claude Code reads `CLAUDE.md`, calls `npx ai-agent-workflow task next` to fetch 
 | `agentj update [targetDir]` | Safely synchronizes latest directives, sub-agents, and missing contracts without touching project state. |
 | `agentj status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
 | `agentj validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
+| `agentj task list [targetDir]` | Lists all project tasks with filtering (`--available`, `--status`, `--milestone`, `--json`). Alias: `agentj tasks`. |
 | `agentj task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
 | `agentj task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
 | `agentj task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
