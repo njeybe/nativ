@@ -1,6 +1,8 @@
-# AI Agent Workflow (`ai-agent-workflow`)
+# AgentJ (`agentj`)
 
 A portable, multi-tier autonomous software engineering harness that connects **Antigravity (Strategy & Planning)** with **Claude Code CLI (Project Manager)** and downstream **Sub-agents** (Backend, Frontend, Database, QA).
+
+> **Binary Name:** `agentj` *(alias: `ai-agent-workflow`)*
 
 ---
 
@@ -40,11 +42,11 @@ A portable, multi-tier autonomous software engineering harness that connects **A
 Run the CLI tool inside your target project directory:
 
 ```bash
-# Via npx (once published) or local runner:
-npx ai-agent-workflow init
+# Using agentj globally (via npm link or global install):
+agentj init
 
-# Or in a local development environment:
-node /path/to/ai-agent-workflow/bin/cli.js init
+# Or via npx:
+npx agentj init
 ```
 
 ### What `init` Does:
@@ -89,21 +91,22 @@ Claude Code reads `CLAUDE.md`, calls `npx ai-agent-workflow task next` to fetch 
 
 ---
 
-## 🛠 CLI Commands
+## 🛠 CLI Commands (`agentj`)
 
 | Command | Description |
 | :--- | :--- |
-| `ai-agent-workflow init [targetDir]` | Scans target project and generates `.ai/`, `CLAUDE.md`, and `GEMINI.md`. Use `-f` / `--force` to overwrite. |
-| `ai-agent-workflow status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
-| `ai-agent-workflow validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
-| `ai-agent-workflow task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
-| `ai-agent-workflow task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
-| `ai-agent-workflow task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
-| `ai-agent-workflow task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
-| `ai-agent-workflow task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
-| `ai-agent-workflow worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
-| `ai-agent-workflow worktree list` | Lists all active agent git worktrees. |
-| `ai-agent-workflow worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
+| `agentj init [targetDir]` | Scans target project and generates `.ai/`, `CLAUDE.md`, and `GEMINI.md`. Use `-f` to overwrite. |
+| `agentj update [targetDir]` | Safely synchronizes latest directives, sub-agents, and missing contracts without touching project state. |
+| `agentj status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
+| `agentj validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
+| `agentj task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
+| `agentj task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
+| `agentj task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
+| `agentj task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
+| `agentj task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
+| `agentj worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
+| `agentj worktree list` | Lists all active agent git worktrees. |
+| `agentj worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
 
 ---
 
@@ -112,11 +115,12 @@ Claude Code reads `CLAUDE.md`, calls `npx ai-agent-workflow task next` to fetch 
 ```
 ai-agent-workflow/
 ├── bin/
-│   └── cli.js                    # Executable binary entrypoint
+│   └── cli.js                    # Executable binary entrypoint (agentj)
 ├── src/
 │   ├── index.ts                  # Commander CLI definition
 │   ├── commands/
 │   │   ├── init.ts               # Project initialization command
+│   │   ├── update.ts             # Non-destructive framework sync command
 │   │   ├── status.ts             # Status report command
 │   │   ├── validate.ts           # Schema validation command
 │   │   ├── task.ts               # JIT task lifecycle commands (next/start/complete/block/escalate)

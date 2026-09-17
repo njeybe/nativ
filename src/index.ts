@@ -14,12 +14,14 @@ import {
   runWorktreeList,
   runWorktreeMerge,
 } from './commands/worktree.js';
+import { runUpdate } from './commands/update.js';
 
 export function createProgram(): Command {
   const program = new Command();
 
   program
-    .name('ai-agent-workflow')
+    .name('agentj')
+    .alias('ai-agent-workflow')
     .description('Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents')
     .version('1.0.0');
 
@@ -29,6 +31,13 @@ export function createProgram(): Command {
     .option('-f, --force', 'Overwrite existing specification and directive files')
     .action(async (targetDir, options) => {
       await runInit(targetDir, options);
+    });
+
+  program
+    .command('update [targetDir]')
+    .description('Safely synchronize directives and sub-agents to the latest framework standards without touching project data')
+    .action(async (targetDir) => {
+      await runUpdate(targetDir);
     });
 
   program
