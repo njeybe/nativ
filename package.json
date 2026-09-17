@@ -1,5 +1,5 @@
 {
-  "name": "ai-agent-workflow",
+  "name": "agentj",
   "version": "1.0.0",
   "description": "Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents",
   "type": "module",
