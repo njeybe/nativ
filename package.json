@@ -18,7 +18,7 @@
     "watch": "tsc -w",
     "prepare": "npm run build",
     "start": "node bin/cli.js",
-    "test": "node tests/test-task-router.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs"
+    "test": "node tests/test-task-router.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs && node tests/test-contract-governor.mjs"
   },
   "repository": {
     "type": "git",

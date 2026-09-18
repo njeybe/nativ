@@ -12,6 +12,7 @@ import {
   runTaskBlock,
   runTaskEscalate,
   runTaskAdd,
+  runTaskProposePatch,
 } from '../commands/task.js';
 import { SUBAGENT_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
@@ -223,6 +224,38 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     },
     ({ taskId, type, details, affected }) =>
       captureOutput(() => runTaskEscalate(taskId, targetDir, { type, details, affected: affected?.join(',') })),
+  );
+
+  registerDualTool(
+    'task_propose_patch',
+    {
+      description:
+        'Propose an atomic modification to .ai/db_schema.json or .ai/api_contracts.json. ' +
+        'Evaluated deterministically by the Contract Governor. Additive changes are auto-approved; ' +
+        'destructive changes are rejected and trip the Circuit Breaker on 3 failures.',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        target: z.enum(['db_schema', 'api_contracts']).describe('Target contract to patch'),
+        operation: z.enum(['ADD', 'ALTER', 'DROP', 'RENAME']).describe('Operation type'),
+        path: z.string().min(1).describe('Dot-notation path to modify (e.g. users.columns.phone)'),
+        value: z.any().optional().describe('Value or schema definition to apply'),
+        reason: z.string().min(1).describe('Technical rationale for proposing this patch'),
+        baseHash: z.string().optional().describe('Base schema hash to prevent concurrent dirty writes'),
+      },
+    },
+    ({ taskId, target, operation, path: targetPath, value, reason, baseHash }) =>
+      captureOutput(() =>
+        runTaskProposePatch(targetDir, {
+          taskId,
+          target,
+          operation,
+          path: targetPath,
+          value,
+          reason,
+          baseHash,
+          json: true,
+        }),
+      ),
   );
 
   // ─── Workspace tools ───────────────────────────────────────────────────────

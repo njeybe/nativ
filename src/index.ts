@@ -10,6 +10,7 @@ import {
   runTaskBlock,
   runTaskEscalate,
   runTaskAdd,
+  runTaskProposePatch,
 } from './commands/task.js';
 import {
   runWorktreeCreate,
@@ -169,6 +170,29 @@ export function createProgram(): Command {
     .option('-a, --affected <contracts>', 'Comma-separated affected contracts')
     .action(async (taskId, targetDir, options) => {
       await runTaskEscalate(taskId, targetDir, options);
+    });
+
+  task
+    .command('propose-patch <taskId> [targetDir]')
+    .description('Propose a modification to .ai/db_schema.json or .ai/api_contracts.json through the Contract Governor')
+    .requiredOption('--target <target>', 'Target contract (db_schema or api_contracts)')
+    .requiredOption('--op <operation>', 'Operation (ADD, ALTER, DROP, RENAME)')
+    .requiredOption('--path <path>', 'Dot-notation or pointer path to modify (e.g. users.columns.status)')
+    .option('--value <jsonOrString>', 'Value or schema definition to apply')
+    .requiredOption('-r, --reason <reason>', 'Technical rationale for proposing this patch')
+    .option('--base-hash <hash>', 'Base schema hash to prevent concurrent dirty writes')
+    .option('--json', 'Output evaluation verdict as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskProposePatch(targetDir, {
+        taskId,
+        target: options.target,
+        operation: options.op,
+        path: options.path,
+        value: options.value,
+        reason: options.reason,
+        baseHash: options.baseHash,
+        json: options.json,
+      });
     });
 
   const worktree = program
