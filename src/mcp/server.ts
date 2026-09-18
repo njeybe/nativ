@@ -1,0 +1,266 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import {
+  runTaskList,
+  runTaskNext,
+  runTaskStart,
+  runTaskComplete,
+  runTaskBlock,
+  runTaskEscalate,
+} from '../commands/task.js';
+import { runInit } from '../commands/init.js';
+import { runStatus } from '../commands/status.js';
+import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
+
+/**
+ * Native MCP (Model Context Protocol) server for AgentJ over stdio.
+ *
+ * stdout is reserved for JSON-RPC frames, so the existing CLI handlers (which print via console.*)
+ * run inside `captureOutput`, which collects their output and returns it as tool content.
+ * Air-gap: only masked, structure-only commands are exposed. `db sync`, `db ui` and `init --force`
+ * are intentionally absent, and every tool is bound to the server's project root.
+ */
+
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+
+const ESCALATION_TYPES = [
+  'contract_drift',
+  'schema_flaw',
+  'missing_credential',
+  'dependency_conflict',
+  'architectural_ambiguity',
+] as const;
+
+const RESOURCES = [
+  { name: 'context', uris: ['nativ://context', 'agentj://context'], file: 'context.md', mimeType: 'text/markdown', description: 'Project context, tech stack and guardrails (.ai/context.md)' },
+  { name: 'master-plan', uris: ['nativ://master-plan', 'agentj://master-plan'], file: 'master_plan.json', mimeType: 'application/json', description: 'Milestones, tasks and their status (.ai/master_plan.json)' },
+  { name: 'db-schema', uris: ['nativ://db-schema', 'agentj://db-schema'], file: 'db_schema.json', mimeType: 'application/json', description: 'Database schema contract (.ai/db_schema.json)' },
+  { name: 'api-contracts', uris: ['nativ://api-contracts', 'agentj://api-contracts'], file: 'api_contracts.json', mimeType: 'application/json', description: 'API route and schema contracts (.ai/api_contracts.json)' },
+  { name: 'escalation', uris: ['nativ://escalation', 'agentj://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
+] as const;
+
+function packageVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: string };
+    return pkg.version ?? '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+}
+
+// Handlers share global console/process.exitCode state, so captured runs are serialized.
+let captureQueue: Promise<unknown> = Promise.resolve();
+
+function captureOutput(fn: () => Promise<void>, options: { errorOnExitCode?: boolean } = {}): Promise<CallToolResult> {
+  const run = async (): Promise<CallToolResult> => {
+    const lines: string[] = [];
+    const collect = (...args: unknown[]) => {
+      lines.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a, null, 2))).join(' '));
+    };
+    const original = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+    const previousExitCode = process.exitCode;
+    process.exitCode = undefined;
+    console.log = console.error = console.warn = console.info = collect;
+
+    let failed = false;
+    try {
+      await fn();
+      failed = options.errorOnExitCode !== false && process.exitCode !== undefined && process.exitCode !== 0;
+    } catch (err) {
+      failed = true;
+      lines.push(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      Object.assign(console, original);
+      process.exitCode = previousExitCode;
+    }
+
+    const text = lines.join('\n').replace(ANSI_PATTERN, '').trim() || '(no output)';
+    return { content: [{ type: 'text', text }], isError: failed || undefined };
+  };
+
+  const result = captureQueue.then(run, run);
+  captureQueue = result.catch(() => undefined);
+  return result;
+}
+
+export function createMcpServer(targetDirArg?: string): McpServer {
+  const targetDir = path.resolve(targetDirArg || process.cwd());
+  const server = new McpServer({ name: 'nativ', version: packageVersion() });
+
+  function registerDualTool(
+    baseName: string,
+    meta: { description: string; inputSchema: Record<string, z.ZodTypeAny> },
+    handler: (args: any) => Promise<CallToolResult>,
+  ) {
+    server.registerTool(`nativ_${baseName}`, meta as any, handler);
+    server.registerTool(`agentj_${baseName}`, meta as any, handler);
+  }
+
+  // ─── Task lifecycle tools ──────────────────────────────────────────────────
+
+  registerDualTool(
+    'task_next',
+    {
+      description: 'Get the next executable task in the active milestone, with its role guide and JIT contract slice (JSON).',
+      inputSchema: {},
+    },
+    () => captureOutput(() => runTaskNext(targetDir, { json: true })),
+  );
+
+  registerDualTool(
+    'task_list',
+    {
+      description: 'List project tasks from .ai/master_plan.json with optional filters (JSON).',
+      inputSchema: {
+        available: z.boolean().optional().describe('Only tasks that are unblocked and ready for execution'),
+        status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional().describe('Filter by task status'),
+        milestone: z.string().optional().describe('Filter by milestone ID or name'),
+      },
+    },
+    ({ available, status, milestone }) =>
+      captureOutput(() => runTaskList(targetDir, { available, status, milestone, json: true })),
+  );
+
+  registerDualTool(
+    'task_start',
+    {
+      description: 'Mark a task as in_progress.',
+      inputSchema: { taskId: z.string().min(1).describe('Task ID, e.g. task-12') },
+    },
+    ({ taskId }) => captureOutput(() => runTaskStart(taskId, targetDir)),
+  );
+
+  registerDualTool(
+    'task_complete',
+    {
+      description: "Mark a task as completed (only after its verificationCommand exits 0). Advances the milestone when all its tasks are done.",
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        notes: z.string().optional().describe('Completion notes or summary'),
+      },
+    },
+    ({ taskId, notes }) => captureOutput(() => runTaskComplete(taskId, targetDir, { notes })),
+  );
+
+  registerDualTool(
+    'task_block',
+    {
+      description: 'Mark a task as blocked with a required reason (e.g. verification failed after 3 attempts).',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        reason: z.string().min(1).describe('Why the task is blocked'),
+      },
+    },
+    ({ taskId, reason }) => captureOutput(() => runTaskBlock(taskId, reason, targetDir)),
+  );
+
+  registerDualTool(
+    'task_escalate',
+    {
+      description: 'Escalate a contract or architectural blocker to Tier 1 (writes .ai/escalation.json and blocks the task).',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        type: z.enum(ESCALATION_TYPES).describe('Escalation type'),
+        details: z.string().min(1).describe('Explanation of the contract gap or blocker'),
+        affected: z.array(z.string()).optional().describe('Affected contract paths, e.g. [".ai/db_schema.json"]'),
+      },
+    },
+    ({ taskId, type, details, affected }) =>
+      captureOutput(() => runTaskEscalate(taskId, targetDir, { type, details, affected: affected?.join(',') })),
+  );
+
+  // ─── Workspace tools ───────────────────────────────────────────────────────
+
+  registerDualTool(
+    'init',
+    {
+      description: 'Scaffold the .ai/ workflow (contracts, master plan, sub-agents, directives). Never overwrites existing files.',
+      inputSchema: {},
+    },
+    () => captureOutput(() => runInit(targetDir, { force: false })),
+  );
+
+  registerDualTool(
+    'status',
+    {
+      description: 'Summarize execution progress across all milestones and tasks.',
+      inputSchema: {},
+    },
+    () => captureOutput(() => runStatus(targetDir)),
+  );
+
+  // ─── Database telemetry tools (masked, structure-only) ─────────────────────
+
+  registerDualTool(
+    'db_status',
+    {
+      description: 'Dev/Prod database connection health, engine, latency and table count. URLs are masked; no credentials are returned.',
+      inputSchema: {},
+    },
+    // An offline database is a valid status report, not a tool failure.
+    () => captureOutput(() => runDbStatus(targetDir, { json: true }), { errorOnExitCode: false }),
+  );
+
+  registerDualTool(
+    'db_inspect',
+    {
+      description: 'Introspect live database structure (tables, columns, types, keys, indexes). Structure only; never reads row data.',
+      inputSchema: {
+        env: z.enum(['dev', 'prod']).optional().describe('Environment to inspect (default dev)'),
+        table: z.string().optional().describe('Only return a single table or collection'),
+      },
+    },
+    ({ env, table }) => captureOutput(() => runDbInspect(targetDir, { env: env ?? 'dev', table, json: true })),
+  );
+
+  registerDualTool(
+    'db_diff',
+    {
+      description: 'Compute schema drift from the Dev database to .ai/db_schema.json (target "contract", default) or to Prod.',
+      inputSchema: {
+        target: z.enum(['contract', 'prod']).optional().describe('Comparison target (default contract)'),
+      },
+    },
+    ({ target }) => captureOutput(() => runDbDiff(targetDir, { target: target ?? 'contract', json: true })),
+  );
+
+  // ─── Contract resources ────────────────────────────────────────────────────
+
+  for (const res of RESOURCES) {
+    for (const uriStr of res.uris) {
+      server.registerResource(
+        res.name,
+        uriStr,
+        { mimeType: res.mimeType, description: res.description },
+        async (uri): Promise<ReadResourceResult> => {
+          const filePath = path.join(targetDir, '.ai', res.file);
+          let text: string;
+          if (fs.existsSync(filePath)) {
+            text = fs.readFileSync(filePath, 'utf8');
+          } else if (res.name === 'escalation') {
+            text = JSON.stringify({ escalations: [] }, null, 2);
+          } else {
+            throw new Error(`.ai/${res.file} not found in ${targetDir}. Run nativ_init first.`);
+          }
+          return { contents: [{ uri: uri.href, mimeType: res.mimeType, text }] };
+        },
+      );
+    }
+  }
+
+  return server;
+}
+
+export async function startMcpServer(targetDirArg?: string): Promise<void> {
+  // Keep stray console.log calls off stdout, which carries the JSON-RPC stream.
+  console.log = console.info = console.error;
+
+  const server = createMcpServer(targetDirArg);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error(`Nativ MCP server running on stdio (project: ${path.resolve(targetDirArg || process.cwd())})`);
+}

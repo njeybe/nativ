@@ -37,6 +37,27 @@ Confirm to the user that:
 
 ---
 
+## Native MCP Integration (Antigravity)
+
+When the `agentj` MCP server is registered in Antigravity (Agent panel → **MCP Servers** → **Manage MCP Servers** → **View raw config**, i.e. `mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "agentj": {
+      "command": "npx",
+      "args": ["agentj", "mcp", "/absolute/path/to/your/project"]
+    }
+  }
+}
+```
+
+- Read contracts through resources instead of opening files: `agentj://context`, `agentj://master-plan`, `agentj://db-schema`, `agentj://api-contracts`, `agentj://escalation`.
+- Use `agentj_status` and `agentj_task_list` to review execution progress, and `agentj_db_status` / `agentj_db_inspect` / `agentj_db_diff` for masked, structure-only schema discovery.
+- The MCP server exposes no contract-writing tool. Phase 2 contract exports and escalation resolutions are still written by you, after the user approves them.
+
+---
+
 ## 4. Two-Way Escalation Resolution Protocol
 When Claude Code (Project Manager) or a downstream sub-agent encounters an architectural blocker, contract drift, or schema flaw, it will log an issue into [`.ai/escalation.json`](file:///.ai/escalation.json).
 

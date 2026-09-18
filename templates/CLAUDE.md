@@ -26,6 +26,19 @@ Instead, follow this streamlined orientation:
      - `devops-agent` → Read [`.ai/context.md`](file:///.ai/context.md) (Infrastructure section)
      - `qa-tester` / `security-auditor` → Read target files, [`.ai/api_contracts.json`](file:///.ai/api_contracts.json), and test/scan scripts directly.
 
+3. **Native MCP Tools (when the `agentj` MCP server is connected):**
+   If your tool list includes `agentj_*` tools, prefer them over shelling out. They mutate the same `.ai/` state as the CLI:
+
+   | MCP tool | CLI equivalent |
+   | :--- | :--- |
+   | `agentj_task_next` / `agentj_task_list` | `agentj task next --json` / `agentj task list --json` |
+   | `agentj_task_start` / `agentj_task_complete` | `agentj task start` / `agentj task complete` |
+   | `agentj_task_block` / `agentj_task_escalate` | `agentj task block` / `agentj task escalate` |
+   | `agentj_status` / `agentj_init` | `agentj status` / `agentj init` (never overwrites) |
+   | `agentj_db_status` / `agentj_db_inspect` / `agentj_db_diff` | `agentj db status\|inspect\|diff --json` (masked, structure-only) |
+
+   Contract slices are also readable as MCP resources: `agentj://context`, `agentj://master-plan`, `agentj://db-schema`, `agentj://api-contracts`, `agentj://escalation`. Treat them as read-only — the no-edit rules below still apply.
+
 ---
 
 ## 2. Autonomous Task Execution Loop

@@ -1,11 +1,12 @@
 {
-  "name": "agentj",
+  "name": "nativ-cli",
   "version": "1.0.0",
   "description": "Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "nativ": "./bin/cli.js",
     "agentj": "./bin/cli.js",
     "ai-agent-workflow": "./bin/cli.js"
   },
@@ -33,11 +34,13 @@
   "license": "MIT",
   "dependencies": {
     "@google-cloud/firestore": "^9.2.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^12.1.0",
     "mongodb": "^7.6.0",
     "mysql2": "^3.24.4",
     "pg": "^8.23.0",
-    "picocolors": "^1.1.0"
+    "picocolors": "^1.1.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",

@@ -1,8 +1,8 @@
-# AgentJ (`agentj`)
+# Nativ (`nativ`)
 
 A portable, multi-tier autonomous software engineering harness that connects **Antigravity (Strategy & Planning)** with **Claude Code CLI (Project Manager)** and downstream **Sub-agents** (Backend, Frontend, Database, QA).
 
-> **Binary Name:** `agentj` *(alias: `ai-agent-workflow`)*
+> **Package Name:** `nativ-cli` | **Binary Command:** `nativ` *(aliases: `agentj`, `ai-agent-workflow`)*
 
 ---
 
@@ -113,6 +113,89 @@ Claude Code reads `CLAUDE.md`, calls `npx ai-agent-workflow task next` to fetch 
 | `agentj db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
 | `agentj db sync [targetDir]` | Previews exporting a live schema into `.ai/db_schema.json`; writes only with `--yes` (`--source dev\|prod`). |
 | `agentj db ui [targetDir]` | Launches the local DB Studio dashboard (`--port <n>`, `--no-open`). Alias: `agentj studio`. |
+| `agentj mcp [targetDir]` | Runs the native MCP server over stdio, exposing `agentj_*` tools and `agentj://` contract resources. |
+
+---
+
+## 🔌 Native MCP Server (`agentj mcp`)
+
+`agentj mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io) over stdio, so any MCP client can drive the workflow with typed tool calls instead of parsing CLI output.
+
+**Tools**
+
+| Tool | Arguments | Equivalent |
+| :--- | :--- | :--- |
+| `agentj_task_next` | – | `agentj task next --json` |
+| `agentj_task_list` | `available?`, `status?`, `milestone?` | `agentj task list --json` |
+| `agentj_task_start` | `taskId` | `agentj task start` |
+| `agentj_task_complete` | `taskId`, `notes?` | `agentj task complete` |
+| `agentj_task_block` | `taskId`, `reason` | `agentj task block` |
+| `agentj_task_escalate` | `taskId`, `type`, `details`, `affected?` | `agentj task escalate` |
+| `agentj_init` | – | `agentj init` (never overwrites; no `--force`) |
+| `agentj_status` | – | `agentj status` |
+| `agentj_db_status` | – | `agentj db status --json` |
+| `agentj_db_inspect` | `env?`, `table?` | `agentj db inspect --json` |
+| `agentj_db_diff` | `target?` (`contract` default, or `prod`) | `agentj db diff --json` |
+
+**Resources:** `agentj://context`, `agentj://master-plan`, `agentj://db-schema`, `agentj://api-contracts`, `agentj://escalation` (the matching `.ai/` files).
+
+The server is bound to one project directory: the `[targetDir]` argument, or the directory the client starts it in. It follows the same air-gap as the CLI: database output is masked and structure-only, and `db sync`, `db ui`, and `init --force` are not exposed.
+
+### Client configuration
+
+**Claude Code** (run inside the project):
+
+```bash
+claude mcp add agentj -- npx agentj mcp
+```
+
+Or commit a project-scoped `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agentj": { "command": "npx", "args": ["agentj", "mcp"] }
+  }
+}
+```
+
+**Claude Desktop** (`claude_desktop_config.json`; Desktop does not start in your project, so pass its path):
+
+```json
+{
+  "mcpServers": {
+    "agentj": {
+      "command": "npx",
+      "args": ["agentj", "mcp", "/absolute/path/to/your/project"]
+    }
+  }
+}
+```
+
+**Cursor** (`.cursor/mcp.json` in the project, or `~/.cursor/mcp.json` with an absolute path):
+
+```json
+{
+  "mcpServers": {
+    "agentj": { "command": "npx", "args": ["agentj", "mcp", "${workspaceFolder}"] }
+  }
+}
+```
+
+**Antigravity** (Agent panel → MCP Servers → Manage MCP Servers → View raw config, `mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "agentj": {
+      "command": "npx",
+      "args": ["agentj", "mcp", "/absolute/path/to/your/project"]
+    }
+  }
+}
+```
+
+> **Windows:** if a client fails to launch `npx`, use `"command": "cmd"` with `"args": ["/c", "npx", "agentj", "mcp", "C:\\path\\to\\project"]`. With a global install (`npm i -g` / `npm link`), `"command": "agentj", "args": ["mcp", "<path>"]` works everywhere.
 
 ---
 
@@ -217,7 +300,10 @@ ai-agent-workflow/
 │   │   ├── validate.ts           # Schema validation command
 │   │   ├── task.ts               # JIT task lifecycle commands (next/start/complete/block/escalate)
 │   │   ├── worktree.ts           # Parallel agent Git worktree isolation (create/list/merge)
-│   │   └── db.ts                 # Database commands (status/inspect/diff/sync/ui)
+│   │   ├── db.ts                 # Database commands (status/inspect/diff/sync/ui)
+│   │   └── mcp.ts                # `agentj mcp` stdio server command
+│   ├── mcp/
+│   │   └── server.ts             # MCP tools & agentj:// contract resources
 │   ├── db/
 │   │   ├── types.ts              # Telemetry, schema & diff types (mirrors .ai/api_contracts.json)
 │   │   ├── env-parser.ts         # Safe .env reader & connection-string masking

@@ -17,13 +17,14 @@ import {
 } from './commands/worktree.js';
 import { runUpdate } from './commands/update.js';
 import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './commands/db.js';
+import { runMcp } from './commands/mcp.js';
 
 export function createProgram(): Command {
   const program = new Command();
 
   program
-    .name('agentj')
-    .alias('ai-agent-workflow')
+    .name('nativ')
+    .alias('agentj')
     .description('Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents')
     .version('1.0.0');
 
@@ -205,6 +206,13 @@ export function createProgram(): Command {
     .option('--no-open', 'Do not open the browser automatically')
     .action(async (targetDir, options) => {
       await runDbUi(targetDir, options);
+    });
+
+  program
+    .command('mcp [targetDir]')
+    .description('Run the native MCP (Model Context Protocol) server over stdio, exposing agentj tools and .ai/ contract resources')
+    .action(async (targetDir) => {
+      await runMcp(targetDir);
     });
 
   return program;
