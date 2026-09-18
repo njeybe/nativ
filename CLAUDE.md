@@ -78,3 +78,25 @@ For each active task:
 - **Target File Jailing:** Do not touch or modify files outside `targetFiles` unless importing exported symbols. Never edit `.ai/` contract files directly.
 - **Parallel Execution:** For independent tasks without mutual dependencies, use `agentj worktree create <taskId>` to work safely in an isolated git branch, and `agentj worktree merge <taskId>` once verified.
 
+---
+
+## 4. Zero-Credential Air-Gap (CRITICAL — Security Guardrails)
+
+Database credentials exist only in `.env*` files and inside the local `agentj` process memory. You and your sub-agents work with **structure, never secrets**.
+
+- **Never read secret files:** Do not open, `cat`, `grep`, `Get-Content`, or otherwise load `.env`, `.env.*`, `.agentj/*.local.json`, `*.pem`, `*.key`, or any path listed in `.claudeignore` — even when debugging a connection failure. `.env.example` is the only exception.
+- **Never print secrets:** Do not echo environment variables (`echo $DATABASE_URL`, `printenv`, `env`, `Get-ChildItem Env:`) or write connection strings into code, logs, tests, commits, or `.ai/` files.
+- **Use agentj for all database telemetry** — its output is masked (`••••••••`) and structure-only:
+  ```bash
+  agentj db status --json          # connection health, engine, latency, masked URLs
+  agentj db inspect --json         # tables, columns, types, keys, indexes
+  agentj db diff --target contract # live Dev schema vs .ai/db_schema.json
+  ```
+- **Schema-only authority:** Never run data-reading queries (`SELECT * FROM ...`) or dump data. `.ai/db_schema.json` is the source of truth for structure.
+- **No contract writes:** Do not run `agentj db sync --yes` or Export Contract. Updating `.ai/db_schema.json` belongs to Tier 1 (Antigravity) with user approval. If the live schema drifts from the contract, escalate:
+  ```bash
+  agentj task escalate <taskId> --type contract_drift --details "agentj db diff --target contract reports: <summary>"
+  ```
+- **Never touch production:** Migrations and destructive DDL may run only against local/staging test databases. Any `[DROPPED]` or `[DESTRUCTIVE]` result from `agentj db diff` must be surfaced to the user, never applied automatically.
+- **Missing credentials:** If a task needs a database that is not configured, do not ask the user to paste a connection string into chat. Ask them to add it to `.env` or run `agentj studio` locally, or escalate with `--type missing_credential`.
+

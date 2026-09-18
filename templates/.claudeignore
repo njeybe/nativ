@@ -1,0 +1,44 @@
+# AgentJ Zero-Credential AI Air-Gap
+# Files that must never be read into an AI agent's context.
+# Database credentials live only in these files and in the local agentj process memory.
+
+# Environment files (connection strings, API keys, secrets)
+.env
+.env.*
+.env*.local
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# AgentJ local runtime state (saved connections, session data)
+.agentj/*.local.json
+**/*.local.json
+
+# Private keys & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Local database files (may contain real data; agents only need .ai/db_schema.json)
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Database dumps & backups
+*.dump
+*.sql.gz
+*.bak
+
+# Cloud & tooling credentials
+.npmrc
+.pgpass
+.my.cnf
+**/credentials.json
+**/service-account*.json

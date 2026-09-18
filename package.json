@@ -32,11 +32,16 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@google-cloud/firestore": "^9.2.0",
     "commander": "^12.1.0",
+    "mongodb": "^7.6.0",
+    "mysql2": "^3.24.4",
+    "pg": "^8.23.0",
     "picocolors": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
+    "@types/pg": "^8.23.1",
     "typescript": "^5.5.4"
   }
 }
