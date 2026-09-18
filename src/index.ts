@@ -191,7 +191,7 @@ export function createProgram(): Command {
 
   db
     .command('ui [targetDir]')
-    .description('Launch the local AgentJ DB Studio web dashboard')
+    .description('Launch the local Nativ DB Studio web dashboard')
     .option('-p, --port <port>', 'Port to listen on (default 4983)')
     .option('--no-open', 'Do not open the browser automatically')
     .action(async (targetDir, options) => {
@@ -200,7 +200,7 @@ export function createProgram(): Command {
 
   program
     .command('studio [targetDir]')
-    .description('Launch the local AgentJ DB Studio web dashboard (alias for `db ui`)')
+    .description('Launch the local Nativ DB Studio web dashboard (alias for `db ui`)')
     .option('-p, --port <port>', 'Port to listen on (default 4983)')
     .option('--no-open', 'Do not open the browser automatically')
     .action(async (targetDir, options) => {
@@ -209,7 +209,7 @@ export function createProgram(): Command {
 
   program
     .command('mcp [targetDir]')
-    .description('Run the native MCP (Model Context Protocol) server over stdio, exposing agentj tools and .ai/ contract resources')
+    .description('Run the native MCP (Model Context Protocol) server over stdio, exposing nativ tools and .ai/ contract resources')
     .action(async (targetDir) => {
       await runMcp(targetDir);
     });
