@@ -108,9 +108,11 @@ Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the
 | `nativ verify [taskId]` | Runs verification commands on demand to prevent regressions (`--all`, `--milestone <id>`, `--json`, `--timeout <ms>`). |
 | `nativ task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
 | `nativ task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
-| `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
-| `nativ worktree list` | Lists all active agent git worktrees. |
-| `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
+| `nativ task propose-patch <taskId>` | Proposes a modification to contracts; evaluated by the Governor (`--target`, `--op`, `--path`, `--value`, `--reason`). |
+| `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>` with mounted `.ai/`. |
+| `nativ worktree list` | Lists all active agent git worktrees (supports `--json`). |
+| `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch (Safe Merge Gatekeeper enforced; override with `-f`). |
+| `nativ worktree remove <taskId>` | Safely removes an agent worktree without merging (alias: `nativ worktree cleanup`). |
 | `nativ db status [targetDir]` | Dev/Prod connection health: engine, ping latency, table count, masked URL (supports `--json`). |
 | `nativ db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev|prod`, `--table <name>`, `--json`). |
 | `nativ db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
@@ -135,6 +137,11 @@ Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the
 | `nativ_verify` | `taskId?`, `milestone?`, `all?` | `nativ verify --json` |
 | `nativ_task_block` | `taskId`, `reason` | `nativ task block` |
 | `nativ_task_escalate` | `taskId`, `type`, `details`, `affected?` | `nativ task escalate` |
+| `nativ_task_propose_patch`| `taskId`, `target`, `operation`, `path`, `value?`, `reason` | `nativ task propose-patch --json` (Contract Governor) |
+| `nativ_worktree_create` | `taskId` | `nativ worktree create <taskId> --json` |
+| `nativ_worktree_list` | – | `nativ worktree list --json` |
+| `nativ_worktree_merge` | `taskId`, `force?` | `nativ worktree merge <taskId> --json` |
+| `nativ_worktree_remove`| `taskId`, `force?` | `nativ worktree remove <taskId> --json` |
 | `nativ_init` | – | `nativ init` (never overwrites; no `--force`) |
 | `nativ_status` | – | `nativ status` |
 | `nativ_db_status` | – | `nativ db status --json` |
@@ -289,6 +296,41 @@ AI agents get **schema structure, never secrets**.
 
 ---
 
+## 🛡️ Contract Governor: Deterministic Invariant Middleware
+
+The **Contract Governor** acts as deterministic middleware between autonomous agent proposals and project contracts (`.ai/db_schema.json` and `.ai/api_contracts.json`). Instead of allowing unconstrained code mutations or relying on probabilistic LLM self-policing, the Governor mathematically enforces **Blast Radius Boundaries**:
+
+```
+                       Sub-Agent Proposes Contract Modification
+                                          │
+                                          ▼
+                       [ Nativ Contract Governor Engine ]
+                                          │
+               ┌──────────────────────────┴──────────────────────────┐
+               ▼                                                     ▼
+     [ LOW_ADDITIVE (Type 2) ]                             [ HIGH_DESTRUCTIVE (Type 1) ]
+     • New nullable columns / defaults                     • Dropping tables / columns
+     • New tables / non-unique indexes                     • Changing existing column types
+     • New optional query params / headers                 • Dropping endpoints / response fields
+     • New response fields (Postel's Law)                  • Adding required request parameters
+               │                                                     │
+               ▼                                                     ▼
+     ⚡ Auto-Approved & Patched                             🛑 Hard Rejection & Gating
+     1. Merges atomically into .ai/                        1. Rejects with structured rule violation
+     2. Appends to .ai/audit_log.jsonl                     2. Increments task failure counter
+     3. Agent continues seamlessly                         3. Trips Circuit Breaker on 3 strikes
+                                                              (Locks task to blocked & escalates)
+```
+
+### Edge-Case Defenses Built-in:
+1. **Path Collision Guard:** Prevents agents from sneaking a destructive `ALTER` inside an `ADD` payload.
+2. **Referential Integrity DAG:** Checks that foreign keys target existing tables and blocks circular non-nullable dependency locks.
+3. **Task Patch Budgeting:** Restricts tasks to a maximum of 3 contract patches to detect architectural scope creep early.
+4. **Concurrent Dirty-Write Protection:** Enforces base schema hashing to detect race conditions across parallel agent worktrees.
+5. **3-Strike Circuit Breaker:** Freezes runaway agents after 3 failed attempts, compiling a structured Diagnostic Flight Recorder bundle into `.ai/escalation.json`.
+
+---
+
 ## Project Structure
 
 ```
@@ -304,12 +346,19 @@ nativ/
 │   │   ├── update.ts             # Non-destructive framework sync command
 │   │   ├── status.ts             # Status report command
 │   │   ├── validate.ts           # Schema validation command
-│   │   ├── task.ts               # JIT task lifecycle commands (next/start/complete/block/escalate)
+│   │   ├── task.ts               # JIT task lifecycle (next/start/complete/block/escalate/propose-patch)
 │   │   ├── worktree.ts           # Parallel agent Git worktree isolation (create/list/merge)
 │   │   ├── db.ts                 # Database commands (status/inspect/diff/sync/ui)
 │   │   └── mcp.ts                # `nativ mcp` stdio server command
+│   ├── governor/                 # Deterministic Contract Governor subsystem
+│   │   ├── types.ts              # Blast radius, patch, verdict & diagnostic types
+│   │   ├── rules/
+│   │   │   ├── db-rules.ts       # Database schema mutation rules & collision guards
+│   │   │   └── api-rules.ts      # API endpoint & payload rules (Postel's Law)
+│   │   ├── circuit-breaker.ts    # 3-strike failure ledger & escalation diagnostic serializer
+│   │   └── evaluator.ts          # Core governor engine & atomic patch applier
 │   ├── mcp/
-│   │   └── server.ts             # MCP tools & nativ:// contract resources
+│   │   └── server.ts             # MCP tools (including nativ_task_propose_patch) & resources
 │   ├── db/
 │   │   ├── types.ts              # Telemetry, schema & diff types (mirrors .ai/api_contracts.json)
 │   │   ├── env-parser.ts         # Safe .env reader & connection-string masking
@@ -341,6 +390,11 @@ nativ/
 │           ├── devops-agent.md       # Docker, CI/CD & deployment scripts
 │           ├── security-auditor.md   # Vulnerability scans & auth audit
 │           └── db-migration.md       # Zero-downtime & advanced indexing
+├── tests/
+│   ├── test-contract-governor.mjs    # Comprehensive Governor invariant tests
+│   ├── test-task-router.mjs          # Dual-track router tests
+│   ├── test-verify-gatekeeper.mjs    # Gatekeeper tests
+│   └── ...
 ├── package.json
 └── tsconfig.json
 ```

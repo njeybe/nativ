@@ -10,11 +10,13 @@ import {
   runTaskBlock,
   runTaskEscalate,
   runTaskAdd,
+  runTaskProposePatch,
 } from './commands/task.js';
 import {
   runWorktreeCreate,
   runWorktreeList,
   runWorktreeMerge,
+  runWorktreeRemove,
 } from './commands/worktree.js';
 import { runUpdate } from './commands/update.js';
 import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './commands/db.js';
@@ -171,29 +173,66 @@ export function createProgram(): Command {
       await runTaskEscalate(taskId, targetDir, options);
     });
 
+  task
+    .command('propose-patch <taskId> [targetDir]')
+    .description('Propose a modification to .ai/db_schema.json or .ai/api_contracts.json through the Contract Governor')
+    .requiredOption('--target <target>', 'Target contract (db_schema or api_contracts)')
+    .requiredOption('--op <operation>', 'Operation (ADD, ALTER, DROP, RENAME)')
+    .requiredOption('--path <path>', 'Dot-notation or pointer path to modify (e.g. users.columns.status)')
+    .option('--value <jsonOrString>', 'Value or schema definition to apply')
+    .requiredOption('-r, --reason <reason>', 'Technical rationale for proposing this patch')
+    .option('--base-hash <hash>', 'Base schema hash to prevent concurrent dirty writes')
+    .option('--json', 'Output evaluation verdict as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskProposePatch(targetDir, {
+        taskId,
+        target: options.target,
+        operation: options.op,
+        path: options.path,
+        value: options.value,
+        reason: options.reason,
+        baseHash: options.baseHash,
+        json: options.json,
+      });
+    });
+
   const worktree = program
     .command('worktree')
     .description('Manage isolated git worktrees for parallel agent execution');
 
   worktree
     .command('create <taskId> [targetDir]')
-    .description('Create an isolated git worktree branch for a task')
-    .action(async (taskId, targetDir) => {
-      await runWorktreeCreate(taskId, targetDir);
+    .description('Create an isolated git worktree branch for a task with mounted .ai/ contracts')
+    .option('--json', 'Output result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runWorktreeCreate(taskId, targetDir, options);
     });
 
   worktree
     .command('list [targetDir]')
     .description('List active agent git worktrees')
-    .action(async (targetDir) => {
-      await runWorktreeList(targetDir);
+    .option('--json', 'Output worktree list as JSON')
+    .action(async (targetDir, options) => {
+      await runWorktreeList(targetDir, options);
     });
 
   worktree
     .command('merge <taskId> [targetDir]')
-    .description('Merge and cleanup an agent git worktree branch')
-    .action(async (taskId, targetDir) => {
-      await runWorktreeMerge(taskId, targetDir);
+    .description('Merge and cleanup an agent git worktree branch (Safe Merge Gatekeeper enforced)')
+    .option('-f, --force', 'Bypass Safe Merge Gatekeeper checks')
+    .option('--json', 'Output result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runWorktreeMerge(taskId, targetDir, options);
+    });
+
+  worktree
+    .command('remove <taskId> [targetDir]')
+    .alias('cleanup')
+    .description('Safely remove an agent worktree and discard its branch without merging')
+    .option('-f, --force', 'Force removal of worktree and branch')
+    .option('--json', 'Output result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runWorktreeRemove(taskId, targetDir, options);
     });
 
   const db = program

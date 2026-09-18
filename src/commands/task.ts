@@ -14,6 +14,7 @@ import {
   EscalationType,
 } from '../scanner/types.js';
 import { executeVerification } from '../core/verifier.js';
+import { ContractGovernor, CircuitBreaker, ContractPatch } from '../governor/index.js';
 
 function getPlanPath(targetDirArg?: string): { targetDir: string; planPath: string } {
   const targetDir = path.resolve(targetDirArg || process.cwd());
@@ -502,6 +503,7 @@ export async function runTaskComplete(
   }
 
   savePlan(planPath, plan);
+  CircuitBreaker.recordSuccess(targetDir, taskId);
   console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] successfully marked as `) + pc.green('✔ completed') + '\n');
 }
 
@@ -834,4 +836,75 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
   if (task.dependencies.length) console.log(pc.dim('  Deps:     ') + task.dependencies.join(', '));
   console.log(pc.dim('\n  Start it: ') + pc.white(`nativ task start ${task.id}\n`));
   return result;
+}
+
+export interface ProposePatchOptions {
+  taskId: string;
+  target: 'db_schema' | 'api_contracts';
+  operation: 'ADD' | 'ALTER' | 'DROP' | 'RENAME';
+  path: string;
+  value?: any;
+  reason: string;
+  baseHash?: string;
+  json?: boolean;
+}
+
+export async function runTaskProposePatch(targetDirArg: string | undefined, options: ProposePatchOptions) {
+  const targetDir = path.resolve(targetDirArg || process.cwd());
+
+  let parsedValue = options.value;
+  if (typeof options.value === 'string') {
+    try {
+      parsedValue = JSON.parse(options.value);
+    } catch {
+      parsedValue = options.value;
+    }
+  }
+
+  const patch: ContractPatch = {
+    taskId: options.taskId,
+    target: options.target,
+    operation: options.operation,
+    path: options.path,
+    value: parsedValue,
+    reason: options.reason || 'No reason provided',
+    baseHash: options.baseHash,
+  };
+
+  const verdict = ContractGovernor.evaluate(targetDir, patch);
+
+  if (options.json) {
+    console.log(JSON.stringify(verdict, null, 2));
+    if (!verdict.approved) {
+      process.exitCode = 1;
+    }
+    return verdict;
+  }
+
+  if (verdict.approved) {
+    console.log(pc.green(`\n✔ [GOVERNOR APPROVED] Blast Radius: `) + pc.cyan(verdict.blastRadius));
+    console.log(pc.dim('  Rule:    ') + pc.yellow(verdict.ruleId));
+    console.log(pc.dim('  Message: ') + verdict.message);
+    if (verdict.patchApplied) {
+      console.log(pc.green(`  Patch automatically merged into .ai/${options.target === 'db_schema' ? 'db_schema.json' : 'api_contracts.json'}`));
+      console.log(pc.dim(`  Audit log updated at .ai/audit_log.jsonl\n`));
+    }
+  } else {
+    console.error(pc.red(`\n✖ [GOVERNOR REJECTED] Blast Radius: `) + pc.red(verdict.blastRadius));
+    console.error(pc.yellow(`  Rule:    ${verdict.ruleId}`));
+    console.error(pc.red(`  Message: ${verdict.message}`));
+    if (verdict.violations.length > 0) {
+      console.error(pc.dim('  Violations:'));
+      verdict.violations.forEach((v) => console.error(pc.red(`    • ${v}`)));
+    }
+    console.error(pc.yellow(`  Circuit Breaker: ${verdict.circuitBreaker.consecutiveFailures}/${verdict.circuitBreaker.maxThreshold} failures`));
+    if (verdict.circuitBreaker.tripped) {
+      console.error(pc.bold(pc.red(`  🛑 CIRCUIT BREAKER TRIPPED: Task locked to blocked.`)));
+      console.error(pc.magenta(`  Escalation record written to .ai/escalation.json (${verdict.diagnosticBundle?.escalationId})\n`));
+    } else {
+      console.error(pc.dim('  Fix the issue or formulate a backward-compatible proposal.\n'));
+    }
+    process.exitCode = 1;
+  }
+  return verdict;
 }
