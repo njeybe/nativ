@@ -292,9 +292,11 @@ AI agents get **schema structure, never secrets**.
 ## Project Structure
 
 ```
-nativ-fw/
+nativ/
 ├── bin/
 │   └── cli.js                    # Executable binary entrypoint (nativ)
+├── docs/
+│   └── installation.md           # Installation & environment setup guide
 ├── src/
 │   ├── index.ts                  # Commander CLI definition
 │   ├── commands/
