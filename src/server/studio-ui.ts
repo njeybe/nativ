@@ -218,6 +218,13 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
 .field-row + .field-row { margin-top: 8px; }
 .field-row select.input { font-family: var(--font); }
 .field-row [hidden] { display: none; }
+.param-grid { display: grid; grid-template-columns: 140px 1fr 96px; gap: 8px; margin-top: 8px; }
+.param-grid[hidden] { display: none; }
+.param-grid .input { font-family: var(--mono); font-size: 12.5px; min-width: 0; }
+.param-grid select.input { font-family: var(--font); }
+.param-grid .span-2 { grid-column: span 2; }
+@media (max-width: 560px) { .param-grid { grid-template-columns: 1fr; } .param-grid .span-2 { grid-column: auto; } }
+.badge-synth { font-family: var(--mono); color: #a5b4fc; background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35); }
 .field .current { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--muted); min-width: 0; }
 .field .current code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .result { margin-top: 6px; font-size: 12.5px; }
@@ -323,8 +330,21 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       <div class="field-row">
         <select class="input" id="engine-dev" data-engine="dev" aria-label="Dev database type">
           <option value="url">Connection URL (PostgreSQL, MySQL, SQLite, MongoDB)</option>
+          <option value="form">Connection Form (XAMPP / Parameters)</option>
           <option value="firestore">Firebase Firestore</option>
         </select>
+      </div>
+      <div class="param-grid" id="params-dev" hidden>
+        <select class="input" id="pengine-dev" aria-label="Dev database engine">
+          <option value="mysql">MySQL</option>
+          <option value="postgresql">PostgreSQL</option>
+        </select>
+        <input class="input" id="phost-dev" type="text" autocomplete="off" spellcheck="false" aria-label="Dev host" placeholder="Host, e.g. 127.0.0.1">
+        <input class="input" id="pport-dev" type="text" inputmode="numeric" autocomplete="off" aria-label="Dev port" placeholder="Port">
+        <input class="input" id="puser-dev" type="text" autocomplete="off" spellcheck="false" aria-label="Dev user" placeholder="User">
+        <input class="input span-2" id="ppass-dev" type="password" autocomplete="new-password" aria-label="Dev password" placeholder="Password (empty for XAMPP root)">
+        <input class="input span-2" id="pdb-dev" type="text" autocomplete="off" spellcheck="false" aria-label="Dev database name" placeholder="Database name">
+        <button class="btn small" type="button" data-xampp="dev">Use XAMPP Defaults</button>
       </div>
       <div class="field-row">
         <input class="input" id="url-dev" type="password" autocomplete="off" spellcheck="false" aria-label="Dev connection string" placeholder="postgres://user:password@localhost:5432/app_dev  or  mongodb://localhost:27017/app">
@@ -341,8 +361,21 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       <div class="field-row">
         <select class="input" id="engine-prod" data-engine="prod" aria-label="Production database type">
           <option value="url">Connection URL (PostgreSQL, MySQL, SQLite, MongoDB)</option>
+          <option value="form">Connection Form (XAMPP / Parameters)</option>
           <option value="firestore">Firebase Firestore</option>
         </select>
+      </div>
+      <div class="param-grid" id="params-prod" hidden>
+        <select class="input" id="pengine-prod" aria-label="Production database engine">
+          <option value="mysql">MySQL</option>
+          <option value="postgresql">PostgreSQL</option>
+        </select>
+        <input class="input" id="phost-prod" type="text" autocomplete="off" spellcheck="false" aria-label="Production host" placeholder="Host">
+        <input class="input" id="pport-prod" type="text" inputmode="numeric" autocomplete="off" aria-label="Production port" placeholder="Port">
+        <input class="input" id="puser-prod" type="text" autocomplete="off" spellcheck="false" aria-label="Production user" placeholder="User">
+        <input class="input span-2" id="ppass-prod" type="password" autocomplete="new-password" aria-label="Production password" placeholder="Password">
+        <input class="input span-2" id="pdb-prod" type="text" autocomplete="off" spellcheck="false" aria-label="Production database name" placeholder="Database name">
+        <button class="btn small" type="button" data-xampp="prod">Use XAMPP Defaults</button>
       </div>
       <div class="field-row">
         <input class="input" id="url-prod" type="password" autocomplete="off" spellcheck="false" aria-label="Production connection string" placeholder="postgres://user:password@db.example.com:5432/app  or  mongodb+srv://…">
@@ -568,6 +601,25 @@ table.data-table tr:hover td { background: var(--surface-hover); }
   }
 
   // ─── Rendering: shell ──────────────────────────────────────────────────────
+  /** DB_HOST -> DB_*, PROD_DB_HOST -> PROD_DB_*, PGHOST -> PG*. */
+  function keyFamily(key) {
+    var m = /^(.*_)[^_]*$/.exec(key);
+    return m ? m[1] + '*' : key.slice(0, 2) + '*';
+  }
+
+  /** Local-stack hint when fragmented DB_* keys resolve to a server that refuses connections. */
+  function fragmentedDiagnostic(s) {
+    var cfg = state.envInfo && state.envInfo.fragmentedConfig;
+    if (!s || s.connected || !s.synthesized || !cfg) return '';
+    if (!/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH/i.test(s.error || '')) return '';
+    var keys = cfg.sourceKeys.filter(function (k) { return /HOST|DATABASE|_DB$|DB_NAME$/.test(k); });
+    var label = ENGINE_LABEL[cfg.engine] || cfg.engine;
+    var action = cfg.engine === 'mysql'
+      ? 'Ensure MySQL is started in XAMPP Control Panel.'
+      : 'Ensure the PostgreSQL service is running on ' + cfg.host + ':' + cfg.port + '.';
+    return 'Detected fragmented ' + label + ' config (' + (keys.length ? keys : cfg.sourceKeys).join(', ') + '). ' + action;
+  }
+
   function statusPill(env, s) {
     var label = env.toUpperCase();
     if (!s) return '<span class="pill"><span class="dot"></span><b>' + label + ':</b> loading…</span>';
@@ -576,9 +628,11 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       return '<span class="pill" title="' + esc(s.error || '') + '"><span class="dot off"></span><b>' + label + ':</b> ' + why +
         ' <span class="badge badge-offline">OFFLINE</span></span>';
     }
-    var sourceBadge = s.detectedFromExample && s.sourceKey
-      ? ' <span class="badge badge-source" title="Detected in ' + esc(s.exampleFile || '.env.example') + '">via ' + esc(s.sourceKey) + '</span>'
-      : (s.sourceKey ? ' <span class="badge badge-source">via ' + esc(s.sourceKey) + '</span>' : '');
+    var sourceBadge = s.synthesized && s.sourceKey
+      ? ' <span class="badge badge-synth" title="Assembled in memory from fragmented .env keys">synthesized from ' + esc(keyFamily(s.sourceKey)) + '</span>'
+      : s.detectedFromExample && s.sourceKey
+        ? ' <span class="badge badge-source" title="Detected in ' + esc(s.exampleFile || '.env.example') + '">via ' + esc(s.sourceKey) + '</span>'
+        : (s.sourceKey ? ' <span class="badge badge-source">via ' + esc(s.sourceKey) + '</span>' : '');
     return '<span class="pill" title="' + esc(s.maskedUrl) + '"><span class="dot on"></span><b>' + label + ':</b> ' +
       esc(ENGINE_LABEL[s.engine] || s.engine) + (s.database ? ' · ' + esc(s.database) : '') + ' (' + Math.round(s.pingMs) + 'ms) – ' +
       entityCount(s) + ' ' + entityNoun(s, true) + sourceBadge + ' <span class="badge badge-online">ONLINE</span></span>';
@@ -593,7 +647,8 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       var devS = st.dev;
       var prodS = st.prod;
       var activeS = state.envMode === 'prod' ? prodS : devS;
-      var suggestion = (activeS && !activeS.connected && activeS.suggestion) ||
+      var suggestion = fragmentedDiagnostic(activeS) || fragmentedDiagnostic(devS) ||
+        (activeS && !activeS.connected && activeS.suggestion) ||
         (devS && !devS.connected && devS.suggestion) ||
         (prodS && !prodS.connected && prodS.suggestion);
 
@@ -1528,13 +1583,16 @@ table.data-table tr:hover td { background: var(--surface-hover); }
         var key = btn.getAttribute('data-template-key');
         var eng = btn.getAttribute('data-template-engine');
         var targetEnv = btn.getAttribute('data-template-env') || 'dev';
-        if (eng === 'firestore') {
-          $('engine-' + targetEnv).value = 'firestore';
-        } else {
-          $('engine-' + targetEnv).value = 'url';
-        }
+        // Fragmented component keys (DB_HOST, DB_PORT, ...) map to the parameter form, not a URL.
+        var isComponent = /(^|_)(HOST|HOSTNAME|SERVER|PORT|USER|USERNAME|PASS|PASSWORD|DATABASE|NAME|CONNECTION|DRIVER)$/i.test(key) && eng !== 'mongodb' && eng !== 'firestore' && eng !== 'sqlite';
+        $('engine-' + targetEnv).value = eng === 'firestore' ? 'firestore' : isComponent ? 'form' : 'url';
         setEngineMode(targetEnv);
-        $('url-' + targetEnv).focus();
+        if (isComponent) {
+          if (eng === 'mysql' || eng === 'postgresql') $('pengine-' + targetEnv).value = eng;
+          $('phost-' + targetEnv).focus();
+        } else {
+          $((eng === 'firestore' ? 'fsproject-' : 'url-') + targetEnv).focus();
+        }
         toast('Selected ' + key + ' for ' + targetEnv.toUpperCase());
       };
     });
@@ -1549,22 +1607,61 @@ table.data-table tr:hover td { background: var(--surface-hover); }
   }
 
   function isFirestoreMode(env) { return $('engine-' + env).value === 'firestore'; }
+  function isFormMode(env) { return $('engine-' + env).value === 'form'; }
+
+  var PARAM_FIELDS = ['phost', 'pport', 'puser', 'ppass', 'pdb'];
+  var DEFAULT_PORT = { mysql: '3306', postgresql: '5432' };
 
   function setEngineMode(env) {
     var fs = isFirestoreMode(env);
-    $('url-' + env).hidden = fs;
-    document.querySelector('[data-toggle="' + env + '"]').hidden = fs;
+    var form = isFormMode(env);
+    $('url-' + env).hidden = fs || form;
+    document.querySelector('[data-toggle="' + env + '"]').hidden = fs || form;
     $('fsproject-' + env).hidden = !fs;
     $('fsemu-' + env).hidden = !fs;
+    $('params-' + env).hidden = !form;
     $('result-' + env).textContent = '';
   }
 
+  /** Quick-fill for a stock XAMPP install: MySQL on 127.0.0.1:3306 as root with an empty password. */
+  function applyXamppDefaults(env) {
+    $('engine-' + env).value = 'form';
+    setEngineMode(env);
+    $('pengine-' + env).value = 'mysql';
+    $('phost-' + env).value = '127.0.0.1';
+    $('pport-' + env).value = '3306';
+    $('puser-' + env).value = 'root';
+    $('ppass-' + env).value = '';
+    $('pdb-' + env).focus();
+  }
+
   function hasInput(env) {
-    return isFirestoreMode(env) ? !!$('fsproject-' + env).value.trim() : !!$('url-' + env).value.trim();
+    if (isFirestoreMode(env)) return !!$('fsproject-' + env).value.trim();
+    if (isFormMode(env)) return !!$('phost-' + env).value.trim();
+    return !!$('url-' + env).value.trim();
+  }
+
+  /** Parameter form: sent as the contract's components payload; the server assembles the URL in memory. */
+  function componentsBody(env) {
+    var engine = $('pengine-' + env).value;
+    var host = $('phost-' + env).value.trim();
+    var port = $('pport-' + env).value.trim() || DEFAULT_PORT[engine];
+    if (!host) return { error: 'Enter a host, e.g. 127.0.0.1.' };
+    if (!/^[A-Za-z0-9._:\[\]-]{1,253}$/.test(host)) return { error: 'Host must be a hostname or IP address.' };
+    if (!/^\d{1,5}$/.test(port) || +port < 1 || +port > 65535) return { error: 'Port must be a number between 1 and 65535.' };
+    var components = { engine: engine, host: host, port: +port };
+    var user = $('puser-' + env).value.trim();
+    var password = $('ppass-' + env).value;
+    var database = $('pdb-' + env).value.trim();
+    if (user) components.user = user;
+    if (password) components.password = password;
+    if (database) components.database = database;
+    return { body: { env: env, engine: engine, components: components } };
   }
 
   /** Builds the /api/connect body. Firestore is sent as a firestore:// URL plus the contract's firestoreConfig. */
   function connectBody(env) {
+    if (isFormMode(env)) return componentsBody(env);
     if (!isFirestoreMode(env)) {
       var url = $('url-' + env).value.trim();
       return url ? { body: { env: env, connectionUrl: url } } : { error: 'Enter a connection string first.' };
@@ -1591,6 +1688,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
         out.textContent = 'Connected to ' + (ENGINE_LABEL[r.engine] || r.engine) + ' in ' + Math.round(r.pingMs) + 'ms · ' + count + ' ' +
           entityNoun({ engine: r.engine }, true).toLowerCase() + ' · saved to session as ' + r.maskedUrl;
         $('url-' + env).value = '';
+        $('ppass-' + env).value = '';
         return true;
       }
       out.className = 'result err';
@@ -1804,6 +1902,14 @@ table.data-table tr:hover td { background: var(--surface-hover); }
 
   ['dev', 'prod'].forEach(function (env) {
     $('engine-' + env).addEventListener('change', function () { setEngineMode(env); });
+    $('pengine-' + env).addEventListener('change', function () {
+      var port = $('pport-' + env);
+      // Swap the port only when it still holds the other engine's default.
+      if (!port.value.trim() || port.value.trim() === DEFAULT_PORT.mysql || port.value.trim() === DEFAULT_PORT.postgresql) {
+        port.value = DEFAULT_PORT[$('pengine-' + env).value];
+      }
+    });
+    document.querySelector('[data-xampp="' + env + '"]').addEventListener('click', function () { applyXamppDefaults(env); });
   });
 
   $('btn-save-conn').addEventListener('click', function () {
@@ -1825,6 +1931,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       input.value = ''; input.type = 'password';
       $('fsproject-' + env).value = '';
       $('fsemu-' + env).value = '';
+      PARAM_FIELDS.forEach(function (f) { $(f + '-' + env).value = ''; });
       var t = document.querySelector('[data-toggle="' + env + '"]');
       if (t) { t.textContent = 'Show'; t.setAttribute('aria-pressed', 'false'); }
     });

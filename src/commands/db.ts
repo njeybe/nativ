@@ -76,15 +76,63 @@ async function introspectEnv(targetDir: string, env: DatabaseEnv): Promise<Intro
   result.status.sourceKey = conn.sourceKey;
   result.status.detectedFromExample = conn.detectedFromExample;
   result.status.exampleFile = conn.exampleFile;
+  if (conn.synthesized) result.status.synthesized = true;
+  if (!result.status.connected) {
+    const fragmentedKeys = env === 'dev' && conn.synthesized ? conns.templateInfo.fragmentedConfig?.sourceKeys : undefined;
+    const diagnostic = localStackDiagnostic(conn.url, conn.engine, result.status, fragmentedKeys ?? (conn.synthesized ? [conn.sourceKey] : undefined));
+    if (diagnostic) result.status.suggestion = diagnostic;
+  }
   return result;
+}
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
+
+/**
+ * Actionable hint when a local MySQL/PostgreSQL server refuses the connection, e.g. MySQL not started in
+ * the XAMPP Control Panel. Only host/port are read from the URL; credentials are never touched.
+ */
+function localStackDiagnostic(url: string, engine: string, status: DatabaseStatus, fragmentedKeys?: string[]): string | null {
+  if (engine !== 'mysql' && engine !== 'postgresql') return null;
+  if (!/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|connection refused/i.test(status.error ?? '')) return null;
+  let host = '';
+  let port = engine === 'mysql' ? 3306 : 5432;
+  try {
+    const parsed = new URL(url);
+    host = parsed.hostname;
+    if (parsed.port) port = Number(parsed.port);
+  } catch {
+    return null;
+  }
+  const label = ENGINE_LABEL[engine];
+  const isLocal = LOCAL_HOSTS.has(host);
+  const action =
+    engine === 'mysql'
+      ? isLocal
+        ? 'Ensure MySQL is started in XAMPP Control Panel.'
+        : `Ensure the MySQL server at ${host}:${port} is running and reachable.`
+      : `Ensure the PostgreSQL service is running on ${host}:${port}.`;
+
+  if (fragmentedKeys?.length) {
+    const shown = fragmentedKeys.filter((k) => /HOST|DATABASE|_DB$|DB_NAME$/.test(k));
+    return `Detected fragmented ${label} config (${(shown.length ? shown : fragmentedKeys).join(', ')}). ${action}`;
+  }
+  return isLocal ? `${label} refused connections on ${host}:${port}. ${action}` : null;
+}
+
+/** DB_HOST -> DB_*, PROD_DB_HOST -> PROD_DB_*, PGHOST -> PG*. */
+function keyFamily(key: string): string {
+  const m = /^(.*_)[^_]*$/.exec(key);
+  return m ? `${m[1]}*` : `${key.slice(0, 2)}*`;
 }
 
 function printStatusLine(env: DatabaseEnv, s: DatabaseStatus): void {
   const label = pc.bold(env.toUpperCase().padEnd(4));
+  const synthBadge = s.synthesized && s.sourceKey ? ` ${pc.magenta(`[synthesized from ${keyFamily(s.sourceKey)}]`)}` : '';
   if (!s.connected) {
-    console.log(`  ${pc.red('●')} ${label} ${pc.red('[OFFLINE]')} ${pc.dim(s.error ?? 'Unknown error')}`);
+    console.log(`  ${pc.red('●')} ${label} ${pc.red('[OFFLINE]')}${synthBadge} ${pc.dim(s.error ?? 'Unknown error')}`);
     if (s.suggestion) {
-      console.log(`         ${pc.yellow(`Tip: ${s.suggestion}`)}`);
+      const isDiagnostic = /Ensure (MySQL|the MySQL|the PostgreSQL)/.test(s.suggestion);
+      console.log(`         ${pc.yellow(isDiagnostic ? `[DIAGNOSTIC] ${s.suggestion}` : `Tip: ${s.suggestion}`)}`);
     }
     if (s.maskedUrl) console.log(pc.dim(`         ${s.maskedUrl}`));
     return;
@@ -92,8 +140,9 @@ function printStatusLine(env: DatabaseEnv, s: DatabaseStatus): void {
   const count = s.entityCount ?? s.tableCount;
   const isCollection = s.entityType === 'collection';
   const entityWord = isCollection ? (count === 1 ? 'collection' : 'collections') : (count === 1 ? 'table' : 'tables');
-  const sourceInfo =
-    s.detectedFromExample && s.sourceKey
+  const sourceInfo = synthBadge
+    ? synthBadge
+    : s.detectedFromExample && s.sourceKey
       ? pc.cyan(` (via ${s.sourceKey} from ${s.exampleFile ?? '.env.example'})`)
       : s.sourceKey
         ? pc.dim(` (via ${s.sourceKey})`)
@@ -369,8 +418,18 @@ export async function runDbUi(targetDirArg?: string, options: { port?: string; o
 
   const conns = resolveConnections(targetDir);
   console.log(pc.bold(pc.cyan(`\nAgentJ DB Studio v${version}`)));
-  const devSource = conns.dev?.detectedFromExample ? ` (from ${conns.dev.sourceKey} in ${conns.dev.exampleFile ?? '.env.example'})` : conns.dev?.sourceKey ? ` (${conns.dev.sourceKey})` : '';
-  const prodSource = conns.prod?.detectedFromExample ? ` (from ${conns.prod.sourceKey} in ${conns.prod.exampleFile ?? '.env.example'})` : conns.prod?.sourceKey ? ` (${conns.prod.sourceKey})` : '';
+  const describeSource = (c: typeof conns.dev): string =>
+    !c
+      ? ''
+      : c.synthesized
+        ? ` [synthesized from ${keyFamily(c.sourceKey)}]`
+        : c.detectedFromExample
+          ? ` (from ${c.sourceKey} in ${c.exampleFile ?? '.env.example'})`
+          : c.sourceKey
+            ? ` (${c.sourceKey})`
+            : '';
+  const devSource = describeSource(conns.dev);
+  const prodSource = describeSource(conns.prod);
   console.log(pc.dim(`  Dev:  ${conns.dev ? `${conns.dev.maskedUrl}${devSource}` : 'not configured'}`));
   console.log(pc.dim(`  Prod: ${conns.prod ? `${conns.prod.maskedUrl}${prodSource}` : 'not configured'}`));
   console.log(pc.dim('  Credentials stay in this process only. Press Ctrl+C to stop.\n'));

@@ -38,6 +38,38 @@ export interface DatabaseStatus {
   detectedFromExample?: boolean;
   exampleFile?: string | null;
   suggestion?: string | null;
+  /** True when the URL was assembled from fragmented DB_HOST/DB_DATABASE-style keys. */
+  synthesized?: boolean;
+}
+
+/** Engines that can be assembled from fragmented host/port/user/password/database keys. */
+export type ComponentEngine = Extract<SqlEngine, 'mysql' | 'postgresql'>;
+
+/**
+ * Discrete connection parameters (POST /api/connect `components`, XAMPP/Laravel-style .env keys).
+ * Contains the raw password: never log, print, or serialize this object.
+ */
+export interface ConnectionComponents {
+  engine: ComponentEngine;
+  host: string;
+  port?: number;
+  user?: string;
+  password?: string;
+  database?: string;
+}
+
+/** Display-safe description of a fragmented config (GET /api/env-info `fragmentedConfig`). No secrets. */
+export interface FragmentedConfig {
+  env: DatabaseEnv;
+  engine: ComponentEngine;
+  host: string;
+  port: number;
+  user: string | null;
+  database: string | null;
+  hasPassword: boolean;
+  /** Env keys the components were read from, e.g. ['DB_CONNECTION', 'DB_HOST', 'DB_DATABASE']. */
+  sourceKeys: string[];
+  maskedUrl: string;
 }
 
 export interface DetectedTemplateKey {
@@ -53,6 +85,9 @@ export interface TemplateDetectionResult {
   templateFile: string | null;
   detectedKeys: DetectedTemplateKey[];
   missingKeys: DetectedTemplateKey[];
+  /** True when DB_HOST/DB_DATABASE-style component keys are configured and can be synthesized into a URL. */
+  fragmentedDetected?: boolean;
+  fragmentedConfig?: FragmentedConfig | null;
 }
 
 export interface StatusResponse {

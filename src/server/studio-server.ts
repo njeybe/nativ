@@ -3,6 +3,8 @@ import http from 'node:http';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type {
+  ComponentEngine,
+  ConnectionComponents,
   ConnectResponse,
   DatabaseEngine,
   DatabaseEnv,
@@ -13,7 +15,14 @@ import type {
   StatusResponse,
   TableSchema,
 } from '../db/types.js';
-import { detectEngine, detectExampleDbKeys, firestoreUrlFromConfig, maskConnectionString, resolveConnections } from '../db/env-parser.js';
+import {
+  connectionUrlFromComponents,
+  detectEngine,
+  detectExampleDbKeys,
+  firestoreUrlFromConfig,
+  maskConnectionString,
+  resolveConnections,
+} from '../db/env-parser.js';
 import { disconnectedStatus, introspectDatabase, type IntrospectionResult } from '../db/introspector.js';
 import {
   CONTRACT_SCHEMA_PATH,
@@ -65,17 +74,25 @@ class HttpError extends Error {
   }
 }
 
+/** Where a session URL came from; shown as badges in status output. */
+interface ConnectionMeta {
+  sourceKey?: string;
+  detectedFromExample?: boolean;
+  exampleFile?: string | null;
+  synthesized?: boolean;
+}
+
 /** In-memory studio session: raw URLs never leave this object except to database drivers. */
 class StudioSession {
   private readonly urls: Record<DatabaseEnv, string | null> = { dev: null, prod: null };
-  private readonly meta = new Map<DatabaseEnv, { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null }>();
+  private readonly meta = new Map<DatabaseEnv, ConnectionMeta>();
   private readonly cache = new Map<DatabaseEnv, { at: number; result: IntrospectionResult }>();
   private readonly cwd: string;
 
   constructor(
     initial: Partial<Record<DatabaseEnv, string | null>>,
     cwd: string = process.cwd(),
-    initialMeta?: Partial<Record<DatabaseEnv, { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null } | null>>,
+    initialMeta?: Partial<Record<DatabaseEnv, ConnectionMeta | null>>,
   ) {
     this.cwd = cwd;
     for (const env of ENVS) {
@@ -88,7 +105,7 @@ class StudioSession {
     env: DatabaseEnv,
     url: string,
     result: IntrospectionResult,
-    meta?: { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null },
+    meta?: ConnectionMeta,
   ): void {
     this.urls[env] = url;
     if (meta) this.meta.set(env, meta);
@@ -143,6 +160,7 @@ class StudioSession {
       result.status.sourceKey = m.sourceKey;
       result.status.detectedFromExample = m.detectedFromExample;
       result.status.exampleFile = m.exampleFile;
+      if (m.synthesized) result.status.synthesized = true;
     }
     this.cache.set(env, { at: Date.now(), result });
     return result;
@@ -274,9 +292,57 @@ function parseFirestoreConfig(value: unknown): FirestoreConfig | null {
   return config;
 }
 
+const COMPONENT_ENGINES: ComponentEngine[] = ['mysql', 'postgresql'];
+
+function optionalString(raw: Record<string, unknown>, field: string): string | undefined {
+  const value = raw[field];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new HttpError(400, 'VALIDATION_ERROR', `"components.${field}" must be a string`);
+  return value;
+}
+
+/** Validates the `components` payload ({ engine, host, port, user, password, database }). */
+function parseComponents(value: unknown, topLevelEngine: DatabaseEngine | null): ConnectionComponents | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'VALIDATION_ERROR', '"components" must be an object');
+  const raw = value as Record<string, unknown>;
+
+  const engine = raw.engine ?? topLevelEngine;
+  if (typeof engine !== 'string' || !COMPONENT_ENGINES.includes(engine as ComponentEngine)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"components.engine" must be one of ${COMPONENT_ENGINES.join(', ')}`);
+  }
+  if (topLevelEngine && topLevelEngine !== engine) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"engine" is "${topLevelEngine}" but "components.engine" is "${engine}"`);
+  }
+
+  const host = (optionalString(raw, 'host') ?? '').trim();
+  if (!/^[A-Za-z0-9._:[\]-]{1,253}$/.test(host)) throw new HttpError(400, 'VALIDATION_ERROR', '"components.host" must be a hostname or IP address');
+
+  let port: number | undefined;
+  if (raw.port !== undefined && raw.port !== null && raw.port !== '') {
+    port = typeof raw.port === 'number' ? raw.port : typeof raw.port === 'string' && /^\d+$/.test(raw.port.trim()) ? Number(raw.port) : NaN;
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new HttpError(400, 'VALIDATION_ERROR', '"components.port" must be an integer between 1 and 65535');
+    }
+  }
+
+  const user = optionalString(raw, 'user')?.trim();
+  const password = optionalString(raw, 'password');
+  const database = optionalString(raw, 'database')?.trim();
+  return {
+    engine: engine as ComponentEngine,
+    host,
+    ...(port ? { port } : {}),
+    ...(user ? { user } : {}),
+    ...(password ? { password } : {}),
+    ...(database ? { database } : {}),
+  };
+}
+
 /**
- * POST /api/connect. Accepts either `connectionUrl`, or (for Firestore) `firestoreConfig`
- * alone. When `engine` is given it must agree with the URL's scheme.
+ * POST /api/connect. Accepts `connectionUrl`, `components` (parameter / XAMPP form, assembled
+ * in-memory), or (for Firestore) `firestoreConfig` alone. When `engine` is given it must agree
+ * with the URL's scheme.
  */
 async function handleConnect(session: StudioSession, body: Record<string, unknown>): Promise<ConnectResponse> {
   const env = parseEnv(body.env, 'env');
@@ -290,12 +356,20 @@ async function handleConnect(session: StudioSession, body: Record<string, unknow
   const firestoreConfig = parseFirestoreConfig(body.firestoreConfig);
 
   let connectionUrl = typeof body.connectionUrl === 'string' ? body.connectionUrl.trim() : '';
+  const components = connectionUrl ? null : parseComponents(body.components, engine);
+  if (!connectionUrl && components) {
+    try {
+      connectionUrl = connectionUrlFromComponents(components);
+    } catch (err) {
+      throw new HttpError(400, 'VALIDATION_ERROR', (err as Error).message);
+    }
+  }
   if (!connectionUrl && firestoreConfig) {
     if (engine && engine !== 'firestore') throw new HttpError(400, 'VALIDATION_ERROR', '"firestoreConfig" requires engine "firestore"');
     connectionUrl = firestoreUrlFromConfig(firestoreConfig);
   }
   if (!connectionUrl) {
-    throw new HttpError(400, 'VALIDATION_ERROR', '"connectionUrl" is required (or "firestoreConfig" for Firestore)');
+    throw new HttpError(400, 'VALIDATION_ERROR', '"connectionUrl" or "components" is required (or "firestoreConfig" for Firestore)');
   }
   const detected = detectEngine(connectionUrl);
   if (!detected) {
@@ -554,10 +628,20 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   const initialMeta = resolved
     ? {
         dev: resolved.dev
-          ? { sourceKey: resolved.dev.sourceKey, detectedFromExample: resolved.dev.detectedFromExample, exampleFile: resolved.dev.exampleFile }
+          ? {
+              sourceKey: resolved.dev.sourceKey,
+              detectedFromExample: resolved.dev.detectedFromExample,
+              exampleFile: resolved.dev.exampleFile,
+              synthesized: resolved.dev.synthesized,
+            }
           : null,
         prod: resolved.prod
-          ? { sourceKey: resolved.prod.sourceKey, detectedFromExample: resolved.prod.detectedFromExample, exampleFile: resolved.prod.exampleFile }
+          ? {
+              sourceKey: resolved.prod.sourceKey,
+              detectedFromExample: resolved.prod.detectedFromExample,
+              exampleFile: resolved.prod.exampleFile,
+              synthesized: resolved.prod.synthesized,
+            }
           : null,
       }
     : undefined;
@@ -598,8 +682,11 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
         }
         case 'GET /api/status':
           return sendJson(res, 200, await handleStatus(session, fresh));
-        case 'GET /api/env-info':
-          return sendJson(res, 200, detectExampleDbKeys(cwd));
+        case 'GET /api/env-info': {
+          // fragmentedConfig is display-safe: host, port, user, database, hasPassword and a masked URL only.
+          const info = detectExampleDbKeys(cwd);
+          return sendJson(res, 200, { ...info, fragmentedDetected: info.fragmentedDetected ?? false, fragmentedConfig: info.fragmentedConfig ?? null });
+        }
         case 'GET /api/schema':
           return sendJson(res, 200, await handleSchema(session, url.searchParams.get('env'), fresh));
         case 'GET /api/diff':
@@ -622,7 +709,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
       }
 
       if (url.pathname.startsWith('/api/')) {
-        const known = ['/api/status', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data'];
+        const known = ['/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data'];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
       }

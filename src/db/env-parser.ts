@@ -1,6 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DatabaseEngine, DatabaseEnv, DetectedTemplateKey, FirestoreConfig, TemplateDetectionResult } from './types.js';
+import type {
+  ComponentEngine,
+  ConnectionComponents,
+  DatabaseEngine,
+  DatabaseEnv,
+  DetectedTemplateKey,
+  FirestoreConfig,
+  FragmentedConfig,
+  TemplateDetectionResult,
+} from './types.js';
 
 /**
  * Safe environment parser.
@@ -49,6 +58,8 @@ export interface ResolvedConnection {
   detectedFromExample?: boolean;
   exampleFile?: string | null;
   suggestion?: string | null;
+  /** True when assembled from fragmented DB_HOST/DB_DATABASE-style keys. */
+  synthesized?: boolean;
 }
 
 /** Parses dotenv-formatted text into key/value pairs without touching process.env. */
@@ -218,12 +229,16 @@ export function detectExampleDbKeys(cwd: string = process.cwd()): TemplateDetect
     }
   }
 
+  const fragmented = synthesizeConnectionFromComponents(loadComponentVars(cwd), 'dev');
+  const fragmentedInfo = { fragmentedDetected: Boolean(fragmented), fragmentedConfig: fragmented?.config ?? null };
+
   if (!templateFile || !rawContent) {
     return {
       templateFound: false,
       templateFile: null,
       detectedKeys: [],
       missingKeys: [],
+      ...fragmentedInfo,
     };
   }
 
@@ -329,7 +344,199 @@ export function detectExampleDbKeys(cwd: string = process.cwd()): TemplateDetect
     templateFile,
     detectedKeys,
     missingKeys,
+    ...fragmentedInfo,
   };
+}
+
+/**
+ * Fragmented connection key families (Laravel/XAMPP/PHP, Docker images, libpq), checked in order.
+ * Each slot lists aliases; the first configured alias wins.
+ */
+interface ComponentKeyFamily {
+  connection: string[];
+  host: string[];
+  port: string[];
+  user: string[];
+  password: string[];
+  database: string[];
+  /** Engine implied by the family itself (e.g. PG* keys), used when no connection key is set. */
+  impliedEngine?: ComponentEngine;
+}
+
+const COMPONENT_FAMILIES: Record<DatabaseEnv, ComponentKeyFamily[]> = {
+  dev: [
+    {
+      connection: ['DB_CONNECTION', 'DB_DRIVER', 'DB_ENGINE', 'DB_TYPE', 'DB_DIALECT'],
+      host: ['DB_HOST', 'DB_HOSTNAME', 'DB_SERVER'],
+      port: ['DB_PORT'],
+      user: ['DB_USERNAME', 'DB_USER'],
+      password: ['DB_PASSWORD', 'DB_PASS'],
+      database: ['DB_DATABASE', 'DB_NAME'],
+    },
+    {
+      connection: [],
+      host: ['MYSQL_HOST'],
+      port: ['MYSQL_PORT'],
+      user: ['MYSQL_USER', 'MYSQL_USERNAME'],
+      password: ['MYSQL_PASSWORD'],
+      database: ['MYSQL_DATABASE', 'MYSQL_DB'],
+      impliedEngine: 'mysql',
+    },
+    {
+      connection: [],
+      host: ['POSTGRES_HOST', 'PGHOST'],
+      port: ['POSTGRES_PORT', 'PGPORT'],
+      user: ['POSTGRES_USER', 'PGUSER'],
+      password: ['POSTGRES_PASSWORD', 'PGPASSWORD'],
+      database: ['POSTGRES_DB', 'POSTGRES_DATABASE', 'PGDATABASE'],
+      impliedEngine: 'postgresql',
+    },
+  ],
+  prod: [
+    {
+      connection: ['PROD_DB_CONNECTION', 'PROD_DB_DRIVER'],
+      host: ['PROD_DB_HOST'],
+      port: ['PROD_DB_PORT'],
+      user: ['PROD_DB_USERNAME', 'PROD_DB_USER'],
+      password: ['PROD_DB_PASSWORD', 'PROD_DB_PASS'],
+      database: ['PROD_DB_DATABASE', 'PROD_DB_NAME'],
+    },
+  ],
+};
+
+/** Every key that can take part in synthesis, so process.env can override .env values for them. */
+const ALL_COMPONENT_KEYS = [
+  ...new Set(
+    Object.values(COMPONENT_FAMILIES)
+      .flat()
+      .flatMap((f) => [...f.connection, ...f.host, ...f.port, ...f.user, ...f.password, ...f.database]),
+  ),
+];
+
+export const DEFAULT_PORTS: Record<ComponentEngine, number> = { mysql: 3306, postgresql: 5432 };
+
+/** Maps a DB_CONNECTION-style driver name (mysql, mariadb, pgsql, postgres…) to an engine. */
+export function componentEngineFromDriver(driver: string | null | undefined): ComponentEngine | null {
+  const d = (driver ?? '').trim().toLowerCase();
+  if (!d) return null;
+  if (/^(mysql|mysql2|mysqli|mariadb|pdo_mysql)$/.test(d)) return 'mysql';
+  if (/^(pgsql|postgres|postgresql|pg|pdo_pgsql)$/.test(d)) return 'postgresql';
+  return null;
+}
+
+/**
+ * Assembles a connection URL from discrete parameters, percent-encoding credentials and database name.
+ * The result contains the raw password: pass it through maskConnectionString() before display.
+ */
+export function connectionUrlFromComponents(components: ConnectionComponents): string {
+  const engine = componentEngineFromDriver(components.engine);
+  if (!engine) throw new Error(`Unsupported engine for parameter connection: ${String(components.engine)} (expected mysql or postgresql)`);
+  const host = (components.host ?? '').trim();
+  if (!host) throw new Error('Parameter connection requires a host');
+  if (/[\s/@?#]/.test(host)) throw new Error('Host must not contain whitespace or URL delimiters');
+  const port = components.port ?? DEFAULT_PORTS[engine];
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid port: ${String(components.port)}`);
+
+  const hostPart = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  const user = components.user?.trim() ?? '';
+  const password = components.password ?? '';
+  const auth = user ? `${encodeURIComponent(user)}${password ? `:${encodeURIComponent(password)}` : ''}@` : '';
+  const database = components.database?.trim() ?? '';
+  const dbPart = database ? `/${encodeURIComponent(database)}` : '';
+  const scheme = engine === 'mysql' ? 'mysql' : 'postgresql';
+  return `${scheme}://${auth}${hostPart}:${port}${dbPart}`;
+}
+
+export interface SynthesizedConnection {
+  /** Raw URL. Never log, print, or serialize this value. */
+  url: string;
+  engine: ComponentEngine;
+  /** Primary key shown as the source (the host or database key). */
+  sourceKey: string;
+  config: FragmentedConfig;
+}
+
+/**
+ * Detects fragmented DB_HOST / DB_PORT / DB_DATABASE / DB_USERNAME / DB_PASSWORD / DB_CONNECTION keys
+ * (plus MYSQL_* and POSTGRES_* / PG* families) and assembles a MySQL or PostgreSQL URL in-memory.
+ * Returns null when no family has a host or database configured, or the driver is not MySQL/PostgreSQL
+ * (e.g. Laravel's DB_CONNECTION=sqlite).
+ */
+export function synthesizeConnectionFromComponents(
+  vars: Record<string, string>,
+  env: DatabaseEnv = 'dev',
+): SynthesizedConnection | null {
+  for (const family of COMPONENT_FAMILIES[env]) {
+    const connection = pick(vars, family.connection);
+    const host = pick(vars, family.host);
+    const database = pick(vars, family.database);
+    if (!host && !database) continue;
+
+    const port = pick(vars, family.port);
+    const portNum = port && /^\d+$/.test(port.value) ? Number(port.value) : undefined;
+
+    let engine: ComponentEngine | null;
+    if (connection) {
+      engine = componentEngineFromDriver(connection.value);
+      if (!engine) continue; // Explicit non-MySQL/PostgreSQL driver: not ours to synthesize.
+    } else {
+      engine = family.impliedEngine ?? (portNum === DEFAULT_PORTS.postgresql ? 'postgresql' : 'mysql');
+    }
+
+    const user = pick(vars, family.user);
+    // Empty passwords are valid (XAMPP root), so read the raw value rather than pick().
+    const passwordKey = family.password.find((k) => vars[k] !== undefined);
+    const password = passwordKey ? vars[passwordKey] : undefined;
+
+    const components: ConnectionComponents = {
+      engine,
+      host: host?.value || '127.0.0.1',
+      ...(portNum ? { port: portNum } : {}),
+      ...(user ? { user: user.value } : {}),
+      ...(password ? { password } : {}),
+      ...(database ? { database: database.value } : {}),
+    };
+
+    let url: string;
+    try {
+      url = connectionUrlFromComponents(components);
+    } catch {
+      continue;
+    }
+
+    const sourceKeys = [connection, host, port, user, database]
+      .filter((x): x is { key: string; value: string } => Boolean(x))
+      .map((x) => x.key);
+    if (passwordKey) sourceKeys.push(passwordKey);
+
+    return {
+      url,
+      engine,
+      sourceKey: (host ?? database)!.key,
+      config: {
+        env,
+        engine,
+        host: components.host,
+        port: components.port ?? DEFAULT_PORTS[engine],
+        user: components.user ?? null,
+        database: components.database ?? null,
+        hasPassword: Boolean(password),
+        sourceKeys,
+        maskedUrl: maskConnectionString(url),
+      },
+    };
+  }
+  return null;
+}
+
+/** Merges .env files with process.env overrides for all fragmented component keys. */
+function loadComponentVars(cwd: string): Record<string, string> {
+  const vars = loadEnvFiles(cwd);
+  for (const key of ALL_COMPONENT_KEYS) {
+    const value = process.env[key];
+    if (value !== undefined) vars[key] = value;
+  }
+  return vars;
 }
 
 export interface ResolvedConnectionsResult {
@@ -373,9 +580,21 @@ export function resolveConnections(cwd: string = process.cwd()): ResolvedConnect
     };
   };
 
+  // Skip keys whose value is not a connection URL (e.g. a template's DB_HOST=127.0.0.1 or DB_CONNECTION=mysql).
   const build = (env: DatabaseEnv, keys: string[]): ResolvedConnection | null => {
-    const found = pick(vars, keys);
-    return found ? toConnection(env, found.value, found.key) : null;
+    for (const key of keys) {
+      const value = vars[key]?.trim();
+      const conn = value ? toConnection(env, value, key) : null;
+      if (conn) return conn;
+    }
+    return null;
+  };
+
+  const componentVars = loadComponentVars(cwd);
+  const synthesize = (env: DatabaseEnv): ResolvedConnection | null => {
+    const synthesized = synthesizeConnectionFromComponents(componentVars, env);
+    const conn = synthesized ? toConnection(env, synthesized.url, synthesized.sourceKey) : null;
+    return conn ? { ...conn, synthesized: true } : null;
   };
 
   let dev = build('dev', effectiveDevKeys);
@@ -385,6 +604,8 @@ export function resolveConnections(cwd: string = process.cwd()): ResolvedConnect
   if (!dev && emulatorHost && projectId) {
     dev = toConnection('dev', firestoreUrlFromConfig({ projectId, emulatorHost }), 'FIRESTORE_EMULATOR_HOST');
   }
+  // No single URI configured: assemble one from fragmented DB_HOST / DB_DATABASE-style keys.
+  dev ??= synthesize('dev');
 
-  return { dev, prod: build('prod', effectiveProdKeys), templateInfo };
+  return { dev, prod: build('prod', effectiveProdKeys) ?? synthesize('prod'), templateInfo };
 }
