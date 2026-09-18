@@ -16,6 +16,8 @@ import { runInit } from '../commands/init.js';
 import { runStatus } from '../commands/status.js';
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
 import { runVerify } from '../commands/verify.js';
+import { runTestGen } from '../commands/test-gen.js';
+import { TEST_FRAMEWORKS } from '../core/test-generator-types.js';
 
 /**
  * Native MCP (Model Context Protocol) server for Nativ over stdio.
@@ -241,6 +243,32 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       },
     },
     ({ target }) => captureOutput(() => runDbDiff(targetDir, { target: target ?? 'contract', json: true })),
+  );
+
+  // ─── Test generation ─────────────────────────────────────────────────────
+
+  registerDualTool(
+    'test_gen',
+    {
+      description:
+        'Generate API contract and DB integrity test suites from .ai/api_contracts.json and .ai/db_schema.json (JSON result). ' +
+        'Writes into the project unless dryRun is true; never overwrites files it did not generate.',
+      inputSchema: {
+        output: z.string().optional().describe('Output directory relative to the project (default tests/contract)'),
+        framework: z.enum(TEST_FRAMEWORKS as [string, ...string[]]).optional().describe('Test framework (default vitest)'),
+        baseUrl: z.string().optional().describe('Base URL the API suites call (default http://localhost:3000)'),
+        dryRun: z.boolean().optional().describe('Return the generated files without writing them'),
+      },
+    },
+    async ({ output, framework, baseUrl, dryRun }) => {
+      if (output) {
+        const rel = path.relative(targetDir, path.resolve(targetDir, output));
+        if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+          return { content: [{ type: 'text', text: 'Error: output must be a subdirectory of the project.' }], isError: true };
+        }
+      }
+      return captureOutput(() => runTestGen(targetDir, { output, framework, baseUrl, dryRun, json: true }));
+    },
   );
 
   // ─── Contract resources ────────────────────────────────────────────────────

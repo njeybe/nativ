@@ -33,6 +33,8 @@ import {
   type ContractSchemaDiff,
 } from '../db/diff.js';
 import { fetchData, insertRecord, updateRecord, deleteRecord } from '../db/data-engine.js';
+import { generateContractTests, TestGenError } from '../core/test-generator.js';
+import { isTestFramework, TEST_FRAMEWORKS, type TestGenResult } from '../core/test-generator-types.js';
 
 /**
  * Embedded Studio HTTP server (native node:http).
@@ -468,6 +470,45 @@ async function handleExportContract(session: StudioSession, cwd: string, body: R
   };
 }
 
+const TEST_GEN_ERROR_STATUS: Record<string, number> = {
+  INVALID_FRAMEWORK: 400,
+  INVALID_BASE_URL: 400,
+  INVALID_OUTPUT_PATH: 400,
+  NO_CONTRACTS: 404,
+  OUTPUT_CONFLICT: 409,
+  INVALID_CONTRACT: 422,
+};
+
+/** POST /api/tests/generate. Output is confined to the project directory. */
+function handleTestGenerate(cwd: string, body: Record<string, unknown>): TestGenResult {
+  const { outputDir, framework, baseUrl, dryRun } = body;
+  if (outputDir !== undefined && typeof outputDir !== 'string') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"outputDir" must be a string');
+  }
+  if (framework !== undefined && (typeof framework !== 'string' || !isTestFramework(framework))) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"framework" must be one of: ${TEST_FRAMEWORKS.join(', ')}`);
+  }
+  if (baseUrl !== undefined && typeof baseUrl !== 'string') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"baseUrl" must be a string');
+  }
+  if (dryRun !== undefined && typeof dryRun !== 'boolean') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"dryRun" must be a boolean');
+  }
+  if (outputDir) {
+    const rel = path.relative(cwd, path.resolve(cwd, outputDir));
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new HttpError(400, 'VALIDATION_ERROR', '"outputDir" must be a subdirectory of the project');
+    }
+  }
+
+  try {
+    return generateContractTests({ targetDir: cwd, outputDir, framework, baseUrl, dryRun });
+  } catch (err) {
+    if (err instanceof TestGenError) throw new HttpError(TEST_GEN_ERROR_STATUS[err.code] ?? 400, err.code, err.message);
+    throw err;
+  }
+}
+
 function logProdAudit(
   cwd: string,
   action: 'INSERT' | 'UPDATE' | 'DELETE',
@@ -708,13 +749,15 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, await handleDataPut(session, cwd, await readJsonBody(req), req));
         case 'DELETE /api/data':
           return sendJson(res, 200, await handleDataDelete(session, cwd, await readJsonBody(req), req));
+        case 'POST /api/tests/generate':
+          return sendJson(res, 200, handleTestGenerate(cwd, await readJsonBody(req)));
         case 'GET /favicon.ico':
           res.writeHead(204).end();
           return;
       }
 
       if (url.pathname.startsWith('/api/')) {
-        const known = ['/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data'];
+        const known = ['/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data', '/api/tests/generate'];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
       }

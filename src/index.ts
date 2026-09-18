@@ -19,6 +19,7 @@ import { runUpdate } from './commands/update.js';
 import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './commands/db.js';
 import { runMcp } from './commands/mcp.js';
 import { runVerify } from './commands/verify.js';
+import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -234,6 +235,22 @@ export function createProgram(): Command {
     .option('--no-open', 'Do not open the browser automatically')
     .action(async (targetDir, options) => {
       await runDbUi(targetDir, options);
+    });
+
+  const test = program
+    .command('test')
+    .description('Generate contract and database integrity tests from .ai/ contracts');
+
+  test
+    .command('gen [targetDir]')
+    .description('Synthesize API contract and DB integrity test suites from .ai/api_contracts.json and .ai/db_schema.json')
+    .option('-o, --output <dir>', 'Output directory, relative to the project (default tests/contract)')
+    .option('-f, --framework <name>', `${TEST_GEN_FRAMEWORK_HELP} (default vitest)`)
+    .option('-b, --base-url <url>', 'Base URL the API suites call (default http://localhost:3000)')
+    .option('--dry-run', 'Show what would be generated without writing files')
+    .option('--json', 'Output the generation result as JSON')
+    .action(async (targetDir, options) => {
+      await runTestGen(targetDir, options);
     });
 
   program
