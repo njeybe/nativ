@@ -37,6 +37,8 @@ A portable, multi-tier autonomous software engineering harness that connects **A
 
 ## ⚡ Quick Start
 
+> 📖 **Full Guide:** See [Installation Guide](file:///docs/installation.md) for detailed prerequisites, global/source install, and Windows troubleshooting.
+
 ### Initialize in Any Project (Existing or New)
 
 Run the CLI tool inside your target project directory:
