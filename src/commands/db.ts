@@ -46,27 +46,61 @@ function parseEnvOption(value: string | undefined, fallback: DatabaseEnv): Datab
 }
 
 async function introspectEnv(targetDir: string, env: DatabaseEnv): Promise<IntrospectionResult> {
-  const conn = resolveConnections(targetDir)[env];
+  const conns = resolveConnections(targetDir);
+  const conn = conns[env];
   if (!conn) {
+    const missingKey = conns.templateInfo?.missingKeys.find((k) => k.targetEnv === env);
+    if (missingKey) {
+      const engineLabel = missingKey.engine ? ` (${ENGINE_LABEL[missingKey.engine] ?? missingKey.engine})` : '';
+      const templateName = conns.templateInfo?.templateFile ?? '.env.example';
+      const suggestion = `Found "${missingKey.key}"${engineLabel} in ${templateName}, but it is not set in your .env`;
+      return {
+        status: disconnectedStatus(
+          `No ${env} database configured. ${suggestion}`,
+          missingKey.engine ?? 'postgresql',
+          '',
+          {
+            sourceKey: missingKey.key,
+            detectedFromExample: true,
+            exampleFile: templateName,
+            suggestion,
+          },
+        ),
+        tables: [],
+      };
+    }
     const key = env === 'dev' ? 'DEV_DATABASE_URL (or DATABASE_URL)' : 'PROD_DATABASE_URL';
     return { status: disconnectedStatus(`No ${env} database configured. Set ${key} in .env`), tables: [] };
   }
-  return introspectDatabase(conn.url);
+  const result = await introspectDatabase(conn.url);
+  result.status.sourceKey = conn.sourceKey;
+  result.status.detectedFromExample = conn.detectedFromExample;
+  result.status.exampleFile = conn.exampleFile;
+  return result;
 }
 
 function printStatusLine(env: DatabaseEnv, s: DatabaseStatus): void {
   const label = pc.bold(env.toUpperCase().padEnd(4));
   if (!s.connected) {
     console.log(`  ${pc.red('●')} ${label} ${pc.red('[OFFLINE]')} ${pc.dim(s.error ?? 'Unknown error')}`);
+    if (s.suggestion) {
+      console.log(`         ${pc.yellow(`Tip: ${s.suggestion}`)}`);
+    }
     if (s.maskedUrl) console.log(pc.dim(`         ${s.maskedUrl}`));
     return;
   }
   const count = s.entityCount ?? s.tableCount;
   const isCollection = s.entityType === 'collection';
   const entityWord = isCollection ? (count === 1 ? 'collection' : 'collections') : (count === 1 ? 'table' : 'tables');
+  const sourceInfo =
+    s.detectedFromExample && s.sourceKey
+      ? pc.cyan(` (via ${s.sourceKey} from ${s.exampleFile ?? '.env.example'})`)
+      : s.sourceKey
+        ? pc.dim(` (via ${s.sourceKey})`)
+        : '';
   console.log(
     `  ${pc.green('●')} ${label} ${pc.green('[ONLINE]')} ${ENGINE_LABEL[s.engine] ?? s.engine}` +
-      `${s.database ? ` · ${s.database}` : ''} ${pc.dim(`(${s.pingMs}ms)`)} – ${count} ${entityWord}`,
+      `${s.database ? ` · ${s.database}` : ''} ${pc.dim(`(${s.pingMs}ms)`)} – ${count} ${entityWord}${sourceInfo}`,
   );
   console.log(pc.dim(`         ${s.maskedUrl}`));
 }
@@ -335,9 +369,10 @@ export async function runDbUi(targetDirArg?: string, options: { port?: string; o
 
   const conns = resolveConnections(targetDir);
   console.log(pc.bold(pc.cyan(`\nAgentJ DB Studio v${version}`)));
-  console.log(`  ${pc.bold('Local:')} ${pc.underline(handle.url)}`);
-  console.log(pc.dim(`  Dev:  ${conns.dev ? conns.dev.maskedUrl : 'not configured'}`));
-  console.log(pc.dim(`  Prod: ${conns.prod ? conns.prod.maskedUrl : 'not configured'}`));
+  const devSource = conns.dev?.detectedFromExample ? ` (from ${conns.dev.sourceKey} in ${conns.dev.exampleFile ?? '.env.example'})` : conns.dev?.sourceKey ? ` (${conns.dev.sourceKey})` : '';
+  const prodSource = conns.prod?.detectedFromExample ? ` (from ${conns.prod.sourceKey} in ${conns.prod.exampleFile ?? '.env.example'})` : conns.prod?.sourceKey ? ` (${conns.prod.sourceKey})` : '';
+  console.log(pc.dim(`  Dev:  ${conns.dev ? `${conns.dev.maskedUrl}${devSource}` : 'not configured'}`));
+  console.log(pc.dim(`  Prod: ${conns.prod ? `${conns.prod.maskedUrl}${prodSource}` : 'not configured'}`));
   console.log(pc.dim('  Credentials stay in this process only. Press Ctrl+C to stop.\n'));
 
   if (options.open !== false) openBrowser(handle.url);

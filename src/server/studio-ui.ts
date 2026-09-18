@@ -99,6 +99,25 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .badge-media { color: var(--media); background: rgba(236,72,153,.13); font-family: inherit; cursor: zoom-in; }
 button.badge-media:hover { background: rgba(236,72,153,.25); }
 button.badge { font: inherit; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; }
+.badge-source { font-family: var(--mono); color: #38bdf8; background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.35); }
+
+/* Diagnostic Banner */
+.diagnostic-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; margin: 12px 0 16px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--r-control); }
+.diagnostic-content { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #fef3c7; }
+.diagnostic-tag { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--warning); background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 7px; border-radius: var(--r-pill); }
+.diagnostic-msg code { background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; color: #fff; font-family: var(--mono); }
+.diagnostic-actions { display: flex; gap: 8px; }
+
+/* Template Helper Box in Settings Modal */
+.template-helper-box { background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: var(--r-control); padding: 12px 14px; margin-bottom: 16px; }
+.template-helper-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.template-helper-label code { color: #38bdf8; font-family: var(--mono); font-weight: 600; }
+.template-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.template-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); font-family: var(--mono); font-size: 12px; }
+.template-chip:hover { border-color: #38bdf8; background: var(--surface-hover); }
+.chip-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.chip-dot.on { background: var(--success); }
+.chip-dot.off { background: var(--warning); }
 
 /* Media preview */
 .thumb-pop { position: fixed; z-index: 60; width: 220px; padding: 8px; border-radius: var(--r-card); border: 1px solid rgba(236,72,153,.45); background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.5); pointer-events: none; }
@@ -282,6 +301,8 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     </div>
   </div>
 
+  <div id="diagnostic-banner" aria-live="polite" hidden></div>
+
   <nav class="tabs" role="tablist" aria-label="Studio views">
     <button class="tab" role="tab" id="tab-explorer" aria-controls="view" data-tab="explorer">Schema &amp; Structure <span class="count" id="count-explorer">0</span></button>
     <button class="tab" role="tab" id="tab-data" aria-controls="view" data-tab="data">Live Data Browser <span class="count" id="count-data">0</span></button>
@@ -296,6 +317,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
   <form class="modal glass" method="dialog" id="conn-form">
     <h2 id="conn-title">Connection Settings</h2>
     <p class="lead">Connection strings stay in memory inside the local agentj process. They are never written to disk or shown to AI agents; only masked URLs are displayed.</p>
+    <div id="conn-template-chips" hidden></div>
     <div class="field" data-env="dev">
       <label for="engine-dev"><span class="dot" id="mdot-dev"></span> Dev / Staging</label>
       <div class="field-row">
@@ -415,7 +437,8 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     dataResult: null,
     dataError: null,
     editingPk: null,
-    pendingMutation: null
+    pendingMutation: null,
+    envInfo: null
   };
   // Media fields rendered in the current view, referenced by index from IMAGE badges.
   var mediaRegistry = [];
@@ -523,11 +546,13 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     return Promise.all([
       api('/api/status' + q).catch(function (e) { toast(e.message); return null; }),
       api('/api/schema' + q).catch(function (e) { toast(e.message); return { devTables: [], prodTables: [] }; }),
-      api(diffPath).then(function (d) { state.diffError = null; return d; }, function (e) { state.diffError = e.message; return null; })
+      api(diffPath).then(function (d) { state.diffError = null; return d; }, function (e) { state.diffError = e.message; return null; }),
+      api('/api/env-info').catch(function () { return null; })
     ]).then(function (results) {
       state.status = results[0];
       state.schema = results[1];
       state.diff = results[2];
+      state.envInfo = results[3];
       state.diffTargetUsed = state.diffTarget;
       state.loading = false;
       if (state.status) {
@@ -551,14 +576,58 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       return '<span class="pill" title="' + esc(s.error || '') + '"><span class="dot off"></span><b>' + label + ':</b> ' + why +
         ' <span class="badge badge-offline">OFFLINE</span></span>';
     }
+    var sourceBadge = s.detectedFromExample && s.sourceKey
+      ? ' <span class="badge badge-source" title="Detected in ' + esc(s.exampleFile || '.env.example') + '">via ' + esc(s.sourceKey) + '</span>'
+      : (s.sourceKey ? ' <span class="badge badge-source">via ' + esc(s.sourceKey) + '</span>' : '');
     return '<span class="pill" title="' + esc(s.maskedUrl) + '"><span class="dot on"></span><b>' + label + ':</b> ' +
       esc(ENGINE_LABEL[s.engine] || s.engine) + (s.database ? ' · ' + esc(s.database) : '') + ' (' + Math.round(s.pingMs) + 'ms) – ' +
-      entityCount(s) + ' ' + entityNoun(s, true) + ' <span class="badge badge-online">ONLINE</span></span>';
+      entityCount(s) + ' ' + entityNoun(s, true) + sourceBadge + ' <span class="badge badge-online">ONLINE</span></span>';
   }
 
   function renderShell() {
     var st = state.status || {};
     $('telemetry').innerHTML = statusPill('dev', st.dev) + statusPill('prod', st.prod);
+
+    var bannerEl = $('diagnostic-banner');
+    if (bannerEl) {
+      var devS = st.dev;
+      var prodS = st.prod;
+      var activeS = state.envMode === 'prod' ? prodS : devS;
+      var suggestion = (activeS && !activeS.connected && activeS.suggestion) ||
+        (devS && !devS.connected && devS.suggestion) ||
+        (prodS && !prodS.connected && prodS.suggestion);
+
+      if (!suggestion && state.envInfo && state.envInfo.missingKeys && state.envInfo.missingKeys.length > 0) {
+        var missingForActive = state.envInfo.missingKeys.find(function (k) {
+          return k.targetEnv === (state.envMode === 'prod' ? 'prod' : 'dev');
+        }) || state.envInfo.missingKeys[0];
+        if (missingForActive && ((missingForActive.targetEnv === 'dev' && (!devS || !devS.connected)) || (missingForActive.targetEnv === 'prod' && (!prodS || !prodS.connected)))) {
+          var engLabel = missingForActive.engine ? ' (' + (ENGINE_LABEL[missingForActive.engine] || missingForActive.engine) + ')' : '';
+          suggestion = 'Detected "' + missingForActive.key + '"' + engLabel + ' in ' + (state.envInfo.templateFile || '.env.example') + ', but it is not set in your .env file.';
+        }
+      }
+
+      if (suggestion && ((!devS || !devS.connected) || (!prodS || !prodS.connected))) {
+        bannerEl.innerHTML = '<div class="diagnostic-banner">' +
+          '<div class="diagnostic-content">' +
+            '<span class="diagnostic-tag">[DIAGNOSTIC]</span> ' +
+            '<span class="diagnostic-msg">' + esc(suggestion) + '</span>' +
+          '</div>' +
+          '<div class="diagnostic-actions">' +
+            '<button class="btn small" type="button" id="btn-diag-settings">Open Connection Settings</button>' +
+          '</div>' +
+        '</div>';
+        bannerEl.hidden = false;
+        var btnDiag = $('btn-diag-settings');
+        if (btnDiag) {
+          btnDiag.onclick = function () { openSettings(); };
+        }
+      } else {
+        bannerEl.innerHTML = '';
+        bannerEl.hidden = true;
+      }
+    }
+
     $('count-explorer').textContent = String((state.schema.devTables || []).length + (state.schema.prodTables || []).length);
     var activeEnv = state.envMode === 'prod' ? 'prod' : 'dev';
     var dataCount = state.dataResult && state.dataResult.totalCount != null
@@ -1431,8 +1500,49 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     });
   }
 
+  function renderTemplateChips() {
+    var host = $('conn-template-chips');
+    if (!host) return;
+    if (!state.envInfo || !state.envInfo.templateFound || !state.envInfo.detectedKeys || state.envInfo.detectedKeys.length === 0) {
+      host.innerHTML = '';
+      host.hidden = true;
+      return;
+    }
+    var html = '<div class="template-helper-box">' +
+      '<div class="template-helper-label">Discovered in <code>' + esc(state.envInfo.templateFile || '.env.example') + '</code>:</div>' +
+      '<div class="template-chips">';
+    state.envInfo.detectedKeys.forEach(function (dk) {
+      var eng = dk.engine ? ' (' + (ENGINE_LABEL[dk.engine] || dk.engine) + ')' : '';
+      var statusDot = dk.isConfiguredInEnv ? '<span class="chip-dot on"></span>' : '<span class="chip-dot off"></span>';
+      var title = dk.isConfiguredInEnv ? 'Configured in .env' : 'Missing in .env';
+      html += '<button type="button" class="btn small template-chip" data-template-key="' + esc(dk.key) + '" data-template-engine="' + esc(dk.engine || '') + '" data-template-env="' + esc(dk.targetEnv) + '" title="' + title + '">' +
+        statusDot + esc(dk.key) + eng +
+      '</button>';
+    });
+    html += '</div></div>';
+    host.innerHTML = html;
+    host.hidden = false;
+
+    host.querySelectorAll('.template-chip').forEach(function (btn) {
+      btn.onclick = function () {
+        var key = btn.getAttribute('data-template-key');
+        var eng = btn.getAttribute('data-template-engine');
+        var targetEnv = btn.getAttribute('data-template-env') || 'dev';
+        if (eng === 'firestore') {
+          $('engine-' + targetEnv).value = 'firestore';
+        } else {
+          $('engine-' + targetEnv).value = 'url';
+        }
+        setEngineMode(targetEnv);
+        $('url-' + targetEnv).focus();
+        toast('Selected ' + key + ' for ' + targetEnv.toUpperCase());
+      };
+    });
+  }
+
   function openSettings() {
     renderModalStatus();
+    renderTemplateChips();
     ['dev', 'prod'].forEach(function (env) { $('result-' + env).textContent = ''; $('result-' + env).className = 'result'; });
     var dlg = $('conn-dialog');
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');

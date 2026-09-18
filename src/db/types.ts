@@ -34,6 +34,25 @@ export interface DatabaseStatus {
   /** @deprecated Legacy alias of entityCount, kept for existing CLI/studio consumers. */
   tableCount: number;
   error: string | null;
+  sourceKey?: string;
+  detectedFromExample?: boolean;
+  exampleFile?: string | null;
+  suggestion?: string | null;
+}
+
+export interface DetectedTemplateKey {
+  key: string;
+  targetEnv: DatabaseEnv;
+  engine: DatabaseEngine | null;
+  exampleValue?: string;
+  isConfiguredInEnv: boolean;
+}
+
+export interface TemplateDetectionResult {
+  templateFound: boolean;
+  templateFile: string | null;
+  detectedKeys: DetectedTemplateKey[];
+  missingKeys: DetectedTemplateKey[];
 }
 
 export interface StatusResponse {

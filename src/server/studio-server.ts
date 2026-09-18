@@ -13,7 +13,7 @@ import type {
   StatusResponse,
   TableSchema,
 } from '../db/types.js';
-import { detectEngine, firestoreUrlFromConfig, maskConnectionString, resolveConnections } from '../db/env-parser.js';
+import { detectEngine, detectExampleDbKeys, firestoreUrlFromConfig, maskConnectionString, resolveConnections } from '../db/env-parser.js';
 import { disconnectedStatus, introspectDatabase, type IntrospectionResult } from '../db/introspector.js';
 import {
   CONTRACT_SCHEMA_PATH,
@@ -68,14 +68,31 @@ class HttpError extends Error {
 /** In-memory studio session: raw URLs never leave this object except to database drivers. */
 class StudioSession {
   private readonly urls: Record<DatabaseEnv, string | null> = { dev: null, prod: null };
+  private readonly meta = new Map<DatabaseEnv, { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null }>();
   private readonly cache = new Map<DatabaseEnv, { at: number; result: IntrospectionResult }>();
+  private readonly cwd: string;
 
-  constructor(initial: Partial<Record<DatabaseEnv, string | null>>) {
-    for (const env of ENVS) this.urls[env] = initial[env] ?? null;
+  constructor(
+    initial: Partial<Record<DatabaseEnv, string | null>>,
+    cwd: string = process.cwd(),
+    initialMeta?: Partial<Record<DatabaseEnv, { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null } | null>>,
+  ) {
+    this.cwd = cwd;
+    for (const env of ENVS) {
+      this.urls[env] = initial[env] ?? null;
+      if (initialMeta?.[env]) this.meta.set(env, initialMeta[env]!);
+    }
   }
 
-  set(env: DatabaseEnv, url: string, result: IntrospectionResult): void {
+  set(
+    env: DatabaseEnv,
+    url: string,
+    result: IntrospectionResult,
+    meta?: { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null },
+  ): void {
     this.urls[env] = url;
+    if (meta) this.meta.set(env, meta);
+    else this.meta.delete(env);
     this.cache.set(env, { at: Date.now(), result });
   }
 
@@ -90,14 +107,43 @@ class StudioSession {
   async introspect(env: DatabaseEnv, fresh = false): Promise<IntrospectionResult> {
     const url = this.urls[env];
     if (!url) {
+      const conns = resolveConnections(this.cwd);
+      const missingKey = conns.templateInfo?.missingKeys.find((k) => k.targetEnv === env);
+      if (missingKey) {
+        const engineLabel = missingKey.engine ? ` (${missingKey.engine})` : '';
+        const templateName = conns.templateInfo?.templateFile ?? '.env.example';
+        const suggestion = `Found "${missingKey.key}"${engineLabel} in ${templateName}, but it is not set in your .env`;
+        return {
+          status: disconnectedStatus(
+            `No ${env === 'dev' ? 'Dev' : 'Prod'} database configured. ${suggestion}`,
+            missingKey.engine ?? 'postgresql',
+            '',
+            {
+              sourceKey: missingKey.key,
+              detectedFromExample: true,
+              exampleFile: templateName,
+              suggestion,
+            },
+          ),
+          tables: [],
+        };
+      }
       return {
-        status: disconnectedStatus(`No ${env === 'dev' ? 'Dev' : 'Prod'} database configured. Use Connection Settings or set ${env.toUpperCase()}_DATABASE_URL.`),
+        status: disconnectedStatus(
+          `No ${env === 'dev' ? 'Dev' : 'Prod'} database configured. Use Connection Settings or set ${env.toUpperCase()}_DATABASE_URL.`,
+        ),
         tables: [],
       };
     }
     const cached = this.cache.get(env);
     if (!fresh && cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.result;
     const result = await introspectDatabase(url);
+    const m = this.meta.get(env);
+    if (m) {
+      result.status.sourceKey = m.sourceKey;
+      result.status.detectedFromExample = m.detectedFromExample;
+      result.status.exampleFile = m.exampleFile;
+    }
     this.cache.set(env, { at: Date.now(), result });
     return result;
   }
@@ -217,7 +263,7 @@ function parseFirestoreConfig(value: unknown): FirestoreConfig | null {
   const config: FirestoreConfig = { projectId };
   if (raw.emulatorHost !== undefined && raw.emulatorHost !== '') {
     const host = typeof raw.emulatorHost === 'string' ? raw.emulatorHost.trim() : '';
-    if (!/^[A-Za-z0-9.\-[\]:]+:\d{2,5}$/.test(host)) throw new HttpError(400, 'VALIDATION_ERROR', '"firestoreConfig.emulatorHost" must look like host:port');
+    if (!/^[A-Za-z0-9.\-[\]:]+:\d{1,5}$/.test(host)) throw new HttpError(400, 'VALIDATION_ERROR', '"firestoreConfig.emulatorHost" must look like host:port');
     config.emulatorHost = host;
   }
   if (raw.databaseId !== undefined && raw.databaseId !== '') {
@@ -505,7 +551,21 @@ async function handleDataDelete(session: StudioSession, cwd: string, body: Recor
 export function createStudioServer(options: StudioServerOptions = {}): http.Server {
   const cwd = options.cwd ?? process.cwd();
   const resolved = options.connections ? null : resolveConnections(cwd);
-  const session = new StudioSession(options.connections ?? { dev: resolved?.dev?.url ?? null, prod: resolved?.prod?.url ?? null });
+  const initialMeta = resolved
+    ? {
+        dev: resolved.dev
+          ? { sourceKey: resolved.dev.sourceKey, detectedFromExample: resolved.dev.detectedFromExample, exampleFile: resolved.dev.exampleFile }
+          : null,
+        prod: resolved.prod
+          ? { sourceKey: resolved.prod.sourceKey, detectedFromExample: resolved.prod.detectedFromExample, exampleFile: resolved.prod.exampleFile }
+          : null,
+      }
+    : undefined;
+  const session = new StudioSession(
+    options.connections ?? { dev: resolved?.dev?.url ?? null, prod: resolved?.prod?.url ?? null },
+    cwd,
+    initialMeta,
+  );
 
   const renderHtml = () => {
     if (typeof options.html === 'function') return options.html();
@@ -528,6 +588,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
             'Content-Length': Buffer.byteLength(html),
             'Cache-Control': 'no-store',
             'X-Frame-Options': 'DENY',
+            // https: images are allowed for media thumbnails; never leak the studio URL to those hosts.
+            'Referrer-Policy': 'no-referrer',
             'Content-Security-Policy':
               "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
           });
@@ -536,6 +598,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
         }
         case 'GET /api/status':
           return sendJson(res, 200, await handleStatus(session, fresh));
+        case 'GET /api/env-info':
+          return sendJson(res, 200, detectExampleDbKeys(cwd));
         case 'GET /api/schema':
           return sendJson(res, 200, await handleSchema(session, url.searchParams.get('env'), fresh));
         case 'GET /api/diff':

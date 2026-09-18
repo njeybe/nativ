@@ -894,7 +894,12 @@ async function openDriver(url: string, engine: DatabaseEngine): Promise<Driver> 
 }
 
 /** Status for an environment with no usable connection configured. */
-export function disconnectedStatus(error: string, engine: DatabaseEngine = 'postgresql', url = ''): DatabaseStatus {
+export function disconnectedStatus(
+  error: string,
+  engine: DatabaseEngine = 'postgresql',
+  url = '',
+  meta?: { sourceKey?: string; detectedFromExample?: boolean; exampleFile?: string | null; suggestion?: string | null },
+): DatabaseStatus {
   return {
     connected: false,
     engine,
@@ -905,6 +910,10 @@ export function disconnectedStatus(error: string, engine: DatabaseEngine = 'post
     entityType: isNoSqlEngine(engine) ? 'collection' : 'table',
     tableCount: 0,
     error,
+    ...(meta?.sourceKey ? { sourceKey: meta.sourceKey } : {}),
+    ...(meta?.detectedFromExample !== undefined ? { detectedFromExample: meta.detectedFromExample } : {}),
+    ...(meta?.exampleFile ? { exampleFile: meta.exampleFile } : {}),
+    ...(meta?.suggestion ? { suggestion: meta.suggestion } : {}),
   };
 }
 
