@@ -18,6 +18,7 @@ import {
 import { runUpdate } from './commands/update.js';
 import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './commands/db.js';
 import { runMcp } from './commands/mcp.js';
+import { runVerify } from './commands/verify.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -67,6 +68,17 @@ export function createProgram(): Command {
       await runTaskList(targetDir, options);
     });
 
+  program
+    .command('verify [taskId] [targetDir]')
+    .description('Execute task verification commands to prevent regressions and validate build health')
+    .option('-a, --all', 'Run verification commands for all completed tasks in the project')
+    .option('-m, --milestone <id>', 'Run verification commands for all tasks in a specific milestone')
+    .option('--json', 'Output verification telemetry as JSON')
+    .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
+    .action(async (taskId, targetDir, options) => {
+      await runVerify(taskId, targetDir, options);
+    });
+
   const task = program
     .command('task')
     .description('Manage task lifecycle and JIT context slicing in .ai/master_plan.json');
@@ -99,10 +111,27 @@ export function createProgram(): Command {
 
   task
     .command('complete <taskId> [targetDir]')
-    .description('Mark a task as completed and advance milestone when ready')
+    .description('Mark a task as completed (executes verification command unless --no-verify is passed)')
     .option('-n, --notes <notes>', 'Completion notes or summary')
+    .option('--no-verify', 'Skip automated verification command execution')
+    .option('--timeout <ms>', 'Verification execution timeout in milliseconds', parseInt)
     .action(async (taskId, targetDir, options) => {
-      await runTaskComplete(taskId, targetDir, options);
+      await runTaskComplete(taskId, targetDir, {
+        notes: options.notes,
+        skipVerify: options.verify === false,
+        timeout: options.timeout,
+      });
+    });
+
+  task
+    .command('verify [taskId] [targetDir]')
+    .description('Execute task verification commands to prevent regressions and validate build health')
+    .option('-a, --all', 'Run verification commands for all completed tasks in the project')
+    .option('-m, --milestone <id>', 'Run verification commands for all tasks in a specific milestone')
+    .option('--json', 'Output verification telemetry as JSON')
+    .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
+    .action(async (taskId, targetDir, options) => {
+      await runVerify(taskId, targetDir, options);
     });
 
   task

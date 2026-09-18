@@ -15,9 +15,10 @@ import {
 import { runInit } from '../commands/init.js';
 import { runStatus } from '../commands/status.js';
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
+import { runVerify } from '../commands/verify.js';
 
 /**
- * Native MCP (Model Context Protocol) server for AgentJ over stdio.
+ * Native MCP (Model Context Protocol) server for Nativ over stdio.
  *
  * stdout is reserved for JSON-RPC frames, so the existing CLI handlers (which print via console.*)
  * run inside `captureOutput`, which collects their output and returns it as tool content.
@@ -55,7 +56,7 @@ function packageVersion(): string {
 // Handlers share global console/process.exitCode state, so captured runs are serialized.
 let captureQueue: Promise<unknown> = Promise.resolve();
 
-function captureOutput(fn: () => Promise<void>, options: { errorOnExitCode?: boolean } = {}): Promise<CallToolResult> {
+function captureOutput(fn: () => Promise<unknown>, options: { errorOnExitCode?: boolean } = {}): Promise<CallToolResult> {
   const run = async (): Promise<CallToolResult> => {
     const lines: string[] = [];
     const collect = (...args: unknown[]) => {
@@ -137,13 +138,27 @@ export function createMcpServer(targetDirArg?: string): McpServer {
   registerDualTool(
     'task_complete',
     {
-      description: "Mark a task as completed (only after its verificationCommand exits 0). Advances the milestone when all its tasks are done.",
+      description: "Mark a task as completed (automatically executes its verificationCommand unless skipVerify is true). Advances the milestone when all its tasks are done.",
       inputSchema: {
         taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
         notes: z.string().optional().describe('Completion notes or summary'),
+        skipVerify: z.boolean().optional().describe('Skip automated verification command execution'),
       },
     },
-    ({ taskId, notes }) => captureOutput(() => runTaskComplete(taskId, targetDir, { notes })),
+    ({ taskId, notes, skipVerify }) => captureOutput(() => runTaskComplete(taskId, targetDir, { notes, skipVerify })),
+  );
+
+  registerDualTool(
+    'verify',
+    {
+      description: "Run verification commands on demand for a task, milestone, or all completed tasks without changing task status.",
+      inputSchema: {
+        taskId: z.string().optional().describe('Task ID to verify. Defaults to active in_progress task.'),
+        milestone: z.string().optional().describe('Filter by milestone ID or name'),
+        all: z.boolean().optional().describe('Run verification commands for all completed tasks to detect regressions'),
+      },
+    },
+    ({ taskId, milestone, all }) => captureOutput(() => runVerify(taskId, targetDir, { milestone, all, json: true })),
   );
 
   registerDualTool(

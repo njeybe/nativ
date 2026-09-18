@@ -9,6 +9,7 @@ import {
   EscalationRecord,
   EscalationType,
 } from '../scanner/types.js';
+import { executeVerification } from '../core/verifier.js';
 
 function getPlanPath(targetDirArg?: string): { targetDir: string; planPath: string } {
   const targetDir = path.resolve(targetDirArg || process.cwd());
@@ -19,7 +20,7 @@ function getPlanPath(targetDirArg?: string): { targetDir: string; planPath: stri
 function loadPlan(planPath: string): MasterPlan | null {
   if (!fs.existsSync(planPath)) {
     console.error(pc.red(`\n✖ No .ai/master_plan.json found at: ${planPath}`));
-    console.log(pc.yellow('Run `ai-agent-workflow init` first to scaffold the workflow.\n'));
+    console.log(pc.yellow('Run `nativ init` first to scaffold the workflow.\n'));
     return null;
   }
 
@@ -358,8 +359,18 @@ export async function runTaskStart(taskId: string, targetDirArg?: string) {
   console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] marked as `) + pc.yellow('▶ in_progress') + '\n');
 }
 
-export async function runTaskComplete(taskId: string, targetDirArg?: string, options: { notes?: string } = {}) {
-  const { planPath } = getPlanPath(targetDirArg);
+export interface TaskCompleteOptions {
+  notes?: string;
+  skipVerify?: boolean;
+  timeout?: number;
+}
+
+export async function runTaskComplete(
+  taskId: string,
+  targetDirArg?: string,
+  options: TaskCompleteOptions = {}
+) {
+  const { targetDir, planPath } = getPlanPath(targetDirArg);
   const plan = loadPlan(planPath);
   if (!plan) {
     process.exitCode = 1;
@@ -382,6 +393,42 @@ export async function runTaskComplete(taskId: string, targetDirArg?: string, opt
     console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
     process.exitCode = 1;
     return;
+  }
+
+  // ── Verification Gatekeeper ────────────────────────────────────────────────
+  if (!options.skipVerify) {
+    const vResult = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
+    if (!vResult.success) {
+      console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] verification FAILED with exit code ${vResult.exitCode}:`));
+      console.error(pc.yellow(`  Command: \`${foundTask.verificationCommand}\``));
+
+      if (vResult.stderr && vResult.stderr.trim()) {
+        console.error(pc.red('\n--- stderr ---'));
+        console.error(pc.red(vResult.stderr.trim()));
+      }
+      if (vResult.stdout && vResult.stdout.trim() && !vResult.stderr?.trim()) {
+        console.error(pc.dim('\n--- stdout ---'));
+        console.error(pc.dim(vResult.stdout.trim()));
+      }
+      if (vResult.error && !vResult.stderr?.includes(vResult.error)) {
+        console.error(pc.red(`\nError: ${vResult.error}`));
+      }
+
+      console.error(pc.yellow(`\n⚠ Task remains '${foundTask.status}'. Fix the issue and retry:`));
+      console.error(pc.white(`  nativ task complete ${taskId}`));
+      console.error(pc.dim('  (or pass --no-verify to bypass verification check)\n'));
+      process.exitCode = 1;
+      return;
+    }
+
+    if (vResult.skipped) {
+      console.log(pc.dim(`\n○ Verification skipped: no verification command specified for [${taskId}]`));
+    } else {
+      const elapsed = (vResult.durationMs / 1000).toFixed(2);
+      console.log(pc.green(`\n✔ Verification passed (${elapsed}s): `) + pc.yellow(`\`${foundTask.verificationCommand}\``));
+    }
+  } else {
+    console.log(pc.yellow(`\n⚠ Verification skipped via --no-verify for [${taskId}]`));
   }
 
   foundTask.status = 'completed';

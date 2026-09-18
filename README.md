@@ -102,16 +102,17 @@ Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the
 | `nativ task list [targetDir]` | Lists all project tasks with filtering (`--available`, `--status`, `--milestone`, `--json`). Alias: `nativ tasks`. |
 | `nativ task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
 | `nativ task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
-| `nativ task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
+| `nativ task complete <taskId>` | Marks a task as completed after running its verification command (rejects on failure; bypass with `--no-verify`). |
+| `nativ verify [taskId]` | Runs verification commands on demand to prevent regressions (`--all`, `--milestone <id>`, `--json`, `--timeout <ms>`). |
 | `nativ task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
 | `nativ task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
 | `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
 | `nativ worktree list` | Lists all active agent git worktrees. |
 | `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
 | `nativ db status [targetDir]` | Dev/Prod connection health: engine, ping latency, table count, masked URL (supports `--json`). |
-| `nativ db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev\|prod`, `--table <name>`, `--json`). |
+| `nativ db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev|prod`, `--table <name>`, `--json`). |
 | `nativ db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
-| `nativ db sync [targetDir]` | Previews exporting a live schema into `.ai/db_schema.json`; writes only with `--yes` (`--source dev\|prod`). |
+| `nativ db sync [targetDir]` | Previews exporting a live schema into `.ai/db_schema.json`; writes only with `--yes` (`--source dev|prod`). |
 | `nativ db ui [targetDir]` | Launches the local DB Studio dashboard (`--port <n>`, `--no-open`). Alias: `nativ studio`. |
 | `nativ mcp [targetDir]` | Runs the native MCP server over stdio, exposing `nativ_*` tools and `nativ://` contract resources. |
 
@@ -128,7 +129,8 @@ Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the
 | `nativ_task_next` | – | `nativ task next --json` |
 | `nativ_task_list` | `available?`, `status?`, `milestone?` | `nativ task list --json` |
 | `nativ_task_start` | `taskId` | `nativ task start` |
-| `nativ_task_complete` | `taskId`, `notes?` | `nativ task complete` |
+| `nativ_task_complete` | `taskId`, `notes?`, `skipVerify?` | `nativ task complete` (enforces verification) |
+| `nativ_verify` | `taskId?`, `milestone?`, `all?` | `nativ verify --json` |
 | `nativ_task_block` | `taskId`, `reason` | `nativ task block` |
 | `nativ_task_escalate` | `taskId`, `type`, `details`, `affected?` | `nativ task escalate` |
 | `nativ_init` | – | `nativ init` (never overwrites; no `--force`) |
