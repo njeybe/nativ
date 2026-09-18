@@ -205,6 +205,49 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
 .result.ok { color: var(--success); } .result.err { color: #fca5a5; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
+/* Environment focus & toggles */
+.env-toggle-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 10px; }
+.env-segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-pill); background: rgba(19, 27, 46, 0.7); backdrop-filter: blur(8px); padding: 3px; }
+.env-seg-btn { border: none; background: transparent; padding: 6px 16px; border-radius: var(--r-pill); cursor: pointer; color: var(--muted); font-size: 12.5px; font-weight: 600; transition: all .15s ease; }
+.env-seg-btn:hover { color: var(--text); }
+.env-seg-btn[aria-pressed="true"] { background: var(--primary); color: #fff; box-shadow: 0 0 12px rgba(99,102,241,.35); }
+.env-seg-btn[data-env-mode="prod"][aria-pressed="true"] { background: #b45309; color: #fff; box-shadow: 0 0 12px rgba(245,158,11,.35); }
+.prod-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: var(--r-control); border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.08); color: #fef3c7; font-size: 12.5px; margin-bottom: 14px; }
+.prod-banner b { color: #fde68a; font-weight: 600; }
+.panes-full { grid-template-columns: 1fr; }
+
+/* Data Grid */
+.data-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.data-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.data-grid-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface); margin-bottom: 14px; min-height: 240px; }
+table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }
+table.data-table th { background: #1a243c; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; white-space: nowrap; user-select: none; }
+table.data-table th.sortable { cursor: pointer; }
+table.data-table th.sortable:hover { color: var(--text); background: #223050; }
+table.data-table td { padding: 8px 12px; border-bottom: 1px solid rgba(30,41,59,.5); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+table.data-table tr:hover td { background: var(--surface-hover); }
+.th-sort-icon { font-size: 10px; margin-left: 4px; color: var(--primary); }
+.td-actions { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.btn-danger { color: #fca5a5; border-color: rgba(239,68,68,.4); }
+.btn-danger:hover { background: rgba(239,68,68,.18); border-color: var(--danger); color: #fff; }
+.pagination-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 4px; font-size: 12.5px; color: var(--muted); }
+.pagination-ctrls { display: flex; align-items: center; gap: 8px; }
+.cell-preview-btn { padding: 2px 6px; font-size: 11px; border-radius: 4px; border: 1px solid var(--media); color: var(--media); background: rgba(236,72,153,.1); cursor: pointer; }
+.cell-preview-btn:hover { background: rgba(236,72,153,.2); }
+
+/* Modals */
+.modal-prod-guard { border: 1px solid rgba(245,158,11,.6); box-shadow: 0 0 30px rgba(245,158,11,.15); }
+.challenge-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; color: #f59e0b; background: rgba(245,158,11,.15); border: 1px solid #f59e0b; margin-bottom: 12px; }
+.challenge-box { padding: 14px; border-radius: var(--r-control); border: 1px solid rgba(239,68,68,.4); background: rgba(239,68,68,.07); margin: 12px 0; }
+.challenge-box p { margin: 0 0 8px; font-size: 12.5px; }
+.challenge-box code { color: #fca5a5; font-weight: 700; font-size: 13px; }
+.record-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-height: 60vh; overflow-y: auto; padding-right: 4px; margin-bottom: 16px; }
+.record-form-grid .field-full { grid-column: 1 / -1; }
+.record-form-grid label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted); }
+.record-form-grid label b { color: var(--text); font-family: var(--mono); }
+.record-form-grid .input { width: 100%; }
+.record-form-grid textarea.input { min-height: 64px; resize: vertical; font-family: var(--mono); font-size: 12px; }
+
 @media (max-width: 900px) {
   .container { padding: 16px; }
   .topnav { position: static; }
@@ -231,8 +274,17 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     </div>
   </header>
 
+  <div class="env-toggle-bar">
+    <div class="env-segmented" role="group" aria-label="Environment Focus Mode">
+      <button type="button" class="env-seg-btn" data-env-mode="dev" aria-pressed="true">Staging / Dev</button>
+      <button type="button" class="env-seg-btn" data-env-mode="prod" aria-pressed="false">Production</button>
+      <button type="button" class="env-seg-btn" data-env-mode="split" aria-pressed="false">Split Comparison</button>
+    </div>
+  </div>
+
   <nav class="tabs" role="tablist" aria-label="Studio views">
-    <button class="tab" role="tab" id="tab-explorer" aria-controls="view" data-tab="explorer">Side-by-Side Explorer <span class="count" id="count-explorer">0</span></button>
+    <button class="tab" role="tab" id="tab-explorer" aria-controls="view" data-tab="explorer">Schema &amp; Structure <span class="count" id="count-explorer">0</span></button>
+    <button class="tab" role="tab" id="tab-data" aria-controls="view" data-tab="data">Live Data Browser <span class="count" id="count-data">0</span></button>
     <button class="tab" role="tab" id="tab-drift" aria-controls="view" data-tab="drift">Drift &amp; Diff Tracker <span class="count" id="count-drift">0</span></button>
     <button class="tab" role="tab" id="tab-sql" aria-controls="view" data-tab="sql">Migration Script Preview <span class="count" id="count-sql">0</span></button>
   </nav>
@@ -299,6 +351,38 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
   </form>
 </dialog>
 
+<dialog id="record-dialog" aria-labelledby="record-title">
+  <form class="modal glass" method="dialog" id="record-form">
+    <h2 id="record-title">Record</h2>
+    <p class="lead" id="record-lead">Insert or edit record.</p>
+    <div class="record-form-grid" id="record-fields"></div>
+    <div class="modal-foot">
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn primary" type="button" id="btn-save-record">Save Record</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="challenge-dialog" aria-labelledby="challenge-title">
+  <form class="modal glass modal-prod-guard" method="dialog" id="challenge-form">
+    <span class="challenge-badge">PRODUCTION MUTATION SAFEGUARD</span>
+    <h2 id="challenge-title">Confirm Production Mutation</h2>
+    <div class="challenge-box">
+      <p>Target: <b>PRODUCTION ENVIRONMENT</b></p>
+      <p id="challenge-desc">You are about to modify live production data.</p>
+      <p>To proceed, type the target name exactly: <code id="challenge-target-name">entity</code></p>
+    </div>
+    <div class="field">
+      <label for="challenge-input">Confirmation phrase</label>
+      <input class="input" id="challenge-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type name to confirm">
+    </div>
+    <div class="modal-foot">
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn btn-danger" type="button" id="btn-confirm-challenge" disabled>Execute Production Mutation</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="thumb-pop" id="thumb-pop" role="tooltip" hidden></div>
 
 <script>
@@ -309,6 +393,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
   var NOSQL = { mongodb: true, firestore: true };
   var state = {
     tab: 'explorer',
+    envMode: 'dev',
     loading: true,
     status: null,
     schema: { devTables: [], prodTables: [] },
@@ -318,7 +403,19 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     search: '',
     mobileEnv: 'dev',
     sql: '',
-    scriptLang: 'sql'
+    scriptLang: 'sql',
+    dataEnv: 'dev',
+    dataEntity: '',
+    dataPage: 1,
+    dataLimit: 25,
+    dataSort: '',
+    dataOrder: 'asc',
+    dataSearch: '',
+    dataLoading: false,
+    dataResult: null,
+    dataError: null,
+    editingPk: null,
+    pendingMutation: null
   };
   // Media fields rendered in the current view, referenced by index from IMAGE badges.
   var mediaRegistry = [];
@@ -463,6 +560,11 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     var st = state.status || {};
     $('telemetry').innerHTML = statusPill('dev', st.dev) + statusPill('prod', st.prod);
     $('count-explorer').textContent = String((state.schema.devTables || []).length + (state.schema.prodTables || []).length);
+    var activeEnv = state.envMode === 'prod' ? 'prod' : 'dev';
+    var dataCount = state.dataResult && state.dataResult.totalCount != null
+      ? state.dataResult.totalCount
+      : ((state.schema[activeEnv + 'Tables'] || []).length);
+    $('count-data').textContent = String(dataCount);
     var d = state.diff && state.diff.summary;
     $('count-drift').textContent = d ? String(d.addedTablesCount + d.alteredTablesCount + d.droppedTablesCount) : '–';
     var script = state.diff ? generateScript(state.diff) : { text: '', lang: 'sql', count: 0 };
@@ -475,6 +577,10 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
       t.setAttribute('aria-selected', active ? 'true' : 'false');
       t.setAttribute('tabindex', active ? '0' : '-1');
     });
+    document.querySelectorAll('.env-seg-btn').forEach(function (btn) {
+      var m = btn.getAttribute('data-env-mode');
+      btn.setAttribute('aria-pressed', String(m === state.envMode));
+    });
     $('view').setAttribute('aria-labelledby', 'tab-' + state.tab);
     $('btn-refresh').disabled = state.loading;
   }
@@ -486,6 +592,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     var view = $('view');
     if (state.loading) { view.innerHTML = skeleton(); return; }
     if (state.tab === 'explorer') view.innerHTML = renderExplorer();
+    else if (state.tab === 'data') view.innerHTML = renderData();
     else if (state.tab === 'drift') view.innerHTML = renderDrift();
     else view.innerHTML = renderSql();
   }
@@ -668,13 +775,350 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
       return emptyState('No database connected', 'No database connected. Click Connection Settings to connect a local or remote database.');
     }
     var badges = diffBadges();
+    var panesHtml = '';
+    if (state.envMode === 'dev') {
+      panesHtml = '<div class="panes panes-full">' + paneHtml('dev', state.schema.devTables || [], badges.dev) + '</div>';
+    } else if (state.envMode === 'prod') {
+      panesHtml = '<div class="prod-banner"><span><b>Production Focus Active:</b> Browsing production schema and collections. Any data modifications require challenge phrase confirmation.</span>' +
+        '<span class="badge badge-prod">PROD</span></div>' +
+        '<div class="panes panes-full">' + paneHtml('prod', state.schema.prodTables || [], badges.prod) + '</div>';
+    } else {
+      panesHtml = '<div class="panes">' + paneHtml('dev', state.schema.devTables || [], badges.dev) + paneHtml('prod', state.schema.prodTables || [], badges.prod) + '</div>';
+    }
+
     return '<div class="toolbar">' +
       '<label class="sr-only" for="search">Search tables, collections and fields</label>' +
       '<input class="input search" id="search" type="search" placeholder="Search tables, collections or fields…" value="' + esc(state.search) + '">' +
-      '<div class="segmented" role="group" aria-label="Environment">' +
-      '<button type="button" data-env-toggle="dev" aria-pressed="' + (state.mobileEnv === 'dev') + '">Dev</button>' +
-      '<button type="button" data-env-toggle="prod" aria-pressed="' + (state.mobileEnv === 'prod') + '">Prod</button></div>' +
-      '</div><div class="panes">' + paneHtml('dev', state.schema.devTables || [], badges.dev) + paneHtml('prod', state.schema.prodTables || [], badges.prod) + '</div>';
+      '</div>' + panesHtml;
+  }
+
+  // ─── Live Data Studio ───────────────────────────────────────────────────────
+  function renderDataCell(val, colName) {
+    if (val === null || val === undefined) return '<td class="mono muted">NULL</td>';
+    if (typeof val === 'boolean') return '<td class="mono"><b>' + (val ? 'TRUE' : 'FALSE') + '</b></td>';
+    if (typeof val === 'string') {
+      var isImgUrl = /^https?:\/\//i.test(val) && /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)/i.test(val);
+      var isDataImg = /^data:image\//i.test(val);
+      if (isImgUrl || isDataImg) {
+        return '<td><button type="button" class="cell-preview-btn" data-action="preview-url" data-url="' + esc(val) + '">Preview Image</button> <span class="mono muted" style="font-size:11px">' + esc(val.length > 28 ? val.slice(0, 28) + '…' : val) + '</span></td>';
+      }
+      var displayStr = val.length > 50 ? val.slice(0, 50) + '…' : val;
+      return '<td class="mono" title="' + esc(val) + '">' + esc(displayStr) + '</td>';
+    }
+    if (typeof val === 'object') {
+      var json = JSON.stringify(val);
+      var display = json.length > 40 ? json.slice(0, 40) + '…' : json;
+      return '<td class="mono cell-expandable" title="Click to expand JSON" data-action="view-json" data-raw="' + esc(json) + '">' + esc(display) + '</td>';
+    }
+    return '<td class="mono">' + esc(String(val)) + '</td>';
+  }
+
+  function renderData() {
+    var activeEnv = state.envMode === 'prod' ? 'prod' : 'dev';
+    state.dataEnv = activeEnv;
+    var s = state.status && state.status[activeEnv];
+    if (!s || !s.connected) {
+      return emptyState((activeEnv === 'dev' ? 'Dev / Staging' : 'Production') + ' database not connected',
+        'Please connect the ' + (activeEnv === 'dev' ? 'Dev' : 'Prod') + ' database in Connection Settings to browse and edit live data.');
+    }
+
+    var tables = state.schema[activeEnv + 'Tables'] || [];
+    if (!tables.length) {
+      return '<div class="empty glass"><p>No ' + entityNoun(s, true).toLowerCase() + ' found in this database.</p></div>';
+    }
+
+    if (!state.dataEntity || !tables.some(function (t) { return t.name === state.dataEntity; })) {
+      state.dataEntity = tables[0].name;
+    }
+
+    var currentTable = tables.find(function (t) { return t.name === state.dataEntity; }) || tables[0];
+    var isColl = isCollection(currentTable);
+
+    var entityOptions = tables.map(function (t) {
+      var sel = t.name === state.dataEntity ? ' selected' : '';
+      return '<option value="' + esc(t.name) + '"' + sel + '>' + esc(t.name) + (isCollection(t) ? ' (collection)' : '') + '</option>';
+    }).join('');
+
+    var limitOptions = [25, 50, 100].map(function (n) {
+      var sel = state.dataLimit === n ? ' selected' : '';
+      return '<option value="' + n + '"' + sel + '>' + n + ' / page</option>';
+    }).join('');
+
+    var prodBannerHtml = activeEnv === 'prod'
+      ? '<div class="prod-banner"><span><b>Production Safeguard Active:</b> Operating on live production data. All mutations require strict challenge phrase confirmation and are recorded to .agentj/prod_audit.log.</span><span class="badge badge-prod">PROD</span></div>'
+      : '';
+
+    var toolbar = '<div class="data-toolbar">' +
+      '<div class="data-controls">' +
+        '<select class="input" id="data-entity-select" style="min-width:180px;font-weight:600">' + entityOptions + '</select>' +
+        '<input class="input" id="data-search" type="search" placeholder="Search records in ' + esc(state.dataEntity) + '…" value="' + esc(state.dataSearch) + '" style="min-width:200px">' +
+        '<select class="input" id="data-limit-select">' + limitOptions + '</select>' +
+        '<button class="btn" type="button" id="btn-data-refresh">Refresh</button>' +
+      '</div>' +
+      '<button class="btn primary" type="button" id="btn-insert-record">+ Insert ' + (isColl ? 'Document' : 'Record') + '</button>' +
+    '</div>';
+
+    if (state.dataLoading) {
+      return prodBannerHtml + toolbar + '<div class="glass" style="padding:48px 24px;text-align:center"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';
+    }
+
+    if (state.dataError) {
+      return prodBannerHtml + toolbar + '<div class="alert-danger" style="margin-top:12px"><strong>Query error:</strong> ' + esc(state.dataError) + '</div>';
+    }
+
+    var res = state.dataResult;
+    if (!res || !res.rows || res.entity !== state.dataEntity) {
+      setTimeout(function () { fetchDataRecords(); }, 10);
+      return prodBannerHtml + toolbar + '<div class="glass" style="padding:48px 24px;text-align:center"><p class="muted">Loading records for ' + esc(state.dataEntity) + '…</p></div>';
+    }
+
+    var pk = res.primaryKey || 'id';
+    var schemaCols = currentTable.columns.map(function (c) { return c.name; });
+    var allKeys = new Set(schemaCols);
+    res.rows.forEach(function (r) { Object.keys(r).forEach(function (k) { allKeys.add(k); }); });
+    var displayCols = [pk];
+    allKeys.forEach(function (k) { if (k !== pk) displayCols.push(k); });
+
+    var thead = '<tr><th class="th-actions" style="width:115px">Actions</th>' + displayCols.map(function (col) {
+      var isSorted = state.dataSort === col;
+      var sortIcon = isSorted ? (state.dataOrder === 'desc' ? ' ▼' : ' ▲') : '';
+      return '<th class="sortable" data-sort-col="' + esc(col) + '">' + esc(col) +
+        (col === pk ? ' <span class="badge badge-pk">PK</span>' : '') +
+        '<span class="th-sort-icon">' + sortIcon + '</span></th>';
+    }).join('') + '</tr>';
+
+    var tbody = '';
+    if (res.rows.length === 0) {
+      tbody = '<tr><td colspan="' + (displayCols.length + 1) + '" style="text-align:center;padding:32px;color:var(--muted)">No records found' +
+        (state.dataSearch ? ' matching "' + esc(state.dataSearch) + '"' : '') + '.</td></tr>';
+    } else {
+      tbody = res.rows.map(function (row, rowIdx) {
+        var actions = '<td class="td-actions">' +
+          '<button class="btn small" type="button" data-action="edit-record" data-row="' + rowIdx + '">Edit</button>' +
+          '<button class="btn small btn-danger" type="button" data-action="delete-record" data-row="' + rowIdx + '">Delete</button>' +
+        '</td>';
+
+        var cells = displayCols.map(function (c) {
+          return renderDataCell(row[c], c);
+        }).join('');
+
+        return '<tr>' + actions + cells + '</tr>';
+      }).join('');
+    }
+
+    var start = res.totalCount === 0 ? 0 : (res.page - 1) * res.limit + 1;
+    var end = Math.min(res.page * res.limit, res.totalCount);
+    var pagination = '<div class="pagination-bar">' +
+      '<div>Showing ' + start + '–' + end + ' of ' + res.totalCount + ' ' + (isColl ? 'documents' : 'records') + '</div>' +
+      '<div class="pagination-ctrls">' +
+        '<button class="btn small" type="button" id="btn-page-prev"' + (res.page <= 1 ? ' disabled' : '') + '>Previous</button>' +
+        '<span>Page ' + res.page + ' of ' + Math.max(1, res.totalPages) + '</span>' +
+        '<button class="btn small" type="button" id="btn-page-next"' + (res.page >= res.totalPages ? ' disabled' : '') + '>Next</button>' +
+      '</div>' +
+    '</div>';
+
+    return prodBannerHtml + toolbar + '<div class="data-grid-wrap"><table class="data-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>' + pagination;
+  }
+
+  function fetchDataRecords() {
+    if (!state.dataEntity) return;
+    state.dataLoading = true;
+    state.dataError = null;
+    render();
+
+    var params = [
+      'env=' + encodeURIComponent(state.dataEnv),
+      'entity=' + encodeURIComponent(state.dataEntity),
+      'page=' + state.dataPage,
+      'limit=' + state.dataLimit
+    ];
+    if (state.dataSort) params.push('sort=' + encodeURIComponent(state.dataSort));
+    if (state.dataOrder) params.push('order=' + encodeURIComponent(state.dataOrder));
+    if (state.dataSearch) params.push('search=' + encodeURIComponent(state.dataSearch));
+
+    api('/api/data?' + params.join('&')).then(function (res) {
+      state.dataResult = res;
+      state.dataLoading = false;
+      render();
+    }, function (err) {
+      state.dataError = err.message;
+      state.dataLoading = false;
+      render();
+    });
+  }
+
+  function openInsertRecordModal() {
+    var tables = state.schema[state.dataEnv + 'Tables'] || [];
+    var table = tables.find(function (t) { return t.name === state.dataEntity; }) || { columns: [] };
+    var isColl = isCollection(table);
+
+    $('record-title').textContent = 'Insert ' + (isColl ? 'Document' : 'Record') + ' into ' + state.dataEntity;
+    $('record-lead').textContent = 'Target Environment: ' + state.dataEnv.toUpperCase() + '. Specify column values below:';
+    $('btn-save-record').textContent = 'Insert ' + (isColl ? 'Document' : 'Record');
+    state.editingPk = null;
+
+    var html = '';
+    table.columns.forEach(function (col) {
+      var isPk = col.primaryKey;
+      var fieldLabel = esc(col.name) + (isPk ? ' (Primary Key - Optional/Auto)' : '');
+      var placeholder = col.type + (col.default ? ' · default: ' + col.default : '');
+      var isLong = /json|map|array|text/i.test(col.type);
+      if (isLong) {
+        html += '<div class="field field-full"><label><b>' + fieldLabel + '</b></label><textarea class="input" name="' + esc(col.name) + '" placeholder="' + esc(placeholder) + '"></textarea></div>';
+      } else {
+        html += '<div class="field"><label><b>' + fieldLabel + '</b></label><input class="input" type="text" name="' + esc(col.name) + '" placeholder="' + esc(placeholder) + '"></div>';
+      }
+    });
+    $('record-fields').innerHTML = html || '<p class="muted">No schema columns defined.</p>';
+
+    var dlg = $('record-dialog');
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+
+  function openEditRecordModal(rowIndex) {
+    if (!state.dataResult || !state.dataResult.rows[rowIndex]) return;
+    var row = state.dataResult.rows[rowIndex];
+    var pkCol = state.dataResult.primaryKey || 'id';
+    var pkVal = row[pkCol];
+    state.editingPk = pkVal;
+
+    var tables = state.schema[state.dataEnv + 'Tables'] || [];
+    var table = tables.find(function (t) { return t.name === state.dataEntity; }) || { columns: [] };
+    var isColl = isCollection(table);
+
+    $('record-title').textContent = 'Edit ' + (isColl ? 'Document' : 'Record') + ' (' + pkCol + ' = ' + pkVal + ')';
+    $('record-lead').textContent = 'Target Environment: ' + state.dataEnv.toUpperCase() + '. Primary key is locked for single-record isolation:';
+    $('btn-save-record').textContent = 'Save Changes';
+
+    var html = '';
+    html += '<div class="field field-full"><label><b>' + esc(pkCol) + ' (Primary Key - Locked)</b></label><input class="input" type="text" name="' + esc(pkCol) + '" value="' + esc(pkVal) + '" disabled style="opacity:.65"></div>';
+
+    var displayedCols = new Set([pkCol]);
+    table.columns.forEach(function (col) {
+      if (col.name === pkCol) return;
+      displayedCols.add(col.name);
+      var val = row[col.name];
+      var valStr = val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+      var isLong = /json|map|array|text/i.test(col.type) || valStr.length > 50;
+      if (isLong) {
+        html += '<div class="field field-full"><label><b>' + esc(col.name) + ' (' + esc(col.type) + ')</b></label><textarea class="input" name="' + esc(col.name) + '">' + esc(valStr) + '</textarea></div>';
+      } else {
+        html += '<div class="field"><label><b>' + esc(col.name) + ' (' + esc(col.type) + ')</b></label><input class="input" type="text" name="' + esc(col.name) + '" value="' + esc(valStr) + '"></div>';
+      }
+    });
+
+    Object.keys(row).forEach(function (k) {
+      if (displayedCols.has(k)) return;
+      var val = row[k];
+      var valStr = val == null ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+      html += '<div class="field"><label><b>' + esc(k) + '</b></label><input class="input" type="text" name="' + esc(k) + '" value="' + esc(valStr) + '"></div>';
+    });
+
+    $('record-fields').innerHTML = html;
+    var dlg = $('record-dialog');
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+
+  function parseInputValue(raw) {
+    if (raw === '') return null;
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    if (/^-?\d+$/.test(raw)) return parseInt(raw, 10);
+    if (/^-?\d+\.\d+$/.test(raw)) return parseFloat(raw);
+    if ((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('[') && raw.endsWith(']'))) {
+      try { return JSON.parse(raw); } catch (e) { return raw; }
+    }
+    return raw;
+  }
+
+  function handleSaveRecordSubmit() {
+    var form = $('record-form');
+    var inputs = form.querySelectorAll('input, textarea');
+    var data = {};
+    inputs.forEach(function (inp) {
+      if (inp.name && !inp.disabled) {
+        var v = inp.value.trim();
+        if (v !== '') data[inp.name] = parseInputValue(v);
+      }
+    });
+
+    if (state.editingPk !== null) {
+      dispatchMutation('UPDATE', state.dataEntity, state.editingPk, { updates: data });
+    } else {
+      dispatchMutation('INSERT', state.dataEntity, null, { record: data });
+    }
+  }
+
+  function handleDeleteRecord(rowIndex) {
+    if (!state.dataResult || !state.dataResult.rows[rowIndex]) return;
+    var row = state.dataResult.rows[rowIndex];
+    var pkCol = state.dataResult.primaryKey || 'id';
+    var pkVal = row[pkCol];
+    if (pkVal === undefined || pkVal === null) return;
+
+    if (state.dataEnv === 'prod') {
+      dispatchMutation('DELETE', state.dataEntity, pkVal, {});
+    } else {
+      if (window.confirm('Delete record ' + pkVal + ' from ' + state.dataEntity + '?')) {
+        api('/api/data', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ env: state.dataEnv, entity: state.dataEntity, primaryKey: pkVal })
+        }).then(function () {
+          toast('Record deleted successfully', 'ok');
+          fetchDataRecords();
+        }, function (err) {
+          toast('Delete failed: ' + err.message);
+        });
+      }
+    }
+  }
+
+  function dispatchMutation(action, entity, pk, payload) {
+    if (state.dataEnv === 'prod') {
+      state.pendingMutation = { action: action, entity: entity, pk: pk, payload: payload };
+      $('challenge-desc').textContent = 'Action: ' + action + ' on entity "' + entity + '"' + (pk != null ? ' (PK: ' + pk + ')' : '') + '.';
+      $('challenge-target-name').textContent = entity;
+      var input = $('challenge-input');
+      input.value = '';
+      $('btn-confirm-challenge').disabled = true;
+
+      var dlg = $('challenge-dialog');
+      if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+      input.focus();
+    } else {
+      executeMutationDirect(action, entity, pk, payload, false, '');
+    }
+  }
+
+  function executeMutationDirect(action, entity, pk, payload, confirmProd, challengePhrase) {
+    var method = action === 'INSERT' ? 'POST' : action === 'UPDATE' ? 'PUT' : 'DELETE';
+    var body = Object.assign({
+      env: state.dataEnv,
+      entity: entity
+    }, payload);
+    if (pk != null) body.primaryKey = pk;
+    if (confirmProd) {
+      body.confirmProd = true;
+      body.challengePhrase = challengePhrase;
+    }
+
+    api('/api/data', {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function () {
+      if (confirmProd) {
+        toast('Production ' + action.toLowerCase() + ' executed. Logged to .agentj/prod_audit.log', 'ok');
+        $('challenge-dialog').close();
+      } else {
+        toast(action + ' executed successfully', 'ok');
+      }
+      $('record-dialog').close();
+      fetchDataRecords();
+    }, function (err) {
+      toast(action + ' failed: ' + err.message);
+    });
   }
 
   // ─── Drift ─────────────────────────────────────────────────────────────────
@@ -744,7 +1188,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     }
     if (d.droppedTables.length) {
       html += '<section class="section glass"><h3><span class="badge badge-dropped">DROPPED</span> Dropped in Dev (' + d.droppedTables.length + ')</h3>' +
-        '<div class="alert-danger" role="alert"><strong>⚠ High severity:</strong> these ' + noun + ' exist in ' + esc(targetLabel) +
+        '<div class="alert-danger" role="alert"><strong>High severity:</strong> these ' + noun + ' exist in ' + esc(targetLabel) +
         ' but not in Dev. Applying this migration would permanently delete them and all their data.</div>' +
         d.droppedTables.map(function (t) { return tableCard(t, 'dropped'); }).join('') + '</section>';
     }
@@ -789,7 +1233,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     });
 
     d.alteredTables.forEach(function (t) {
-      out.push('// [ALTERED] ' + t.name + (t.isDestructive ? '  ⚠ DESTRUCTIVE' : ''));
+      out.push('// [ALTERED] ' + t.name + (t.isDestructive ? '  [DESTRUCTIVE]' : ''));
       t.droppedIndexes.forEach(function (i) { out.push(coll(t.name) + '.dropIndex(' + JSON.stringify(i.name) + ');'); });
       t.addedColumns.forEach(function (c) {
         if (c.isSubcollection) { out.push('// + subcollection ' + JSON.stringify(c.name) + ' (Firestore-only concept; model as a separate collection or embedded array in MongoDB)'); return; }
@@ -800,7 +1244,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
         out.push('// ~ field ' + JSON.stringify(ch.name) + ': ' + ch.before.type + ' → ' + ch.after.type + ' (' + ch.changedFields.join(', ') + '); convert existing values with a data migration.');
       });
       t.droppedColumns.forEach(function (c) {
-        out.push('// ⚠ DESTRUCTIVE: removes field data from every document');
+        out.push('// [DESTRUCTIVE] removes field data from every document');
         out.push(coll(t.name) + '.updateMany({}, { $unset: { ' + JSON.stringify(c.name) + ': "" } });');
       });
       t.addedIndexes.forEach(function (i) { out.push(createIdx(t.name, i)); });
@@ -808,7 +1252,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     });
 
     d.droppedTables.forEach(function (t) {
-      out.push('// ⚠ DESTRUCTIVE [DROPPED] ' + t.name + ': permanently deletes the collection and all documents');
+      out.push('// [DESTRUCTIVE: DROPPED] ' + t.name + ': permanently deletes the collection and all documents');
       out.push(coll(t.name) + '.drop();');
       out.push('');
     });
@@ -890,7 +1334,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
 
     d.alteredTables.forEach(function (t) {
       var T = 'ALTER TABLE ' + q(t.name) + ' ';
-      out.push('-- [ALTERED] ' + t.name + (t.isDestructive ? '  ⚠ DESTRUCTIVE' : ''));
+      out.push('-- [ALTERED] ' + t.name + (t.isDestructive ? '  [DESTRUCTIVE]' : ''));
       t.droppedForeignKeys.forEach(function (f) {
         if (dialect === 'sqlite') out.push('-- SQLite cannot drop constraints in place; rebuild ' + t.name + ' to remove FK ' + f.name);
         else out.push(T + (dialect === 'mysql' ? 'DROP FOREIGN KEY ' : 'DROP CONSTRAINT ') + q(f.name) + ';');
@@ -906,7 +1350,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
         if (f.indexOf('default') !== -1) out.push(T + 'ALTER COLUMN ' + q(c.name) + (c.default == null ? ' DROP DEFAULT;' : ' SET DEFAULT ' + c.default + ';'));
         if (f.indexOf('primaryKey') !== -1) out.push('-- Primary key membership changed for ' + t.name + '.' + c.name + '; recreate the PRIMARY KEY constraint manually.');
       });
-      t.droppedColumns.forEach(function (c) { out.push('-- ⚠ DESTRUCTIVE: drops column data'); out.push(T + 'DROP COLUMN ' + q(c.name) + ';'); });
+      t.droppedColumns.forEach(function (c) { out.push('-- [DESTRUCTIVE] drops column data'); out.push(T + 'DROP COLUMN ' + q(c.name) + ';'); });
       t.addedIndexes.forEach(function (i) { out.push(idxDef(t.name, i)); });
       t.addedForeignKeys.forEach(function (f) {
         if (dialect === 'sqlite') out.push('-- SQLite cannot add constraints in place; rebuild ' + t.name + ' to add FK ' + f.column + ' → ' + f.referencedTable);
@@ -916,7 +1360,7 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     });
 
     d.droppedTables.forEach(function (t) {
-      out.push('-- ⚠ DESTRUCTIVE [DROPPED] ' + t.name + ': permanently deletes the table and all rows');
+      out.push('-- [DESTRUCTIVE: DROPPED] ' + t.name + ': permanently deletes the table and all rows');
       out.push('DROP TABLE ' + q(t.name) + ';');
       out.push('');
     });
@@ -1034,18 +1478,18 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
       if (r.success) {
         var count = r.entityCount != null ? r.entityCount : r.tableCount;
         out.className = 'result ok';
-        out.textContent = '✔ Connected to ' + (ENGINE_LABEL[r.engine] || r.engine) + ' in ' + Math.round(r.pingMs) + 'ms · ' + count + ' ' +
+        out.textContent = 'Connected to ' + (ENGINE_LABEL[r.engine] || r.engine) + ' in ' + Math.round(r.pingMs) + 'ms · ' + count + ' ' +
           entityNoun({ engine: r.engine }, true).toLowerCase() + ' · saved to session as ' + r.maskedUrl;
         $('url-' + env).value = '';
         return true;
       }
       out.className = 'result err';
-      out.textContent = '✖ ' + (r.error || 'Connection failed');
+      out.textContent = 'Error: ' + (r.error || 'Connection failed');
       var hint = hintFor(r.error);
       if (hint) out.textContent += ' — ' + hint;
       return false;
     }, function (e) {
-      out.className = 'result err'; out.textContent = '✖ ' + e.message; return false;
+      out.className = 'result err'; out.textContent = 'Error: ' + e.message; return false;
     });
   }
 
@@ -1054,17 +1498,34 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     state.tab = tab;
     render();
     if (focus) $('tab-' + tab).focus();
+    if (tab === 'data' && (!state.dataResult || state.dataResult.entity !== state.dataEntity)) {
+      fetchDataRecords();
+    }
   }
 
   document.querySelectorAll('.tab').forEach(function (t) {
     t.addEventListener('click', function () { setTab(t.getAttribute('data-tab')); });
     t.addEventListener('keydown', function (e) {
-      var order = ['explorer', 'drift', 'sql'];
+      var order = ['explorer', 'data', 'drift', 'sql'];
       var i = order.indexOf(state.tab);
-      if (e.key === 'ArrowRight') { e.preventDefault(); setTab(order[(i + 1) % 3], true); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); setTab(order[(i + 2) % 3], true); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); setTab(order[(i + 1) % 4], true); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); setTab(order[(i + 3) % 4], true); }
       else if (e.key === 'Home') { e.preventDefault(); setTab('explorer', true); }
       else if (e.key === 'End') { e.preventDefault(); setTab('sql', true); }
+    });
+  });
+
+  document.querySelectorAll('.env-seg-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-env-mode');
+      if (mode) {
+        state.envMode = mode;
+        if (mode === 'prod') state.dataEnv = 'prod';
+        else if (mode === 'dev') state.dataEnv = 'dev';
+        state.dataResult = null;
+        render();
+        if (state.tab === 'data') fetchDataRecords();
+      }
     });
   });
 
@@ -1091,10 +1552,31 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
       var s = $('search');
       if (s) { s.focus(); try { s.setSelectionRange(pos, pos); } catch (err) { /* ignore */ } }
     }
+    if (e.target && e.target.id === 'data-search') {
+      state.dataSearch = e.target.value;
+      clearTimeout(state._dataSearchTimeout);
+      state._dataSearchTimeout = setTimeout(function () {
+        state.dataPage = 1;
+        fetchDataRecords();
+      }, 350);
+    }
   });
 
   $('view').addEventListener('change', function (e) {
     if (e.target && e.target.id === 'diff-target') { state.diffTarget = e.target.value; load(false); }
+    if (e.target && e.target.id === 'data-entity-select') {
+      state.dataEntity = e.target.value;
+      state.dataPage = 1;
+      state.dataSort = '';
+      state.dataSearch = '';
+      state.dataResult = null;
+      fetchDataRecords();
+    }
+    if (e.target && e.target.id === 'data-limit-select') {
+      state.dataLimit = Number(e.target.value);
+      state.dataPage = 1;
+      fetchDataRecords();
+    }
   });
 
   $('view').addEventListener('mouseover', function (e) {
@@ -1112,6 +1594,21 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
   window.addEventListener('scroll', hideThumb, { passive: true });
 
   $('view').addEventListener('click', function (e) {
+    var sortTh = e.target.closest('th.sortable');
+    if (sortTh) {
+      var col = sortTh.getAttribute('data-sort-col');
+      if (col) {
+        if (state.dataSort === col) {
+          state.dataOrder = state.dataOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.dataSort = col;
+          state.dataOrder = 'asc';
+        }
+        fetchDataRecords();
+        return;
+      }
+    }
+
     var el = e.target.closest('button');
     if (!el) return;
     if (el.hasAttribute('data-media')) {
@@ -1123,8 +1620,56 @@ dialog::backdrop { background: rgba(3, 6, 14, .7); backdrop-filter: blur(4px); }
     var action = el.getAttribute('data-action');
     if (action === 'open-settings') openSettings();
     else if (action === 'copy-sql') copyText(state.sql, el);
+    else if (action === 'edit-record') openEditRecordModal(Number(el.getAttribute('data-row')));
+    else if (action === 'delete-record') handleDeleteRecord(Number(el.getAttribute('data-row')));
+    else if (action === 'preview-url') {
+      var url = el.getAttribute('data-url');
+      $('media-title').textContent = 'Image Preview';
+      $('media-sub').textContent = url;
+      $('media-thumb').innerHTML = '<img src="' + esc(url) + '" style="max-width:100%;max-height:300px">';
+      $('media-details').innerHTML = '<dt>Source URL</dt><dd><code>' + esc(url) + '</code></dd>';
+      var dlg = $('media-dialog');
+      if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    }
+    else if (action === 'view-json') {
+      var raw = el.getAttribute('data-raw');
+      toast(raw);
+    }
+
+    if (el.id === 'btn-insert-record') openInsertRecordModal();
+    else if (el.id === 'btn-data-refresh') fetchDataRecords();
+    else if (el.id === 'btn-page-prev') {
+      state.dataPage = Math.max(1, state.dataPage - 1);
+      fetchDataRecords();
+    }
+    else if (el.id === 'btn-page-next') {
+      state.dataPage++;
+      fetchDataRecords();
+    }
+
     var envToggle = el.getAttribute('data-env-toggle');
     if (envToggle) { state.mobileEnv = envToggle; render(); }
+  });
+
+  $('record-form').addEventListener('submit', function (e) {
+    if (e.submitter && e.submitter.value === 'save') {
+      e.preventDefault();
+      handleSaveRecordSubmit();
+    }
+  });
+
+  $('challenge-input').addEventListener('input', function (e) {
+    var val = e.target.value.trim();
+    var entity = state.pendingMutation ? state.pendingMutation.entity : '';
+    $('btn-confirm-challenge').disabled = (val !== entity);
+  });
+
+  $('btn-confirm-challenge').addEventListener('click', function () {
+    if (!state.pendingMutation) return;
+    var m = state.pendingMutation;
+    var inputVal = $('challenge-input').value.trim();
+    if (inputVal !== m.entity) return;
+    executeMutationDirect(m.action, m.entity, m.pk, m.payload, true, inputVal);
   });
 
   $('conn-form').addEventListener('click', function (e) {

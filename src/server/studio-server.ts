@@ -23,6 +23,7 @@ import {
   toContractDiff,
   type ContractSchemaDiff,
 } from '../db/diff.js';
+import { fetchData, insertRecord, updateRecord, deleteRecord } from '../db/data-engine.js';
 
 /**
  * Embedded Studio HTTP server (native node:http).
@@ -76,6 +77,10 @@ class StudioSession {
   set(env: DatabaseEnv, url: string, result: IntrospectionResult): void {
     this.urls[env] = url;
     this.cache.set(env, { at: Date.now(), result });
+  }
+
+  getUrl(env: DatabaseEnv): string | null {
+    return this.urls[env];
   }
 
   invalidate(): void {
@@ -343,6 +348,158 @@ async function handleExportContract(session: StudioSession, cwd: string, body: R
   };
 }
 
+function logProdAudit(
+  cwd: string,
+  action: 'INSERT' | 'UPDATE' | 'DELETE',
+  entity: string,
+  primaryKey: string | number | null,
+  details: Record<string, unknown>,
+  req: http.IncomingMessage,
+): void {
+  try {
+    const dir = path.join(cwd, '.agentj');
+    fs.mkdirSync(dir, { recursive: true });
+    const logFile = path.join(dir, 'prod_audit.log');
+    const entry = {
+      timestamp: new Date().toISOString(),
+      env: 'prod',
+      action,
+      entity,
+      primaryKey,
+      clientIp: req.socket.remoteAddress ?? '127.0.0.1',
+      details,
+    };
+    fs.appendFileSync(logFile, `${JSON.stringify(entry)}\n`, 'utf8');
+  } catch (err) {
+    console.error('Failed to append to prod_audit.log:', err);
+  }
+}
+
+async function handleDataGet(session: StudioSession, searchParams: URLSearchParams): Promise<unknown> {
+  const env = parseEnv(searchParams.get('env'), 'env');
+  const entity = searchParams.get('entity')?.trim();
+  if (!entity) throw new HttpError(400, 'VALIDATION_ERROR', '"entity" query parameter is required');
+
+  const page = searchParams.has('page') ? parseInt(searchParams.get('page')!, 10) : undefined;
+  const limit = searchParams.has('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined;
+  const sort = searchParams.get('sort')?.trim() || undefined;
+  const rawOrder = searchParams.get('order')?.toLowerCase();
+  const order = rawOrder === 'desc' ? 'desc' : rawOrder === 'asc' ? 'asc' : undefined;
+  const search = searchParams.get('search')?.trim() || undefined;
+
+  const url = session.getUrl(env);
+  if (!url) {
+    throw new HttpError(409, `${env.toUpperCase()}_NOT_CONNECTED`, `No ${env === 'dev' ? 'Dev' : 'Prod'} database configured.`);
+  }
+
+  try {
+    return await fetchData(url, entity, { page, limit, sort, order, search });
+  } catch (err) {
+    throw new HttpError(500, 'DATA_QUERY_ERROR', (err as Error).message);
+  }
+}
+
+async function handleDataPost(session: StudioSession, cwd: string, body: Record<string, unknown>, req: http.IncomingMessage): Promise<unknown> {
+  const env = parseEnv(body.env, 'env');
+  const entity = typeof body.entity === 'string' ? body.entity.trim() : '';
+  if (!entity) throw new HttpError(400, 'VALIDATION_ERROR', '"entity" is required');
+
+  if (typeof body.record !== 'object' || body.record === null || Array.isArray(body.record)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"record" must be an object');
+  }
+  const record = body.record as Record<string, unknown>;
+
+  if (env === 'prod') {
+    if (body.confirmProd !== true || typeof body.challengePhrase !== 'string' || body.challengePhrase.trim() !== entity) {
+      throw new HttpError(403, 'PROD_CHALLENGE_REQUIRED', `Production insert requires confirmProd=true and challengePhrase matching "${entity}"`);
+    }
+  }
+
+  const url = session.getUrl(env);
+  if (!url) {
+    throw new HttpError(409, `${env.toUpperCase()}_NOT_CONNECTED`, `No ${env === 'dev' ? 'Dev' : 'Prod'} database configured.`);
+  }
+
+  try {
+    const result = await insertRecord(url, entity, record);
+    if (env === 'prod') {
+      logProdAudit(cwd, 'INSERT', entity, result.insertedId, { record }, req);
+    }
+    return result;
+  } catch (err) {
+    throw new HttpError(500, 'DATA_MUTATION_ERROR', (err as Error).message);
+  }
+}
+
+async function handleDataPut(session: StudioSession, cwd: string, body: Record<string, unknown>, req: http.IncomingMessage): Promise<unknown> {
+  const env = parseEnv(body.env, 'env');
+  const entity = typeof body.entity === 'string' ? body.entity.trim() : '';
+  if (!entity) throw new HttpError(400, 'VALIDATION_ERROR', '"entity" is required');
+
+  const primaryKey = body.primaryKey as string | number;
+  if (primaryKey === undefined || primaryKey === null || primaryKey === '') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"primaryKey" is required for updates');
+  }
+
+  if (typeof body.updates !== 'object' || body.updates === null || Array.isArray(body.updates)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"updates" must be an object');
+  }
+  const updates = body.updates as Record<string, unknown>;
+
+  if (env === 'prod') {
+    if (body.confirmProd !== true || typeof body.challengePhrase !== 'string' || body.challengePhrase.trim() !== entity) {
+      throw new HttpError(403, 'PROD_CHALLENGE_REQUIRED', `Production update requires confirmProd=true and challengePhrase matching "${entity}"`);
+    }
+  }
+
+  const url = session.getUrl(env);
+  if (!url) {
+    throw new HttpError(409, `${env.toUpperCase()}_NOT_CONNECTED`, `No ${env === 'dev' ? 'Dev' : 'Prod'} database configured.`);
+  }
+
+  try {
+    const result = await updateRecord(url, entity, primaryKey, updates);
+    if (env === 'prod') {
+      logProdAudit(cwd, 'UPDATE', entity, primaryKey, { updates }, req);
+    }
+    return result;
+  } catch (err) {
+    throw new HttpError(500, 'DATA_MUTATION_ERROR', (err as Error).message);
+  }
+}
+
+async function handleDataDelete(session: StudioSession, cwd: string, body: Record<string, unknown>, req: http.IncomingMessage): Promise<unknown> {
+  const env = parseEnv(body.env, 'env');
+  const entity = typeof body.entity === 'string' ? body.entity.trim() : '';
+  if (!entity) throw new HttpError(400, 'VALIDATION_ERROR', '"entity" is required');
+
+  const primaryKey = body.primaryKey as string | number;
+  if (primaryKey === undefined || primaryKey === null || primaryKey === '') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"primaryKey" is required for deletion');
+  }
+
+  if (env === 'prod') {
+    if (body.confirmProd !== true || typeof body.challengePhrase !== 'string' || body.challengePhrase.trim() !== entity) {
+      throw new HttpError(403, 'PROD_CHALLENGE_REQUIRED', `Production deletion requires confirmProd=true and challengePhrase matching "${entity}"`);
+    }
+  }
+
+  const url = session.getUrl(env);
+  if (!url) {
+    throw new HttpError(409, `${env.toUpperCase()}_NOT_CONNECTED`, `No ${env === 'dev' ? 'Dev' : 'Prod'} database configured.`);
+  }
+
+  try {
+    const result = await deleteRecord(url, entity, primaryKey);
+    if (env === 'prod') {
+      logProdAudit(cwd, 'DELETE', entity, primaryKey, {}, req);
+    }
+    return result;
+  } catch (err) {
+    throw new HttpError(500, 'DATA_MUTATION_ERROR', (err as Error).message);
+  }
+}
+
 // ─── Server ────────────────────────────────────────────────────────────────────
 
 export function createStudioServer(options: StudioServerOptions = {}): http.Server {
@@ -387,13 +544,21 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, await handleConnect(session, await readJsonBody(req)));
         case 'POST /api/export-contract':
           return sendJson(res, 200, await handleExportContract(session, cwd, await readJsonBody(req)));
+        case 'GET /api/data':
+          return sendJson(res, 200, await handleDataGet(session, url.searchParams));
+        case 'POST /api/data':
+          return sendJson(res, 200, await handleDataPost(session, cwd, await readJsonBody(req), req));
+        case 'PUT /api/data':
+          return sendJson(res, 200, await handleDataPut(session, cwd, await readJsonBody(req), req));
+        case 'DELETE /api/data':
+          return sendJson(res, 200, await handleDataDelete(session, cwd, await readJsonBody(req), req));
         case 'GET /favicon.ico':
           res.writeHead(204).end();
           return;
       }
 
       if (url.pathname.startsWith('/api/')) {
-        const known = ['/api/status', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract'];
+        const known = ['/api/status', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data'];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
       }
