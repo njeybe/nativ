@@ -20,11 +20,11 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const templatesDir = getTemplatesDir();
 
-  console.log(pc.bold(pc.cyan('\n🚀 AI-Agent-Workflow: Initializing Multi-Tier Pipeline...')));
+  console.log(pc.bold(pc.cyan('\nNativ: Initializing Multi-Tier Pipeline...')));
   console.log(pc.dim(`Target directory: ${targetDir}`));
 
   // 1. Run scanner
-  console.log(pc.yellow('🔍 Scanning repository structure & tech stack...'));
+  console.log(pc.yellow('Scanning repository structure & tech stack...'));
   const projectInfo = detectProject(targetDir);
 
   console.log(pc.green(`✔ Identified: ${pc.bold(projectInfo.projectName)} (${pc.cyan(projectInfo.repositoryType)})`));

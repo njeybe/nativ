@@ -287,10 +287,10 @@ AI agents get **schema structure, never secrets**.
 
 ---
 
-## 📦 Project Structure
+## Project Structure
 
 ```
-ai-agent-workflow/
+nativ-fw/
 ├── bin/
 │   └── cli.js                    # Executable binary entrypoint (nativ)
 ├── src/
