@@ -16,6 +16,7 @@ import {
   runWorktreeCreate,
   runWorktreeList,
   runWorktreeMerge,
+  runWorktreeRemove,
 } from './commands/worktree.js';
 import { runUpdate } from './commands/update.js';
 import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './commands/db.js';
@@ -201,23 +202,37 @@ export function createProgram(): Command {
 
   worktree
     .command('create <taskId> [targetDir]')
-    .description('Create an isolated git worktree branch for a task')
-    .action(async (taskId, targetDir) => {
-      await runWorktreeCreate(taskId, targetDir);
+    .description('Create an isolated git worktree branch for a task with mounted .ai/ contracts')
+    .option('--json', 'Output result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runWorktreeCreate(taskId, targetDir, options);
     });
 
   worktree
     .command('list [targetDir]')
     .description('List active agent git worktrees')
-    .action(async (targetDir) => {
-      await runWorktreeList(targetDir);
+    .option('--json', 'Output worktree list as JSON')
+    .action(async (targetDir, options) => {
+      await runWorktreeList(targetDir, options);
     });
 
   worktree
     .command('merge <taskId> [targetDir]')
-    .description('Merge and cleanup an agent git worktree branch')
-    .action(async (taskId, targetDir) => {
-      await runWorktreeMerge(taskId, targetDir);
+    .description('Merge and cleanup an agent git worktree branch (Safe Merge Gatekeeper enforced)')
+    .option('-f, --force', 'Bypass Safe Merge Gatekeeper checks')
+    .option('--json', 'Output result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runWorktreeMerge(taskId, targetDir, options);
+    });
+
+  worktree
+    .command('remove <taskId> [targetDir]')
+    .alias('cleanup')
+    .description('Safely remove an agent worktree and discard its branch without merging')
+    .option('-f, --force', 'Force removal of worktree and branch')
+    .option('--json', 'Output result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runWorktreeRemove(taskId, targetDir, options);
     });
 
   const db = program

@@ -17,6 +17,12 @@ import {
 import { SUBAGENT_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
 import { runStatus } from '../commands/status.js';
+import {
+  runWorktreeCreate,
+  runWorktreeList,
+  runWorktreeMerge,
+  runWorktreeRemove,
+} from '../commands/worktree.js';
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
 import { runVerify } from '../commands/verify.js';
 import { runTestGen } from '../commands/test-gen.js';
@@ -256,6 +262,52 @@ export function createMcpServer(targetDirArg?: string): McpServer {
           json: true,
         }),
       ),
+  );
+
+  // ─── Worktree lifecycle tools ──────────────────────────────────────────────
+
+  registerDualTool(
+    'worktree_create',
+    {
+      description: 'Create an isolated Git worktree branch for a task with mounted .ai/ contracts (JSON).',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+      },
+    },
+    ({ taskId }) => captureOutput(() => runWorktreeCreate(taskId, targetDir, { json: true })),
+  );
+
+  registerDualTool(
+    'worktree_list',
+    {
+      description: 'List active agent Git worktrees and their branch mapping (JSON).',
+      inputSchema: {},
+    },
+    () => captureOutput(() => runWorktreeList(targetDir, { json: true })),
+  );
+
+  registerDualTool(
+    'worktree_merge',
+    {
+      description: 'Merge an agent worktree branch into the base branch (enforces Safe Merge Gatekeeper unless force is true).',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        force: z.boolean().optional().describe('Bypass Safe Merge Gatekeeper checks'),
+      },
+    },
+    ({ taskId, force }) => captureOutput(() => runWorktreeMerge(taskId, targetDir, { force, json: true })),
+  );
+
+  registerDualTool(
+    'worktree_remove',
+    {
+      description: 'Safely remove an agent worktree and discard its branch without merging.',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        force: z.boolean().optional().describe('Force removal'),
+      },
+    },
+    ({ taskId, force }) => captureOutput(() => runWorktreeRemove(taskId, targetDir, { force, json: true })),
   );
 
   // ─── Workspace tools ───────────────────────────────────────────────────────

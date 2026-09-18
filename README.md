@@ -109,9 +109,10 @@ Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the
 | `nativ task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
 | `nativ task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
 | `nativ task propose-patch <taskId>` | Proposes a modification to contracts; evaluated by the Governor (`--target`, `--op`, `--path`, `--value`, `--reason`). |
-| `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
-| `nativ worktree list` | Lists all active agent git worktrees. |
-| `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
+| `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>` with mounted `.ai/`. |
+| `nativ worktree list` | Lists all active agent git worktrees (supports `--json`). |
+| `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch (Safe Merge Gatekeeper enforced; override with `-f`). |
+| `nativ worktree remove <taskId>` | Safely removes an agent worktree without merging (alias: `nativ worktree cleanup`). |
 | `nativ db status [targetDir]` | Dev/Prod connection health: engine, ping latency, table count, masked URL (supports `--json`). |
 | `nativ db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev|prod`, `--table <name>`, `--json`). |
 | `nativ db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
@@ -137,6 +138,10 @@ Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the
 | `nativ_task_block` | `taskId`, `reason` | `nativ task block` |
 | `nativ_task_escalate` | `taskId`, `type`, `details`, `affected?` | `nativ task escalate` |
 | `nativ_task_propose_patch`| `taskId`, `target`, `operation`, `path`, `value?`, `reason` | `nativ task propose-patch --json` (Contract Governor) |
+| `nativ_worktree_create` | `taskId` | `nativ worktree create <taskId> --json` |
+| `nativ_worktree_list` | – | `nativ worktree list --json` |
+| `nativ_worktree_merge` | `taskId`, `force?` | `nativ worktree merge <taskId> --json` |
+| `nativ_worktree_remove`| `taskId`, `force?` | `nativ worktree remove <taskId> --json` |
 | `nativ_init` | – | `nativ init` (never overwrites; no `--force`) |
 | `nativ_status` | – | `nativ status` |
 | `nativ_db_status` | – | `nativ db status --json` |
