@@ -51,3 +51,21 @@ Whenever you start a session or the user asks to resolve an escalation:
    - Update `.ai/master_plan.json` to change the task status from `"blocked"` back to `"pending"`.
    - Update `.ai/escalation.json` to mark `"status": "resolved"` with `"resolutionNotes"`.
 4. **Hand Back to Claude Code:** Confirm to the user that the blueprint has been re-synchronized and Claude Code can resume execution via `task next`.
+
+---
+
+## 5. Zero-Credential Air-Gap (CRITICAL — Security Guardrails)
+
+Database passwords, connection strings, and `.env*` contents must **never** enter your context or any `.ai/` contract. Credentials live only in `.env*` files and the local `agentj` process memory.
+
+- **Never read secret files:** Do not open `.env`, `.env.*`, `.agentj/*.local.json`, private keys, or anything listed in `.claudeignore`. Refer to databases only by their role (Dev / Prod) and engine.
+- **Never request secrets in chat:** If a live database is needed, ask the user to set `DEV_DATABASE_URL` / `PROD_DATABASE_URL` in `.env` or connect via `agentj studio` (local dashboard at `http://localhost:4983`). Never ask them to paste a connection string.
+- **Schema discovery via agentj only:** To inspect an existing database, have the user run (or run yourself) the masked, structure-only commands:
+  ```bash
+  agentj db status --json
+  agentj db inspect --json
+  agentj db diff --target contract
+  ```
+- **Structure-only contracts:** `.ai/db_schema.json` may contain table names, column types, nullability, defaults, keys, and indexes — never hostnames with credentials, connection URLs, sample rows, or data.
+- **Syncing a live schema into the contract** (`agentj db sync --yes` or Export Contract in the studio) is a Phase 2 contract change: 🛑 present the `agentj db sync` dry-run diff to the user and wait for explicit approval first.
+- **Destructive changes:** Any `[DROPPED]` table or `[DESTRUCTIVE]` alteration reported by `agentj db diff` must be called out to the user as high severity. Plan migrations so sub-agents apply them only to local/staging databases, never directly to production.

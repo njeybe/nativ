@@ -16,6 +16,7 @@ import {
   runWorktreeMerge,
 } from './commands/worktree.js';
 import { runUpdate } from './commands/update.js';
+import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './commands/db.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -145,6 +146,65 @@ export function createProgram(): Command {
     .description('Merge and cleanup an agent git worktree branch')
     .action(async (taskId, targetDir) => {
       await runWorktreeMerge(taskId, targetDir);
+    });
+
+  const db = program
+    .command('db')
+    .description('Database telemetry, schema introspection, drift detection, and the local DB Studio (credentials never leave this process)');
+
+  db
+    .command('status [targetDir]')
+    .description('Show Dev/Prod connection health, engine, ping latency, and table count (masked URLs only)')
+    .option('--json', 'Output status as JSON')
+    .action(async (targetDir, options) => {
+      await runDbStatus(targetDir, options);
+    });
+
+  db
+    .command('inspect [targetDir]')
+    .description('Print introspected table structures (columns, types, keys, indexes)')
+    .option('-e, --env <env>', 'Environment to inspect (dev or prod)', 'dev')
+    .option('-t, --table <name>', 'Only show a single table')
+    .option('--json', 'Output schema as JSON')
+    .action(async (targetDir, options) => {
+      await runDbInspect(targetDir, options);
+    });
+
+  db
+    .command('diff [targetDir]')
+    .description('Compute schema drift from Dev to Prod (or to .ai/db_schema.json with --target contract)')
+    .option('--target <target>', 'Comparison target (prod or contract)', 'prod')
+    .option('--json', 'Output diff as JSON')
+    .option('--exit-code', 'Exit with code 1 when drift is detected (for CI)')
+    .action(async (targetDir, options) => {
+      await runDbDiff(targetDir, options);
+    });
+
+  db
+    .command('sync [targetDir]')
+    .description('Export a live schema (structure only) into .ai/db_schema.json; previews unless --yes is given')
+    .option('-s, --source <env>', 'Source environment (dev or prod)', 'dev')
+    .option('-y, --yes', 'Write .ai/db_schema.json instead of previewing')
+    .action(async (targetDir, options) => {
+      await runDbSync(targetDir, options);
+    });
+
+  db
+    .command('ui [targetDir]')
+    .description('Launch the local AgentJ DB Studio web dashboard')
+    .option('-p, --port <port>', 'Port to listen on (default 4983)')
+    .option('--no-open', 'Do not open the browser automatically')
+    .action(async (targetDir, options) => {
+      await runDbUi(targetDir, options);
+    });
+
+  program
+    .command('studio [targetDir]')
+    .description('Launch the local AgentJ DB Studio web dashboard (alias for `db ui`)')
+    .option('-p, --port <port>', 'Port to listen on (default 4983)')
+    .option('--no-open', 'Do not open the browser automatically')
+    .action(async (targetDir, options) => {
+      await runDbUi(targetDir, options);
     });
 
   return program;
