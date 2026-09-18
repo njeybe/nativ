@@ -9,7 +9,7 @@ export async function runStatus(targetDirArg?: string) {
 
   if (!fs.existsSync(planPath)) {
     console.error(pc.red(`\n✖ No .ai/master_plan.json found in: ${targetDir}`));
-    console.log(pc.yellow('Run `ai-agent-workflow init` first to scaffold the environment.\n'));
+    console.log(pc.yellow('Run `nativ init` first to scaffold the environment.\n'));
     process.exitCode = 1;
     return;
   }

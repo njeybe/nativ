@@ -412,7 +412,7 @@ function generateFirestore(d: SchemaDiff, targetLabel: string): string {
   }
 
   const doc: Record<string, unknown> = {
-    _agentj: `Preview Dev → ${targetLabel} (Firestore). Nothing runs automatically.`,
+    _nativ: `Preview Dev → ${targetLabel} (Firestore). Nothing runs automatically.`,
     _deploy: 'indexes + fieldOverrides: firebase deploy --only firestore:indexes; dataMigrations: apply with a script',
     indexes,
     fieldOverrides,

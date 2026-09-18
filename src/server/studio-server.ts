@@ -477,9 +477,6 @@ function logProdAudit(
   req: http.IncomingMessage,
 ): void {
   try {
-    const dir = path.join(cwd, '.agentj');
-    fs.mkdirSync(dir, { recursive: true });
-    const logFile = path.join(dir, 'prod_audit.log');
     const entry = {
       timestamp: new Date().toISOString(),
       env: 'prod',
@@ -489,7 +486,15 @@ function logProdAudit(
       clientIp: req.socket.remoteAddress ?? '127.0.0.1',
       details,
     };
+    const dir = path.join(cwd, '.nativ');
+    fs.mkdirSync(dir, { recursive: true });
+    const logFile = path.join(dir, 'prod_audit.log');
     fs.appendFileSync(logFile, `${JSON.stringify(entry)}\n`, 'utf8');
+
+    const legacyDir = path.join(cwd, '.agentj');
+    if (fs.existsSync(legacyDir)) {
+      try { fs.appendFileSync(path.join(legacyDir, 'prod_audit.log'), `${JSON.stringify(entry)}\n`, 'utf8'); } catch {}
+    }
   } catch (err) {
     console.error('Failed to append to prod_audit.log:', err);
   }

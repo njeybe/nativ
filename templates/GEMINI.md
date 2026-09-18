@@ -39,21 +39,21 @@ Confirm to the user that:
 
 ## Native MCP Integration (Antigravity)
 
-When the `agentj` MCP server is registered in Antigravity (Agent panel → **MCP Servers** → **Manage MCP Servers** → **View raw config**, i.e. `mcp_config.json`):
+When the `nativ` MCP server is registered in Antigravity (Agent panel → **MCP Servers** → **Manage MCP Servers** → **View raw config**, i.e. `mcp_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "agentj": {
+    "nativ": {
       "command": "npx",
-      "args": ["agentj", "mcp", "/absolute/path/to/your/project"]
+      "args": ["-y", "nativ-cli", "mcp", "/absolute/path/to/your/project"]
     }
   }
 }
 ```
 
-- Read contracts through resources instead of opening files: `agentj://context`, `agentj://master-plan`, `agentj://db-schema`, `agentj://api-contracts`, `agentj://escalation`.
-- Use `agentj_status` and `agentj_task_list` to review execution progress, and `agentj_db_status` / `agentj_db_inspect` / `agentj_db_diff` for masked, structure-only schema discovery.
+- Read contracts through resources instead of opening files: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`.
+- Use `nativ_status` and `nativ_task_list` to review execution progress, and `nativ_db_status` / `nativ_db_inspect` / `nativ_db_diff` for masked, structure-only schema discovery.
 - The MCP server exposes no contract-writing tool. Phase 2 contract exports and escalation resolutions are still written by you, after the user approves them.
 
 ---
@@ -77,16 +77,16 @@ Whenever you start a session or the user asks to resolve an escalation:
 
 ## 5. Zero-Credential Air-Gap (CRITICAL — Security Guardrails)
 
-Database passwords, connection strings, and `.env*` contents must **never** enter your context or any `.ai/` contract. Credentials live only in `.env*` files and the local `agentj` process memory.
+Database passwords, connection strings, and `.env*` contents must **never** enter your context or any `.ai/` contract. Credentials live only in `.env*` files and the local `nativ` process memory.
 
-- **Never read secret files:** Do not open `.env`, `.env.*`, `.agentj/*.local.json`, private keys, or anything listed in `.claudeignore`. Refer to databases only by their role (Dev / Prod) and engine.
-- **Never request secrets in chat:** If a live database is needed, ask the user to set `DEV_DATABASE_URL` / `PROD_DATABASE_URL` in `.env` or connect via `agentj studio` (local dashboard at `http://localhost:4983`). Never ask them to paste a connection string.
-- **Schema discovery via agentj only:** To inspect an existing database, have the user run (or run yourself) the masked, structure-only commands:
+- **Never read secret files:** Do not open `.env`, `.env.*`, `.nativ/*.local.json`, `.agentj/*.local.json`, private keys, or anything listed in `.claudeignore`. Refer to databases only by their role (Dev / Prod) and engine.
+- **Never request secrets in chat:** If a live database is needed, ask the user to set `DEV_DATABASE_URL` / `PROD_DATABASE_URL` in `.env` or connect via `nativ studio` (local dashboard at `http://localhost:4983`). Never ask them to paste a connection string.
+- **Schema discovery via nativ only:** To inspect an existing database, have the user run (or run yourself) the masked, structure-only commands:
   ```bash
-  agentj db status --json
-  agentj db inspect --json
-  agentj db diff --target contract
+  nativ db status --json
+  nativ db inspect --json
+  nativ db diff --target contract
   ```
 - **Structure-only contracts:** `.ai/db_schema.json` may contain table names, column types, nullability, defaults, keys, and indexes — never hostnames with credentials, connection URLs, sample rows, or data.
-- **Syncing a live schema into the contract** (`agentj db sync --yes` or Export Contract in the studio) is a Phase 2 contract change: 🛑 present the `agentj db sync` dry-run diff to the user and wait for explicit approval first.
-- **Destructive changes:** Any `[DROPPED]` table or `[DESTRUCTIVE]` alteration reported by `agentj db diff` must be called out to the user as high severity. Plan migrations so sub-agents apply them only to local/staging databases, never directly to production.
+- **Syncing a live schema into the contract** (`nativ db sync --yes` or Export Contract in the studio) is a Phase 2 contract change: 🛑 present the `nativ db sync` dry-run diff to the user and wait for explicit approval first.
+- **Destructive changes:** Any `[DROPPED]` table or `[DESTRUCTIVE]` alteration reported by `nativ db diff` must be called out to the user as high severity. Plan migrations so sub-agents apply them only to local/staging databases, never directly to production.

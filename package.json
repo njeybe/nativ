@@ -6,9 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "nativ": "./bin/cli.js",
-    "agentj": "./bin/cli.js",
-    "ai-agent-workflow": "./bin/cli.js"
+    "nativ": "./bin/cli.js"
   },
   "files": [
     "dist",

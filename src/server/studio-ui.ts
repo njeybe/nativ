@@ -22,7 +22,7 @@ export function renderStudioHtml(options: StudioUiOptions = {}): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AgentJ DB Studio</title>
+<title>Nativ DB Studio</title>
 <style>
 :root {
   --bg: #0b0f19;
@@ -291,7 +291,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
 <div class="toast-host" id="toasts" role="status" aria-live="polite"></div>
 <div class="container">
   <header class="topnav glass">
-    <div class="brand"><span class="pulse" aria-hidden="true"></span>AgentJ DB Studio <span class="version">agentj v${version}</span></div>
+    <div class="brand"><span class="pulse" aria-hidden="true"></span>Nativ DB Studio <span class="version">nativ v${version}</span></div>
     <div class="telemetry" id="telemetry" aria-label="Database telemetry"></div>
     <div class="actions">
       <button class="btn" id="btn-settings" type="button">Connection Settings</button>
@@ -323,7 +323,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
 <dialog id="conn-dialog" aria-labelledby="conn-title">
   <form class="modal glass" method="dialog" id="conn-form">
     <h2 id="conn-title">Connection Settings</h2>
-    <p class="lead">Connection strings stay in memory inside the local agentj process. They are never written to disk or shown to AI agents; only masked URLs are displayed.</p>
+    <p class="lead">Connection strings stay in memory inside the local nativ process. They are never written to disk or shown to AI agents; only masked URLs are displayed.</p>
     <div id="conn-template-chips" hidden></div>
     <div class="field" data-env="dev">
       <label for="engine-dev"><span class="dot" id="mdot-dev"></span> Dev / Staging</label>
@@ -529,7 +529,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     if (/ECONNREFUSED|ETIMEDOUT|timeout|EHOSTUNREACH/i.test(m)) return 'Check that the database server is running and the host/port are reachable from this machine.';
     if (/ENOTFOUND|getaddrinfo/i.test(m)) return 'The hostname could not be resolved. Verify the host in your connection string.';
     if (/password|authentication|access denied/i.test(m)) return 'Credentials were rejected. Re-enter the connection string in Connection Settings.';
-    if (/unable to open database file/i.test(m)) return 'The SQLite file was not found. Check the path relative to where agentj was started.';
+    if (/unable to open database file/i.test(m)) return 'The SQLite file was not found. Check the path relative to where nativ was started.';
     if (/not configured|NOT_CONNECTED/i.test(m)) return 'Open Connection Settings to connect a database.';
     if (/default credentials|UNAUTHENTICATED|PERMISSION_DENIED/i.test(m)) return 'For Firestore, run "gcloud auth application-default login" or connect to the emulator instead.';
     if (/Server selection timed out|MongoServerSelectionError/i.test(m)) return 'MongoDB did not respond. Check the host, port, and network access list.';
@@ -969,7 +969,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     }).join('');
 
     var prodBannerHtml = activeEnv === 'prod'
-      ? '<div class="prod-banner"><span><b>Production Safeguard Active:</b> Operating on live production data. All mutations require strict challenge phrase confirmation and are recorded to .agentj/prod_audit.log.</span><span class="badge badge-prod">PROD</span></div>'
+      ? '<div class="prod-banner"><span><b>Production Safeguard Active:</b> Operating on live production data. All mutations require strict challenge phrase confirmation and are recorded to .nativ/prod_audit.log.</span><span class="badge badge-prod">PROD</span></div>'
       : '';
 
     var toolbar = '<div class="data-toolbar">' +
@@ -1233,7 +1233,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       body: JSON.stringify(body)
     }).then(function () {
       if (confirmProd) {
-        toast('Production ' + action.toLowerCase() + ' executed. Logged to .agentj/prod_audit.log', 'ok');
+        toast('Production ' + action.toLowerCase() + ' executed. Logged to .nativ/prod_audit.log', 'ok');
         $('challenge-dialog').close();
       } else {
         toast(action + ' executed successfully', 'ok');
@@ -1344,7 +1344,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
       return coll(t) + '.createIndex(' + keySpec(i) + ', { name: ' + JSON.stringify(i.name) + (i.unique ? ', unique: true' : '') + ' });';
     };
     var out = [
-      '// AgentJ migration preview: Dev → ' + target + ' (MongoDB shell)',
+      '// Nativ migration preview: Dev → ' + target + ' (MongoDB shell)',
       '// Generated from structural metadata only. Review carefully; nothing is executed automatically.',
       ''
     ];
@@ -1418,7 +1418,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     });
 
     var doc = {
-      _agentj: 'Preview Dev → ' + target + ' (Firestore). Nothing runs automatically.',
+      _nativ: 'Preview Dev → ' + target + ' (Firestore). Nothing runs automatically.',
       _deploy: 'indexes + fieldOverrides: firebase deploy --only firestore:indexes; dataMigrations: apply with a script',
       indexes: indexes,
       fieldOverrides: fieldOverrides,
@@ -1440,7 +1440,7 @@ table.data-table tr:hover td { background: var(--surface-hover); }
     var dropIdx = function (t, i) { return dialect === 'mysql' ? 'DROP INDEX ' + q(i.name) + ' ON ' + q(t) + ';' : 'DROP INDEX ' + q(i.name) + ';'; };
     var target = state.diffTargetUsed === 'contract' ? '.ai/db_schema.json' : 'Prod';
     var out = [
-      '-- AgentJ migration preview: Dev → ' + target + ' (' + (ENGINE_LABEL[dialect] || dialect) + ' dialect)',
+      '-- Nativ migration preview: Dev → ' + target + ' (' + (ENGINE_LABEL[dialect] || dialect) + ' dialect)',
       '-- Generated from structural metadata only. Review carefully; nothing is executed automatically.',
       ''
     ];

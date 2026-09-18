@@ -1,6 +1,6 @@
-# AgentJ Zero-Credential AI Air-Gap
+# Nativ Zero-Credential AI Air-Gap
 # Files that must never be read into an AI agent's context.
-# Database credentials live only in these files and in the local agentj process memory.
+# Database credentials live only in these files and in the local nativ process memory.
 
 # Environment files (connection strings, API keys, secrets)
 .env
@@ -11,7 +11,8 @@
 !.env.example
 !**/.env.example
 
-# AgentJ local runtime state (saved connections, session data)
+# Nativ local runtime state (saved connections, session data)
+.nativ/*.local.json
 .agentj/*.local.json
 **/*.local.json
 

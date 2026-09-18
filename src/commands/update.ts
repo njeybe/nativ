@@ -19,11 +19,11 @@ export async function runUpdate(targetDirArg?: string) {
   const templatesDir = getTemplatesDir();
   const aiDir = path.join(targetDir, '.ai');
 
-  console.log(pc.bold(pc.cyan(`\n🔄 AgentJ: Synchronizing Framework & Directives in: ${targetDir}\n`)));
+  console.log(pc.bold(pc.cyan(`\n🔄 Nativ: Synchronizing Framework & Directives in: ${targetDir}\n`)));
 
   if (!fs.existsSync(aiDir)) {
     console.error(pc.red(`✖ No .ai/ directory found in: ${targetDir}`));
-    console.log(pc.yellow('Run `agentj init` first to scaffold the initial environment.\n'));
+    console.log(pc.yellow('Run `nativ init` first to scaffold the initial environment.\n'));
     process.exitCode = 1;
     return;
   }

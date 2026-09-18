@@ -27,6 +27,7 @@ const ENV_FILES = ['.env', '.env.local', '.env.development', '.env.development.l
 export const EXAMPLE_ENV_FILES = ['.env.example', '.env.sample', '.env.template', '.env.dist', '.env.defaults'];
 
 const DEV_KEYS = [
+  'NATIV_DEV_DATABASE_URL',
   'AGENTJ_DEV_DATABASE_URL',
   'DEV_DATABASE_URL',
   'DATABASE_URL_DEV',
@@ -38,6 +39,7 @@ const DEV_KEYS = [
   'FIRESTORE_URL',
 ];
 const PROD_KEYS = [
+  'NATIV_PROD_DATABASE_URL',
   'AGENTJ_PROD_DATABASE_URL',
   'PROD_DATABASE_URL',
   'DATABASE_URL_PROD',

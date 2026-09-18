@@ -651,7 +651,7 @@ function resolveMongoId(id: string | number, ObjectIdClass?: any): any {
 async function mongoFetch(url: string, entity: string, options: FetchDataOptions): Promise<FetchDataResult> {
   assertValidIdentifier(entity, 'collection name');
   const { MongoClient } = await import('mongodb');
-  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'agentj-data' });
+  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'nativ-data' });
   await client.connect();
 
   try {
@@ -706,7 +706,7 @@ async function mongoFetch(url: string, entity: string, options: FetchDataOptions
 async function mongoInsert(url: string, entity: string, record: Record<string, unknown>): Promise<InsertRecordResult> {
   assertValidIdentifier(entity, 'collection name');
   const { MongoClient } = await import('mongodb');
-  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'agentj-data' });
+  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'nativ-data' });
   await client.connect();
 
   try {
@@ -724,7 +724,7 @@ async function mongoInsert(url: string, entity: string, record: Record<string, u
 async function mongoUpdate(url: string, entity: string, primaryKey: string | number, updates: Record<string, unknown>): Promise<UpdateRecordResult> {
   assertValidIdentifier(entity, 'collection name');
   const { MongoClient, ObjectId } = await import('mongodb');
-  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'agentj-data' });
+  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'nativ-data' });
   await client.connect();
 
   try {
@@ -751,7 +751,7 @@ async function mongoUpdate(url: string, entity: string, primaryKey: string | num
 async function mongoDelete(url: string, entity: string, primaryKey: string | number): Promise<DeleteRecordResult> {
   assertValidIdentifier(entity, 'collection name');
   const { MongoClient, ObjectId } = await import('mongodb');
-  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'agentj-data' });
+  const client = new MongoClient(url, { serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000, appName: 'nativ-data' });
   await client.connect();
 
   try {

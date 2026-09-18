@@ -8,7 +8,7 @@ import { renderStudioHtml } from '../dist/server/studio-ui.js';
 console.log('--- Starting Live Data Studio & Production Safeguard Verification ---');
 
 // 1. Create temporary SQLite databases for Dev and Prod
-const tmpDir = path.join(process.cwd(), '.agentj', 'test_tmp');
+const tmpDir = path.join(process.cwd(), '.nativ', 'test_tmp');
 fs.mkdirSync(tmpDir, { recursive: true });
 const devDbPath = path.join(tmpDir, 'dev.sqlite');
 const prodDbPath = path.join(tmpDir, 'prod.sqlite');
@@ -143,7 +143,7 @@ try {
   console.log('✔ Production write correctly rejected with 403 PROD_CHALLENGE_REQUIRED');
 
   // Test G: Production Guardrail - Success with Challenge Phrase & Audit Log
-  const prodAuditFile = path.join(process.cwd(), '.agentj', 'prod_audit.log');
+  const prodAuditFile = path.join(process.cwd(), '.nativ', 'prod_audit.log');
   try { fs.unlinkSync(prodAuditFile); } catch {}
 
   const prodAllowRes = await fetch(`${studio.url}/api/data`, {
@@ -168,7 +168,7 @@ try {
   assert.strictEqual(auditContent.includes('"action":"INSERT"'), true);
   assert.strictEqual(auditContent.includes('"entity":"users"'), true);
   assert.strictEqual(auditContent.includes('prod_authorized'), true);
-  console.log('✔ Audit log entry written to .agentj/prod_audit.log');
+  console.log('✔ Audit log entry written to .nativ/prod_audit.log');
 
   // Test H: Verify UI HTML contains Environment Toggle, Data Tab, Dialogs, and Zero Emojis
   const html = renderStudioHtml({ version: '1.0.0' });

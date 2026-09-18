@@ -24,7 +24,6 @@ export function createProgram(): Command {
 
   program
     .name('nativ')
-    .alias('agentj')
     .description('Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents')
     .version('1.0.0');
 

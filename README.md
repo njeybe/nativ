@@ -2,7 +2,7 @@
 
 A portable, multi-tier autonomous software engineering harness that connects **Antigravity (Strategy & Planning)** with **Claude Code CLI (Project Manager)** and downstream **Sub-agents** (Backend, Frontend, Database, QA).
 
-> **Package Name:** `nativ-cli` | **Binary Command:** `nativ` *(aliases: `agentj`, `ai-agent-workflow`)*
+> **Package Name:** `nativ-cli` | **Binary Command:** `nativ`
 
 ---
 
@@ -42,11 +42,11 @@ A portable, multi-tier autonomous software engineering harness that connects **A
 Run the CLI tool inside your target project directory:
 
 ```bash
-# Using agentj globally (via npm link or global install):
-agentj init
+# Using nativ globally (via npm link or global install):
+nativ init
 
 # Or via npx:
-npx agentj init
+npx nativ-cli init
 ```
 
 ### What `init` Does:
@@ -87,57 +87,57 @@ Open Claude Code CLI in your project terminal:
 ```bash
 claude
 ```
-Claude Code reads `CLAUDE.md`, calls `npx ai-agent-workflow task next` to fetch only the active work item and its recommended contract slice (JIT context slicing), implements the scoped changes, verifies them via automated test runs, and updates status programmatically via `task complete`!
+Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the active work item and its recommended contract slice (JIT context slicing), implements the scoped changes, verifies them via automated test runs, and updates status programmatically via `task complete`!
 
 ---
 
-## 🛠 CLI Commands (`agentj`)
+## 🛠 CLI Commands (`nativ`)
 
 | Command | Description |
 | :--- | :--- |
-| `agentj init [targetDir]` | Scans target project and generates `.ai/`, `CLAUDE.md`, and `GEMINI.md`. Use `-f` to overwrite. |
-| `agentj update [targetDir]` | Safely synchronizes latest directives, sub-agents, and missing contracts without touching project state. |
-| `agentj status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
-| `agentj validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
-| `agentj task list [targetDir]` | Lists all project tasks with filtering (`--available`, `--status`, `--milestone`, `--json`). Alias: `agentj tasks`. |
-| `agentj task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
-| `agentj task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
-| `agentj task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
-| `agentj task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
-| `agentj task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
-| `agentj worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
-| `agentj worktree list` | Lists all active agent git worktrees. |
-| `agentj worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
-| `agentj db status [targetDir]` | Dev/Prod connection health: engine, ping latency, table count, masked URL (supports `--json`). |
-| `agentj db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev\|prod`, `--table <name>`, `--json`). |
-| `agentj db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
-| `agentj db sync [targetDir]` | Previews exporting a live schema into `.ai/db_schema.json`; writes only with `--yes` (`--source dev\|prod`). |
-| `agentj db ui [targetDir]` | Launches the local DB Studio dashboard (`--port <n>`, `--no-open`). Alias: `agentj studio`. |
-| `agentj mcp [targetDir]` | Runs the native MCP server over stdio, exposing `agentj_*` tools and `agentj://` contract resources. |
+| `nativ init [targetDir]` | Scans target project and generates `.ai/`, `CLAUDE.md`, and `GEMINI.md`. Use `-f` to overwrite. |
+| `nativ update [targetDir]` | Safely synchronizes latest directives, sub-agents, and missing contracts without touching project state. |
+| `nativ status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
+| `nativ validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
+| `nativ task list [targetDir]` | Lists all project tasks with filtering (`--available`, `--status`, `--milestone`, `--json`). Alias: `nativ tasks`. |
+| `nativ task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
+| `nativ task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
+| `nativ task complete <taskId>` | Marks a task as `completed` and advances milestone/project status upon completion. |
+| `nativ task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
+| `nativ task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
+| `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>`. |
+| `nativ worktree list` | Lists all active agent git worktrees. |
+| `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch and cleans up. |
+| `nativ db status [targetDir]` | Dev/Prod connection health: engine, ping latency, table count, masked URL (supports `--json`). |
+| `nativ db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev\|prod`, `--table <name>`, `--json`). |
+| `nativ db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
+| `nativ db sync [targetDir]` | Previews exporting a live schema into `.ai/db_schema.json`; writes only with `--yes` (`--source dev\|prod`). |
+| `nativ db ui [targetDir]` | Launches the local DB Studio dashboard (`--port <n>`, `--no-open`). Alias: `nativ studio`. |
+| `nativ mcp [targetDir]` | Runs the native MCP server over stdio, exposing `nativ_*` tools and `nativ://` contract resources. |
 
 ---
 
-## 🔌 Native MCP Server (`agentj mcp`)
+## 🔌 Native MCP Server (`nativ mcp`)
 
-`agentj mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io) over stdio, so any MCP client can drive the workflow with typed tool calls instead of parsing CLI output.
+`nativ mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io) over stdio, so any MCP client can drive the workflow with typed tool calls instead of parsing CLI output.
 
 **Tools**
 
 | Tool | Arguments | Equivalent |
 | :--- | :--- | :--- |
-| `agentj_task_next` | – | `agentj task next --json` |
-| `agentj_task_list` | `available?`, `status?`, `milestone?` | `agentj task list --json` |
-| `agentj_task_start` | `taskId` | `agentj task start` |
-| `agentj_task_complete` | `taskId`, `notes?` | `agentj task complete` |
-| `agentj_task_block` | `taskId`, `reason` | `agentj task block` |
-| `agentj_task_escalate` | `taskId`, `type`, `details`, `affected?` | `agentj task escalate` |
-| `agentj_init` | – | `agentj init` (never overwrites; no `--force`) |
-| `agentj_status` | – | `agentj status` |
-| `agentj_db_status` | – | `agentj db status --json` |
-| `agentj_db_inspect` | `env?`, `table?` | `agentj db inspect --json` |
-| `agentj_db_diff` | `target?` (`contract` default, or `prod`) | `agentj db diff --json` |
+| `nativ_task_next` | – | `nativ task next --json` |
+| `nativ_task_list` | `available?`, `status?`, `milestone?` | `nativ task list --json` |
+| `nativ_task_start` | `taskId` | `nativ task start` |
+| `nativ_task_complete` | `taskId`, `notes?` | `nativ task complete` |
+| `nativ_task_block` | `taskId`, `reason` | `nativ task block` |
+| `nativ_task_escalate` | `taskId`, `type`, `details`, `affected?` | `nativ task escalate` |
+| `nativ_init` | – | `nativ init` (never overwrites; no `--force`) |
+| `nativ_status` | – | `nativ status` |
+| `nativ_db_status` | – | `nativ db status --json` |
+| `nativ_db_inspect` | `env?`, `table?` | `nativ db inspect --json` |
+| `nativ_db_diff` | `target?` (`contract` default, or `prod`) | `nativ db diff --json` |
 
-**Resources:** `agentj://context`, `agentj://master-plan`, `agentj://db-schema`, `agentj://api-contracts`, `agentj://escalation` (the matching `.ai/` files).
+**Resources:** `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation` (the matching `.ai/` files).
 
 The server is bound to one project directory: the `[targetDir]` argument, or the directory the client starts it in. It follows the same air-gap as the CLI: database output is masked and structure-only, and `db sync`, `db ui`, and `init --force` are not exposed.
 
@@ -146,7 +146,7 @@ The server is bound to one project directory: the `[targetDir]` argument, or the
 **Claude Code** (run inside the project):
 
 ```bash
-claude mcp add agentj -- npx agentj mcp
+claude mcp add nativ -- npx nativ-cli mcp
 ```
 
 Or commit a project-scoped `.mcp.json`:
@@ -154,7 +154,7 @@ Or commit a project-scoped `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agentj": { "command": "npx", "args": ["agentj", "mcp"] }
+    "nativ": { "command": "npx", "args": ["nativ", "mcp"] }
   }
 }
 ```
@@ -164,9 +164,9 @@ Or commit a project-scoped `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agentj": {
+    "nativ": {
       "command": "npx",
-      "args": ["agentj", "mcp", "/absolute/path/to/your/project"]
+      "args": ["nativ", "mcp", "/absolute/path/to/your/project"]
     }
   }
 }
@@ -177,7 +177,7 @@ Or commit a project-scoped `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agentj": { "command": "npx", "args": ["agentj", "mcp", "${workspaceFolder}"] }
+    "nativ": { "command": "npx", "args": ["nativ", "mcp", "${workspaceFolder}"] }
   }
 }
 ```
@@ -187,19 +187,19 @@ Or commit a project-scoped `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agentj": {
+    "nativ": {
       "command": "npx",
-      "args": ["agentj", "mcp", "/absolute/path/to/your/project"]
+      "args": ["nativ", "mcp", "/absolute/path/to/your/project"]
     }
   }
 }
 ```
 
-> **Windows:** if a client fails to launch `npx`, use `"command": "cmd"` with `"args": ["/c", "npx", "agentj", "mcp", "C:\\path\\to\\project"]`. With a global install (`npm i -g` / `npm link`), `"command": "agentj", "args": ["mcp", "<path>"]` works everywhere.
+> **Windows:** if a client fails to launch `npx`, use `"command": "cmd"` with `"args": ["/c", "npx", "nativ", "mcp", "C:\\path\\to\\project"]`. With a global install (`npm i -g` / `npm link`), `"command": "nativ", "args": ["mcp", "<path>"]` works everywhere.
 
 ---
 
-## 🗄️ Database Studio & Schema Telemetry (`agentj db`)
+## 🗄️ Database Studio & Schema Telemetry (`nativ db`)
 
 A zero-config, credential-safe way to see what your databases actually look like and how far they have drifted from each other and from the approved `.ai/db_schema.json` contract.
 
@@ -207,7 +207,7 @@ A zero-config, credential-safe way to see what your databases actually look like
 
 ### 1. Configure connections
 
-Add connection strings to `.env` (or `.env.local`, `.env.development`, `.env.production`) in your project root. They are read locally by `agentj` and never printed:
+Add connection strings to `.env` (or `.env.local`, `.env.development`, `.env.production`) in your project root. They are read locally by `nativ` and never printed:
 
 ```bash
 # Dev / staging (first match wins)
@@ -219,12 +219,12 @@ PROD_DATABASE_URL=postgres://readonly:password@db.example.com:5432/app   # or DA
 # DEV_DATABASE_URL=file:./dev.db
 ```
 
-`AGENTJ_DEV_DATABASE_URL` / `AGENTJ_PROD_DATABASE_URL` take precedence, and real environment variables override `.env` files. Prefer a **read-only** database user for production: introspection only needs catalog access.
+`NATIV_DEV_DATABASE_URL` / `NATIV_PROD_DATABASE_URL` take precedence, and real environment variables override `.env` files. Prefer a **read-only** database user for production: introspection only needs catalog access.
 
 ### 2. Check health
 
 ```bash
-agentj db status
+nativ db status
 #  ● DEV  [ONLINE] PostgreSQL · app_dev (3.2ms) – 14 tables
 #         postgres://app:••••••••@localhost:5432/app_dev
 #  ● PROD [ONLINE] PostgreSQL · app (34ms) – 13 tables
@@ -234,9 +234,9 @@ agentj db status
 ### 3. Detect drift
 
 ```bash
-agentj db diff                    # Dev → Prod
-agentj db diff --target contract  # Dev → .ai/db_schema.json
-agentj db diff --exit-code        # exit 1 on any drift (CI gate)
+nativ db diff                    # Dev → Prod
+nativ db diff --target contract  # Dev → .ai/db_schema.json
+nativ db diff --exit-code        # exit 1 on any drift (CI gate)
 ```
 
 Tables are classified as `[NEW TABLE]`, `[ALTERED]` (added / dropped / changed columns, indexes, foreign keys), or `[DROPPED]`. Dropped tables, dropped columns, type changes, and new `NOT NULL` constraints are flagged `[DESTRUCTIVE]` with a high-severity warning. Equivalent types (`INT4` vs `INTEGER`, `timestamptz` vs `TIMESTAMP WITH TIME ZONE`) and Postgres casts in defaults are normalized so they don't show up as false drift.
@@ -244,8 +244,8 @@ Tables are classified as `[NEW TABLE]`, `[ALTERED]` (added / dropped / changed c
 ### 4. Launch the visual studio
 
 ```bash
-agentj studio          # same as: agentj db ui
-agentj studio --port 5000 --no-open
+nativ studio          # same as: nativ db ui
+nativ studio --port 5000 --no-open
 ```
 
 Opens `http://localhost:4983` with:
@@ -260,8 +260,8 @@ The studio exposes a small local REST API (`GET /api/status`, `GET /api/schema`,
 ### 5. Sync the contract
 
 ```bash
-agentj db sync          # dry run: shows what would change in .ai/db_schema.json
-agentj db sync --yes    # write it (structure only)
+nativ db sync          # dry run: shows what would change in .ai/db_schema.json
+nativ db sync --yes    # write it (structure only)
 ```
 
 Syncing overwrites the table definitions in a Tier-1 contract, so treat it as a Phase 2 contract change: review the dry-run diff and approve it before writing. `CLAUDE.md` forbids Claude Code from running it; drift found during execution is escalated instead.
@@ -274,12 +274,12 @@ AI agents get **schema structure, never secrets**.
 
 | Layer | Guarantee |
 | :--- | :--- |
-| **Credential storage** | Connection strings live only in `.env*` files and the memory of the local `agentj` process. Studio connections are never written to disk. |
+| **Credential storage** | Connection strings live only in `.env*` files and the memory of the local `nativ` process. Studio connections are never written to disk. |
 | **Masking** | Every URL shown in the terminal, the studio, or `--json` output is masked (`postgres://user:••••••••@host/db`), including password-like query parameters. Driver error messages are scrubbed of the raw URL and password. |
 | **Schema-only access** | Introspection reads only `information_schema` / `pg_catalog` / `PRAGMA` metadata. No `SELECT * FROM` data queries are ever issued; SQLite files are opened read-only. |
 | **Sanitized contracts** | Exporting to `.ai/db_schema.json` rebuilds each table field-by-field (names, types, nullability, defaults, keys, indexes) so nothing else can leak in. |
 | **Local-only studio** | The server binds to `127.0.0.1` only, rejects non-localhost `Host`/`Origin` headers (DNS-rebinding and CSRF protection), requires JSON bodies on `POST`, and sends a strict CSP. |
-| **Agent directives** | `CLAUDE.md` and `GEMINI.md` forbid reading `.env*` or `.agentj/*.local.json`, echoing environment variables, asking users to paste connection strings into chat, or running data-reading queries. Agents use the masked `agentj db` commands instead. |
+| **Agent directives** | `CLAUDE.md` and `GEMINI.md` forbid reading `.env*` or `.nativ/*.local.json`, echoing environment variables, asking users to paste connection strings into chat, or running data-reading queries. Agents use the masked `nativ db` commands instead. |
 | **Ignore rules** | `templates/.claudeignore` lists `.env*`, `*.local.json`, keys, local database files, and dumps as off-limits for agent context. |
 | **Destructive-change gates** | Drops and destructive alterations are flagged high-severity everywhere. Agents may only apply migrations to local/staging databases, never production. |
 
@@ -290,7 +290,7 @@ AI agents get **schema structure, never secrets**.
 ```
 ai-agent-workflow/
 ├── bin/
-│   └── cli.js                    # Executable binary entrypoint (agentj)
+│   └── cli.js                    # Executable binary entrypoint (nativ)
 ├── src/
 │   ├── index.ts                  # Commander CLI definition
 │   ├── commands/
@@ -301,9 +301,9 @@ ai-agent-workflow/
 │   │   ├── task.ts               # JIT task lifecycle commands (next/start/complete/block/escalate)
 │   │   ├── worktree.ts           # Parallel agent Git worktree isolation (create/list/merge)
 │   │   ├── db.ts                 # Database commands (status/inspect/diff/sync/ui)
-│   │   └── mcp.ts                # `agentj mcp` stdio server command
+│   │   └── mcp.ts                # `nativ mcp` stdio server command
 │   ├── mcp/
-│   │   └── server.ts             # MCP tools & agentj:// contract resources
+│   │   └── server.ts             # MCP tools & nativ:// contract resources
 │   ├── db/
 │   │   ├── types.ts              # Telemetry, schema & diff types (mirrors .ai/api_contracts.json)
 │   │   ├── env-parser.ts         # Safe .env reader & connection-string masking

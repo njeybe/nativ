@@ -313,10 +313,10 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   }
 
   console.log(pc.dim('\n─── Quick CLI Actions ──────────────────────────────────────────'));
-  console.log(pc.dim('  Start task:   ') + pc.white(`agentj task start ${targetTask.id}`));
-  console.log(pc.dim('  Complete task:') + pc.white(`agentj task complete ${targetTask.id}`));
-  console.log(pc.dim('  Block task:   ') + pc.white(`agentj task block ${targetTask.id} --reason "..."`));
-  console.log(pc.dim('  Escalate task:') + pc.white(`agentj task escalate ${targetTask.id} --type schema_flaw --details "..."\n`));
+  console.log(pc.dim('  Start task:   ') + pc.white(`nativ task start ${targetTask.id}`));
+  console.log(pc.dim('  Complete task:') + pc.white(`nativ task complete ${targetTask.id}`));
+  console.log(pc.dim('  Block task:   ') + pc.white(`nativ task block ${targetTask.id} --reason "..."`));
+  console.log(pc.dim('  Escalate task:') + pc.white(`nativ task escalate ${targetTask.id} --type schema_flaw --details "..."\n`));
 }
 
 export async function runTaskStart(taskId: string, targetDirArg?: string) {

@@ -10,7 +10,7 @@ import { DEFAULT_STUDIO_PORT, startStudioServer, writeContractSchema } from '../
 import { renderStudioHtml } from '../server/studio-ui.js';
 
 /**
- * `agentj db` command handlers.
+ * `nativ db` command handlers.
  * Air-gap: raw connection URLs are resolved in-process and never printed; all output
  * (text and --json) uses masked URLs and structural metadata only.
  */
@@ -417,7 +417,7 @@ export async function runDbUi(targetDirArg?: string, options: { port?: string; o
   }
 
   const conns = resolveConnections(targetDir);
-  console.log(pc.bold(pc.cyan(`\nAgentJ DB Studio v${version}`)));
+  console.log(pc.bold(pc.cyan(`\nNativ DB Studio v${version}`)));
   const describeSource = (c: typeof conns.dev): string =>
     !c
       ? ''

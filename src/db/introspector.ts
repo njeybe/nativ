@@ -732,7 +732,7 @@ async function createMongoDriver(url: string): Promise<Driver> {
   const client = new MongoClient(url, {
     serverSelectionTimeoutMS: CONNECT_TIMEOUT_MS,
     connectTimeoutMS: CONNECT_TIMEOUT_MS,
-    appName: 'agentj-studio',
+    appName: 'nativ-studio',
   });
   await client.connect();
   const db = client.db();

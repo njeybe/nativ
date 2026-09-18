@@ -67,7 +67,7 @@ export async function runWorktreeCreate(taskId: string, targetDirArg?: string) {
     console.log(pc.dim('  Location: ') + pc.white(worktreeDir));
     console.log(pc.dim('\nExecution Instructions:'));
     console.log(pc.white(`  Run your agent in: ${worktreeDir}`));
-    console.log(pc.dim(`  When completed and verified, merge with: `) + pc.cyan(`agentj worktree merge ${taskId}\n`));
+    console.log(pc.dim(`  When completed and verified, merge with: `) + pc.cyan(`nativ worktree merge ${taskId}\n`));
   } catch (err: any) {
     console.error(pc.red(`\n✖ Failed to create git worktree: ${err.message}\n`));
     process.exitCode = 1;
