@@ -11,7 +11,9 @@ import {
   runTaskComplete,
   runTaskBlock,
   runTaskEscalate,
+  runTaskAdd,
 } from '../commands/task.js';
+import { SUBAGENT_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
 import { runStatus } from '../commands/status.js';
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
@@ -122,10 +124,43 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         available: z.boolean().optional().describe('Only tasks that are unblocked and ready for execution'),
         status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional().describe('Filter by task status'),
         milestone: z.string().optional().describe('Filter by milestone ID or name'),
+        fastPath: z.boolean().optional().describe('Only fast-path tasks'),
       },
     },
-    ({ available, status, milestone }) =>
-      captureOutput(() => runTaskList(targetDir, { available, status, milestone, json: true })),
+    ({ available, status, milestone, fastPath }) =>
+      captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true })),
+  );
+
+  registerDualTool(
+    'task_add',
+    {
+      description:
+        'Append a task to .ai/master_plan.json with an auto-incremented ID (JSON). Goes to the given milestone, else the active one; ' +
+        'fastPath routes it to the fast-path milestone (created on first use).',
+      inputSchema: {
+        title: z.string().min(1).describe('Task title'),
+        description: z.string().optional().describe('What the task must accomplish'),
+        assignedSubagent: z.enum(SUBAGENT_TYPES as [string, ...string[]]).optional().describe('Sub-agent role (default backend)'),
+        milestone: z.string().optional().describe('Target milestone ID or name'),
+        verificationCommand: z.string().optional().describe('Command the task complete gatekeeper runs'),
+        targetFiles: z.array(z.string()).optional().describe('Files the task may modify'),
+        dependencies: z.array(z.string()).optional().describe('Task IDs that must be completed first'),
+        fastPath: z.boolean().optional().describe('Route to the fast-path track'),
+      },
+    },
+    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath }) =>
+      captureOutput(() =>
+        runTaskAdd(title, targetDir, {
+          description,
+          agent: assignedSubagent,
+          milestone,
+          verify: verificationCommand,
+          files: targetFiles,
+          deps: dependencies,
+          fastPath,
+          json: true,
+        }),
+      ),
   );
 
   registerDualTool(

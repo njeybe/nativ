@@ -9,6 +9,7 @@ import {
   runTaskComplete,
   runTaskBlock,
   runTaskEscalate,
+  runTaskAdd,
 } from './commands/task.js';
 import {
   runWorktreeCreate,
@@ -64,6 +65,7 @@ export function createProgram(): Command {
     .option('-a, --available', 'Show only available unblocked tasks ready for execution')
     .option('-s, --status <status>', 'Filter tasks by status (pending, in_progress, completed, blocked)')
     .option('-m, --milestone <id>', 'Filter tasks by milestone ID or name')
+    .option('--fast-path', 'Show only fast-path tasks')
     .option('--json', 'Output filtered tasks as JSON')
     .action(async (targetDir, options) => {
       await runTaskList(targetDir, options);
@@ -90,9 +92,25 @@ export function createProgram(): Command {
     .option('-a, --available', 'Show only available unblocked tasks ready for execution')
     .option('-s, --status <status>', 'Filter tasks by status (pending, in_progress, completed, blocked)')
     .option('-m, --milestone <id>', 'Filter tasks by milestone ID or name')
+    .option('--fast-path', 'Show only fast-path tasks')
     .option('--json', 'Output filtered tasks as JSON')
     .action(async (targetDir, options) => {
       await runTaskList(targetDir, options);
+    });
+
+  task
+    .command('add <title> [targetDir]')
+    .description('Append a task to .ai/master_plan.json with an auto-incremented ID (planned or --fast-path track)')
+    .option('-m, --milestone <id>', 'Target milestone ID or name (default: active milestone, or the fast-path milestone with --fast-path)')
+    .option('-a, --agent <name>', 'Assigned sub-agent (default backend)')
+    .option('-v, --verify <command>', 'Verification command run by the task complete gatekeeper')
+    .option('-f, --files <paths>', 'Comma-separated target files')
+    .option('-d, --description <text>', 'Task description')
+    .option('--fast-path', 'Route to the fast-path milestone (created on first use) and flag the task as fast path')
+    .option('--deps <ids>', 'Comma-separated dependency task IDs')
+    .option('--json', 'Output the created task as JSON')
+    .action(async (title, targetDir, options) => {
+      await runTaskAdd(title, targetDir, options);
     });
 
   task
