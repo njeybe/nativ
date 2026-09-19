@@ -24,6 +24,7 @@ function createGitFixture() {
 
   // Create initial commit on main branch
   fs.writeFileSync(path.join(dir, 'README.md'), '# Fixture\n', 'utf8');
+  fs.writeFileSync(path.join(dir, '.gitignore'), ".ai/\n.worktrees/\n.nativ/\n", 'utf8');
   execSync('git add . && git commit -m "initial commit"', { cwd: dir, stdio: 'ignore' });
 
   // Scaffold .ai/
