@@ -1,27 +1,29 @@
 # Nativ (`nativ`)
 
-A portable, multi-tier autonomous software engineering harness that connects **Antigravity (Strategy & Planning)** with **Claude Code CLI (Project Manager)** and downstream **Sub-agents** (Backend, Frontend, Database, QA).
+A portable, multi-tier autonomous software engineering harness that connects **Antigravity (Strategy & Planning)** with **Claude Code CLI (Project Manager)** and downstream **Sub-agents** (Backend, Frontend, Database, QA, Flutter, DevOps, Security).
 
 > **Package Name:** `nativ-cli` | **Binary Command:** `nativ`
 
 ---
 
-## 🏛 The 3-Tier Architecture
+## 🏛 The 3-Tier Multi-Agent Architecture
+
+`nativ` establishes a deterministic separation of concerns between strategic contract planning, project management, and specialized code execution:
 
 ```
                  +--------------------------------+
                  |       Tier 1: Antigravity      |
-                 |      (Strategy & Planning)     |
+                 |      (Macro-Architect / Plan)  |
                  +---------------+----------------+
                                  |
-           Generates .ai/ contracts & checkpoints
+           Generates validated .ai/ contracts & checkpoints
                                  v
                  +--------------------------------+
                  |      Tier 2: Claude Code       |
                  |       (Project Manager)        |
                  +---------------+----------------+
                                  |
-               Dispatches tasks to sub-agents
+         Dispatches JIT contract slices to parallel sub-agents
                                  v
    +-------------------------------+-------------------------------+
    |                                                               |
@@ -35,366 +37,370 @@ A portable, multi-tier autonomous software engineering harness that connects **A
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Key Capabilities
 
-> 📖 **Full Guide:** See [Installation Guide](file:///docs/installation.md) for detailed prerequisites, global/source install, and Windows troubleshooting.
-
-### Initialize in Any Project (Existing or New)
-
-Run the CLI tool inside your target project directory:
-
-```bash
-# Using nativ globally (via npm link or global install):
-nativ init
-
-# Or via npx:
-npx nativ-cli init
-```
-
-### What `init` Does:
-1. **Auto-Discovery:** Analyzes the target repository (runtimes, frameworks, ORMs, styling, test runners, project structure).
-2. **Scaffolds `.ai/` Contract Directory:**
-   - `.ai/context.md`: Project description, tech stack, architecture, and engineering guardrails.
-   - `.ai/db_schema.json`: Strict JSON schema contract for database models and relationships.
-   - `.ai/api_contracts.json`: Formal REST/GraphQL endpoints, payload structures, and response schemas.
-   - `.ai/ui_specs.md`: Design system rules, component tree, interaction states, and accessibility specs.
-   - `.ai/master_plan.json`: Execution milestones, dependency graph, assigned sub-agents, and verification commands.
-   - `.ai/subagents/`: Role guides for Core units (`backend.md`, `frontend.md`, `database.md`, `qa-tester.md`) and Specialized units (`flutter-developer.md`, `devops-agent.md`, `security-auditor.md`, `db-migration.md`).
-3. **Generates Directives:**
-   - `CLAUDE.md`: Instructs **Claude Code CLI** to act as Project Manager, read `.ai/master_plan.json`, dispatch work to sub-agents, and track progress.
-   - `GEMINI.md`: Instructs **Antigravity** to act as Macro-Architect, conduct Phase 1 intake, enforce database, API, and UI/UX checkpoints, and export `.ai/` contracts.
+- **Multi-Agent Concurrency & OS Locks:** Advisory cross-process file locks (`proper-lockfile`) with atomic Read-Modify-Write cycles and Windows NTFS `EBUSY`/`EPERM` resilience. Run multiple agents in parallel across separate terminals with zero lost updates.
+- **Contract Governor (Invariant Engine):** Deterministic AST/JSON middleware enforcing blast radius boundaries: auto-approves safe additive changes (`LOW_ADDITIVE`), rejects destructive drops (`HIGH_DESTRUCTIVE`), and trips a 3-strike circuit breaker on runaway violations.
+- **Execution & Cost Telemetry:** Real-time offline telemetry (`.ai/telemetry.json`) tracking step durations, token volume heuristics, estimated operational costs ($3/M input, $15/M output), verification pass rates, and circuit breaker trips.
+- **Synthetic Benchmark Suite (`nativ bench`):** Built-in eval matrix profiling operations throughput (ops/sec) and lock wait latencies (mean/max ms) across concurrency, invariants, verifications, and milestone lifecycles.
+- **Zero-Credential AI Air-Gap:** AI subagents receive database schema structures only—never passwords, connection strings, or raw rows.
+- **Git Worktree Sandboxing:** Isolates subagents into temporary git worktrees with mounted `.ai/` contracts and strict Safe Merge Gatekeepers.
+- **Native MCP Stdio Server:** Exposes typed tools (`nativ_task_*`, `nativ_bench`, `nativ_verify`, `nativ_db_*`) and contract resources (`nativ://*`) for Claude Code, Cursor, and Antigravity.
 
 ---
 
-## 🔄 The 3-Phase Development Flow
+## 🚀 Quick Start
 
-### Phase 1: Discovery & Design Checkpoints (Antigravity)
-1. Antigravity inspects `.ai/context.md` and interviews the user about the requested feature or objective.
-2. **Database Schema Design:** Antigravity outlines the database tables and halts for user confirmation.
-   - 🛑 *Stopping Point: Awaiting database schema approval.*
-3. **API Contract Design:** Antigravity specifies endpoints, route params, request bodies, and response schemas.
-   - 🛑 *Stopping Point: Awaiting API contract approval.*
-4. **UI/UX Layout Design:** Antigravity designs component trees and styling layouts, then halts for user confirmation.
-   - 🛑 *Stopping Point: Awaiting UI/UX approval.*
+### Installation
 
-### Phase 2: State Export & Contract Generation (Antigravity)
-Upon receiving approvals, Antigravity exports the finalized specifications:
-- `.ai/db_schema.json`
-- `.ai/api_contracts.json`
-- `.ai/ui_specs.md`
-- `.ai/master_plan.json`
+Install globally or run via `npx`:
 
-### Phase 3: Autonomous Middle-Tier Execution (Claude Code CLI)
-Open Claude Code CLI in your project terminal:
+```bash
+# Global install (recommended):
+npm install -g nativ-cli
+
+# Or run instantly without installing:
+npx nativ-cli <command>
+```
+
+### 1. Initialize a Project
+
+Run inside any repository (new or existing):
+
+```bash
+nativ init
+```
+
+**What `nativ init` scaffolds:**
+- **`.ai/` Contract Directory:**
+  - `context.md`: Tech stack, runtime architecture, and guardrails.
+  - `db_schema.json`: Strict JSON schema contract for database models and relationships.
+  - `api_contracts.json`: Formal REST/GraphQL endpoints, payload structures, and response schemas.
+  - `ui_specs.md`: Component trees, styling tokens, accessibility, and responsive layouts.
+  - `master_plan.json`: Milestones, task dependency graph, and verification commands.
+  - `subagents/`: Specialized role guides (`backend.md`, `frontend.md`, `database.md`, `qa-tester.md`, etc.).
+- **Agent Directives:**
+  - `CLAUDE.md`: Configures Claude Code as Project Manager.
+  - `GEMINI.md`: Configures Antigravity as Macro-Architect.
+
+---
+
+### 2. The 3-Phase Lifecycle Flow
+
+#### Phase 1: Interactive Design Checkpoints (Antigravity)
+Before any code is written, Antigravity interviews the user and requires explicit approvals:
+1. 🛑 **Database Schema:** Confirm table names, columns, and foreign keys.
+2. 🛑 **API Contracts:** Confirm endpoints, request bodies, and response status codes.
+3. 🛑 **UI/UX Specifications:** Confirm component hierarchy and design tokens.
+
+#### Phase 2: Contract Export (Antigravity)
+Upon receiving user approvals, Antigravity exports the finalized specifications into `.ai/db_schema.json`, `.ai/api_contracts.json`, `.ai/ui_specs.md`, and `.ai/master_plan.json`.
+
+#### Phase 3: Autonomous Multi-Agent Execution (Claude Code)
+Start Claude Code in your project root:
 ```bash
 claude
 ```
-Claude Code reads `CLAUDE.md`, calls `npx nativ-cli task next` to fetch only the active work item and its recommended contract slice (JIT context slicing), implements the scoped changes, verifies them via automated test runs, and updates status programmatically via `task complete`!
+Claude Code queries the next executable task using JIT contract slicing:
+```bash
+nativ task next --json
+```
+Subagents implement changes, run automated test verifications, and atomically commit state transitions via `nativ task complete <taskId>`.
 
 ---
 
-## 🛠 CLI Commands (`nativ`)
+## 💻 CLI Command Reference
 
-| Command | Description |
-| :--- | :--- |
-| `nativ init [targetDir]` | Scans target project and generates `.ai/`, `CLAUDE.md`, and `GEMINI.md`. Use `-f` to overwrite. |
-| `nativ update [targetDir]` | Safely synchronizes latest directives, sub-agents, and missing contracts without touching project state. |
-| `nativ status [targetDir]` | Displays overall progress, active milestone, and sub-agent task statuses from `.ai/master_plan.json`. |
-| `nativ validate [targetDir]` | Verifies the structural integrity and validity of all contracts and agent profiles. |
-| `nativ task list [targetDir]` | Lists all project tasks with filtering (`--available`, `--status`, `--milestone`, `--json`). Alias: `nativ tasks`. |
-| `nativ task next [targetDir]` | Inspects the next executable task and suggests its specific JIT contract slice (supports `--json`). |
-| `nativ task start <taskId>` | Marks a task as `in_progress` in `.ai/master_plan.json`. |
-| `nativ task complete <taskId>` | Marks a task as completed after running its verification command (rejects on failure; bypass with `--no-verify`). |
-| `nativ verify [taskId]` | Runs verification commands on demand to prevent regressions (`--all`, `--milestone <id>`, `--json`, `--timeout <ms>`). |
-| `nativ task block <taskId> -r <reason>` | Marks a task as `blocked` with a documented reason in `notes`. |
-| `nativ task escalate <taskId> -t <type> -d <details>` | Escalates contract drift/flaws to Antigravity via `.ai/escalation.json`. |
-| `nativ task propose-patch <taskId>` | Proposes a modification to contracts; evaluated by the Governor (`--target`, `--op`, `--path`, `--value`, `--reason`). |
-| `nativ worktree create <taskId>` | Creates an isolated Git worktree (`.worktrees/task-<id>`) on branch `agent/task-<id>` with mounted `.ai/`. |
-| `nativ worktree list` | Lists all active agent git worktrees (supports `--json`). |
-| `nativ worktree merge <taskId>` | Merges the agent worktree branch into the base branch (Safe Merge Gatekeeper enforced; override with `-f`). |
-| `nativ worktree remove <taskId>` | Safely removes an agent worktree without merging (alias: `nativ worktree cleanup`). |
-| `nativ db status [targetDir]` | Dev/Prod connection health: engine, ping latency, table count, masked URL (supports `--json`). |
-| `nativ db inspect [targetDir]` | Prints introspected tables, columns, keys, and indexes (`--env dev|prod`, `--table <name>`, `--json`). |
-| `nativ db diff [targetDir]` | Schema drift from Dev to Prod, or to `.ai/db_schema.json` with `--target contract` (`--json`, `--exit-code`). |
-| `nativ db sync [targetDir]` | Previews exporting a live schema into `.ai/db_schema.json`; writes only with `--yes` (`--source dev|prod`). |
-| `nativ db ui [targetDir]` | Launches the local DB Studio dashboard (`--port <n>`, `--no-open`). Alias: `nativ studio`. |
-| `nativ mcp [targetDir]` | Runs the native MCP server over stdio, exposing `nativ_*` tools and `nativ://` contract resources. |
-
----
-
-## 🔌 Native MCP Server (`nativ mcp`)
-
-`nativ mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io) over stdio, so any MCP client can drive the workflow with typed tool calls instead of parsing CLI output.
-
-**Tools**
-
-| Tool | Arguments | Equivalent |
-| :--- | :--- | :--- |
-| `nativ_task_next` | – | `nativ task next --json` |
-| `nativ_task_list` | `available?`, `status?`, `milestone?` | `nativ task list --json` |
-| `nativ_task_start` | `taskId` | `nativ task start` |
-| `nativ_task_complete` | `taskId`, `notes?`, `skipVerify?` | `nativ task complete` (enforces verification) |
-| `nativ_verify` | `taskId?`, `milestone?`, `all?` | `nativ verify --json` |
-| `nativ_task_block` | `taskId`, `reason` | `nativ task block` |
-| `nativ_task_escalate` | `taskId`, `type`, `details`, `affected?` | `nativ task escalate` |
-| `nativ_task_propose_patch`| `taskId`, `target`, `operation`, `path`, `value?`, `reason` | `nativ task propose-patch --json` (Contract Governor) |
-| `nativ_worktree_create` | `taskId` | `nativ worktree create <taskId> --json` |
-| `nativ_worktree_list` | – | `nativ worktree list --json` |
-| `nativ_worktree_merge` | `taskId`, `force?` | `nativ worktree merge <taskId> --json` |
-| `nativ_worktree_remove`| `taskId`, `force?` | `nativ worktree remove <taskId> --json` |
-| `nativ_init` | – | `nativ init` (never overwrites; no `--force`) |
-| `nativ_status` | – | `nativ status` |
-| `nativ_db_status` | – | `nativ db status --json` |
-| `nativ_db_inspect` | `env?`, `table?` | `nativ db inspect --json` |
-| `nativ_db_diff` | `target?` (`contract` default, or `prod`) | `nativ db diff --json` |
-
-**Resources:** `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation` (the matching `.ai/` files).
-
-The server is bound to one project directory: the `[targetDir]` argument, or the directory the client starts it in. It follows the same air-gap as the CLI: database output is masked and structure-only, and `db sync`, `db ui`, and `init --force` are not exposed.
-
-### Client configuration
-
-**Claude Code** (run inside the project):
+### Task Management & JIT Context Slicing
 
 ```bash
-claude mcp add nativ -- npx nativ-cli mcp
+# Inspect next executable task and its JIT contract slice
+nativ task next
+
+# List tasks with filters
+nativ task list --available
+nativ task list --milestone m1 --status pending
+
+# Add a task dynamically (auto-increments ID, planned or fast-path)
+nativ task add "Implement OAuth2 callback" -a backend -v "npm test"
+
+# Transition task state (advisory locked)
+nativ task start task-01
+nativ task complete task-01          # Automatically runs verification command
+nativ task complete task-01 --no-verify  # Bypass verification gatekeeper
+nativ task block task-01 --reason "Missing Stripe API key"
+nativ task escalate task-01 --type schema_flaw --details "Missing foreign key on orders table"
 ```
 
-Or commit a project-scoped `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "nativ": { "command": "npx", "args": ["nativ", "mcp"] }
-  }
-}
-```
-
-**Claude Desktop** (`claude_desktop_config.json`; Desktop does not start in your project, so pass its path):
-
-```json
-{
-  "mcpServers": {
-    "nativ": {
-      "command": "npx",
-      "args": ["nativ", "mcp", "/absolute/path/to/your/project"]
-    }
-  }
-}
-```
-
-**Cursor** (`.cursor/mcp.json` in the project, or `~/.cursor/mcp.json` with an absolute path):
-
-```json
-{
-  "mcpServers": {
-    "nativ": { "command": "npx", "args": ["nativ", "mcp", "${workspaceFolder}"] }
-  }
-}
-```
-
-**Antigravity** (Agent panel → MCP Servers → Manage MCP Servers → View raw config, `mcp_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "nativ": {
-      "command": "npx",
-      "args": ["nativ", "mcp", "/absolute/path/to/your/project"]
-    }
-  }
-}
-```
-
-> **Windows:** if a client fails to launch `npx`, use `"command": "cmd"` with `"args": ["/c", "npx", "nativ", "mcp", "C:\\path\\to\\project"]`. With a global install (`npm i -g` / `npm link`), `"command": "nativ", "args": ["mcp", "<path>"]` works everywhere.
-
----
-
-## 🗄️ Database Studio & Schema Telemetry (`nativ db`)
-
-A zero-config, credential-safe way to see what your databases actually look like and how far they have drifted from each other and from the approved `.ai/db_schema.json` contract.
-
-**Supported engines:** PostgreSQL (incl. Supabase / Neon) via `pg`, MySQL / MariaDB via `mysql2`, and SQLite via Node's built-in `node:sqlite` (Node 22.5+).
-
-### 1. Configure connections
-
-Add connection strings to `.env` (or `.env.local`, `.env.development`, `.env.production`) in your project root. They are read locally by `nativ` and never printed:
+### Verification & Regression Gating
 
 ```bash
-# Dev / staging (first match wins)
-DEV_DATABASE_URL=postgres://app:password@localhost:5432/app_dev   # or DATABASE_URL_DEV / DATABASE_URL
-# Production
-PROD_DATABASE_URL=postgres://readonly:password@db.example.com:5432/app   # or DATABASE_URL_PROD / PRODUCTION_DATABASE_URL
+# Run verification for a single task
+nativ verify task-01
 
-# SQLite works too:
-# DEV_DATABASE_URL=file:./dev.db
+# Run verifications across all completed tasks or specific milestones
+nativ verify --all
+nativ verify --milestone m1 --timeout 60000 --json
 ```
 
-`NATIV_DEV_DATABASE_URL` / `NATIV_PROD_DATABASE_URL` take precedence, and real environment variables override `.env` files. Prefer a **read-only** database user for production: introspection only needs catalog access.
-
-### 2. Check health
+### Project Telemetry & Status
 
 ```bash
+# Inspect status, milestone completion, and task badges
+nativ status
+
+# View execution duration, token heuristics, cost estimates, and pass rates
+nativ status --telemetry
+
+# Emit machine-readable JSON for CI/CD pipelines
+nativ status --json
+```
+
+### Synthetic Benchmark Matrix
+
+```bash
+# Run all 5 synthetic benchmark scenarios
+nativ bench
+
+# Run specific scenario with custom concurrency
+nativ bench --scenario concurrency --concurrency 8
+nativ bench --scenario governor
+
+# Export benchmark report for CI/CD gates
+nativ bench --json
+nativ bench -o .ai/benchmark_report.json
+```
+
+### Database Studio & Schema Telemetry
+
+```bash
+# Check Dev & Prod database connection health
 nativ db status
-#  ● DEV  [ONLINE] PostgreSQL · app_dev (3.2ms) – 14 tables
-#         postgres://app:••••••••@localhost:5432/app_dev
-#  ● PROD [ONLINE] PostgreSQL · app (34ms) – 13 tables
-#         postgres://readonly:••••••••@db.example.com:5432/app
+
+# Introspect table structures, columns, keys, and indexes
+nativ db inspect --env dev
+
+# Compare schema drift from Dev to Prod, or to .ai/db_schema.json
+nativ db diff
+nativ db diff --target contract --exit-code
+
+# Launch local dark-mode DB Studio web dashboard (http://localhost:4983)
+nativ studio
 ```
 
-### 3. Detect drift
+### Git Worktree Sandboxing
 
 ```bash
-nativ db diff                    # Dev → Prod
-nativ db diff --target contract  # Dev → .ai/db_schema.json
-nativ db diff --exit-code        # exit 1 on any drift (CI gate)
+# Create an isolated git worktree for a task with mounted .ai/ contracts
+nativ worktree create task-01
+
+# List active agent worktrees
+nativ worktree list
+
+# Merge task branch back to base branch (Safe Merge Gatekeeper enforced)
+nativ worktree merge task-01
+
+# Discard/cleanup worktree without merging
+nativ worktree remove task-01
 ```
-
-Tables are classified as `[NEW TABLE]`, `[ALTERED]` (added / dropped / changed columns, indexes, foreign keys), or `[DROPPED]`. Dropped tables, dropped columns, type changes, and new `NOT NULL` constraints are flagged `[DESTRUCTIVE]` with a high-severity warning. Equivalent types (`INT4` vs `INTEGER`, `timestamptz` vs `TIMESTAMP WITH TIME ZONE`) and Postgres casts in defaults are normalized so they don't show up as false drift.
-
-### 4. Launch the visual studio
-
-```bash
-nativ studio          # same as: nativ db ui
-nativ studio --port 5000 --no-open
-```
-
-Opens `http://localhost:4983` with:
-- **Side-by-Side Table Explorer:** Dev and Prod tables in dual panes with search, expandable column details, and `PK` / `FK` / drift badges.
-- **Visual Drift & Diff Tracker:** summary banner with risk level, and per-column before/after diffs against Prod or the contract.
-- **Migration SQL Preview:** generated DDL in the target engine's dialect, with destructive statements highlighted. It is a preview only and is never executed.
-- **Connection Settings:** enter or replace Dev/Prod connection strings (masked input, *Test Ping*); held in memory for the session only.
-- **Export Contract:** writes the live Dev schema (structure only) into `.ai/db_schema.json`.
-
-The studio exposes a small local REST API (`GET /api/status`, `GET /api/schema`, `GET /api/diff`, `POST /api/connect`, `POST /api/export-contract`) matching `.ai/api_contracts.json`.
-
-### 5. Sync the contract
-
-```bash
-nativ db sync          # dry run: shows what would change in .ai/db_schema.json
-nativ db sync --yes    # write it (structure only)
-```
-
-Syncing overwrites the table definitions in a Tier-1 contract, so treat it as a Phase 2 contract change: review the dry-run diff and approve it before writing. `CLAUDE.md` forbids Claude Code from running it; drift found during execution is escalated instead.
 
 ---
 
-## 🔐 Security Architecture: Zero-Credential AI Air-Gap
+## 🔒 Multi-Agent Concurrency & OS Locks
 
-AI agents get **schema structure, never secrets**.
+`nativ` protects `.ai/master_plan.json` and `.ai/telemetry.json` against parallel write collisions using OS-level advisory file locks (`proper-lockfile`):
 
-| Layer | Guarantee |
-| :--- | :--- |
-| **Credential storage** | Connection strings live only in `.env*` files and the memory of the local `nativ` process. Studio connections are never written to disk. |
-| **Masking** | Every URL shown in the terminal, the studio, or `--json` output is masked (`postgres://user:••••••••@host/db`), including password-like query parameters. Driver error messages are scrubbed of the raw URL and password. |
-| **Schema-only access** | Introspection reads only `information_schema` / `pg_catalog` / `PRAGMA` metadata. No `SELECT * FROM` data queries are ever issued; SQLite files are opened read-only. |
-| **Sanitized contracts** | Exporting to `.ai/db_schema.json` rebuilds each table field-by-field (names, types, nullability, defaults, keys, indexes) so nothing else can leak in. |
-| **Local-only studio** | The server binds to `127.0.0.1` only, rejects non-localhost `Host`/`Origin` headers (DNS-rebinding and CSRF protection), requires JSON bodies on `POST`, and sends a strict CSP. |
-| **Agent directives** | `CLAUDE.md` and `GEMINI.md` forbid reading `.env*` or `.nativ/*.local.json`, echoing environment variables, asking users to paste connection strings into chat, or running data-reading queries. Agents use the masked `nativ db` commands instead. |
-| **Ignore rules** | `templates/.claudeignore` lists `.env*`, `*.local.json`, keys, local database files, and dumps as off-limits for agent context. |
-| **Destructive-change gates** | Drops and destructive alterations are flagged high-severity everywhere. Agents may only apply migrations to local/staging databases, never production. |
+```
+Agent Process 1 (Frontend)          Agent Process 2 (Backend)
+         │                                   │
+         ▼                                   ▼
+ [withPlanLock: Try Lock]            [withPlanLock: Try Lock]
+         │ (Acquired)                        │ (Queued / Backoff retry)
+         ▼                                   │
+ [Atomic Read-Modify-Write]                  │
+         │ (Released)                        ▼
+         └─────────────────────────► [Acquires Lock]
+                                             │
+                                     [Reads Freshest State]
+                                             │
+                                     [Applies & Saves Atomically]
+```
+
+- **Zero Lost Updates:** Verified across parallel processes running simultaneous `task start`, `task complete`, and `task add` operations.
+- **Optimistic Verification Gating:** Long-running test commands (`npm test`, `pytest`) run *outside* the lock so other agents are never blocked.
+- **Windows NTFS Resilience:** Uses atomic temporary file renames with an exponential retry backoff to cleanly absorb `EBUSY` and `EPERM` file collisions.
 
 ---
 
-## 🛡️ Contract Governor: Deterministic Invariant Middleware
+## ⚡ Execution & Cost Telemetry
 
-The **Contract Governor** acts as deterministic middleware between autonomous agent proposals and project contracts (`.ai/db_schema.json` and `.ai/api_contracts.json`). Instead of allowing unconstrained code mutations or relying on probabilistic LLM self-policing, the Governor mathematically enforces **Blast Radius Boundaries**:
+Every task lifecycle transition records metrics to `.ai/telemetry.json`:
 
-```
-                       Sub-Agent Proposes Contract Modification
-                                          │
-                                          ▼
-                       [ Nativ Contract Governor Engine ]
-                                          │
-               ┌──────────────────────────┴──────────────────────────┐
-               ▼                                                     ▼
-     [ LOW_ADDITIVE (Type 2) ]                             [ HIGH_DESTRUCTIVE (Type 1) ]
-     • New nullable columns / defaults                     • Dropping tables / columns
-     • New tables / non-unique indexes                     • Changing existing column types
-     • New optional query params / headers                 • Dropping endpoints / response fields
-     • New response fields (Postel's Law)                  • Adding required request parameters
-               │                                                     │
-               ▼                                                     ▼
-     ⚡ Auto-Approved & Patched                             🛑 Hard Rejection & Gating
-     1. Merges atomically into .ai/                        1. Rejects with structured rule violation
-     2. Appends to .ai/audit_log.jsonl                     2. Increments task failure counter
-     3. Agent continues seamlessly                         3. Trips Circuit Breaker on 3 strikes
-                                                              (Locks task to blocked & escalates)
+```text
+⚡ Execution & Cost Telemetry
+  Model Tier Benchmark: claude-3-7-sonnet
+  Tasks Completed:      12
+  Total Time Active:    4.2 min (252000ms)
+  Estimated Tokens:     58,400
+  Estimated Cost:       $0.2612 USD
+  Verification Pass:    100% (12/12 runs)
+  Circuit Breaker Trips: 0
 ```
 
-### Edge-Case Defenses Built-in:
-1. **Path Collision Guard:** Prevents agents from sneaking a destructive `ALTER` inside an `ADD` payload.
-2. **Referential Integrity DAG:** Checks that foreign keys target existing tables and blocks circular non-nullable dependency locks.
-3. **Task Patch Budgeting:** Restricts tasks to a maximum of 3 contract patches to detect architectural scope creep early.
-4. **Concurrent Dirty-Write Protection:** Enforces base schema hashing to detect race conditions across parallel agent worktrees.
-5. **3-Strike Circuit Breaker:** Freezes runaway agents after 3 failed attempts, compiling a structured Diagnostic Flight Recorder bundle into `.ai/escalation.json`.
+- **Token & Cost Heuristics:** Calculated from prompt context overhead (~3,500 tokens), target file payload weights ($3.00/1M input), and code diff approximations ($15.00/1M output).
+- **Quality Metrics:** Aggregates verification pass/fail ratios and tracks Governor circuit breaker events.
 
 ---
 
-## Project Structure
+## 🛡️ Contract Governor: Invariant Guardrails
+
+The **Contract Governor** acts as a deterministic firewall between autonomous subagents and project contracts (`.ai/db_schema.json` and `.ai/api_contracts.json`):
+
+```
+                 Sub-Agent Proposes Contract Modification
+                                   │
+                                   ▼
+                [ Nativ Contract Governor Middleware ]
+                                   │
+         ┌─────────────────────────┴─────────────────────────┐
+         ▼                                                   ▼
+[ LOW_ADDITIVE (Type 2) ]                           [ HIGH_DESTRUCTIVE (Type 1) ]
+• New nullable columns / defaults                   • Dropping tables / columns
+• New tables / non-unique indexes                   • Altering existing column types
+• New optional query params / headers               • Dropping API routes / fields
+• New response fields (Postel's Law)                • Adding required request params
+         │                                                   │
+         ▼                                                   ▼
+⚡ Auto-Approved & Patched                          🛑 Hard Rejection & Gating
+1. Merged atomically into contract                  1. Rejected with structured violation
+2. Logged to .ai/audit_log.jsonl                    2. Increments task failure counter
+3. Agent continues seamlessly                       3. 3-Strike Circuit Breaker trips
+                                                       (Freezes task & logs escalation)
+```
+
+---
+
+## 🔌 Native MCP Integration
+
+`nativ` includes a native Model Context Protocol (MCP) server communicating over stdio JSON-RPC.
+
+### Available Tools & Resources
+
+| MCP Tool / Resource | Type | Description |
+| :--- | :--- | :--- |
+| `nativ_task_next` | Tool | Fetch next executable task with JIT contract slice |
+| `nativ_task_start` | Tool | Mark task as `in_progress` |
+| `nativ_task_complete` | Tool | Complete task with automated verification check |
+| `nativ_task_add` | Tool | Append a dynamic task to active or fast-path milestone |
+| `nativ_task_block` | Tool | Mark task blocked with diagnostic notes |
+| `nativ_task_escalate` | Tool | Escalate architectural blockers to Antigravity |
+| `nativ_task_propose_patch` | Tool | Propose contract mutation evaluated by Governor |
+| `nativ_verify` | Tool | Run automated verification command suite |
+| `nativ_bench` | Tool | Execute synthetic benchmark evaluation matrix |
+| `nativ_db_status` | Tool | Inspect connection health and masked database URLs |
+| `nativ_db_inspect` | Tool | Inspect table structures, columns, and indexes |
+| `nativ_db_diff` | Tool | Detect schema drift between environments and contracts |
+| `nativ://context` | Resource | Read `.ai/context.md` |
+| `nativ://master-plan` | Resource | Read `.ai/master_plan.json` |
+| `nativ://telemetry` | Resource | Read `.ai/telemetry.json` |
+| `nativ://db-schema` | Resource | Read `.ai/db_schema.json` |
+| `nativ://api-contracts` | Resource | Read `.ai/api_contracts.json` |
+| `nativ://escalation` | Resource | Read `.ai/escalation.json` |
+
+### Configuration Examples
+
+#### Claude Code
+```bash
+claude mcp add nativ -- npx -y nativ-cli mcp
+```
+
+#### Claude Desktop (`claude_desktop_config.json`)
+```json
+{
+  "mcpServers": {
+    "nativ": {
+      "command": "npx",
+      "args": ["-y", "nativ-cli", "mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+#### Cursor (`.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "nativ": {
+      "command": "npx",
+      "args": ["-y", "nativ-cli", "mcp", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+#### Antigravity (`mcp_config.json`)
+```json
+{
+  "mcpServers": {
+    "nativ": {
+      "command": "npx",
+      "args": ["-y", "nativ-cli", "mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+---
+
+## 📂 Repository Structure
 
 ```
 nativ/
 ├── bin/
-│   └── cli.js                    # Executable binary entrypoint (nativ)
-├── docs/
-│   └── installation.md           # Installation & environment setup guide
+│   └── cli.js                    # Binary entrypoint (`nativ`)
 ├── src/
-│   ├── index.ts                  # Commander CLI definition
+│   ├── index.ts                  # Commander CLI command registry
 │   ├── commands/
-│   │   ├── init.ts               # Project initialization command
-│   │   ├── update.ts             # Non-destructive framework sync command
-│   │   ├── status.ts             # Status report command
-│   │   ├── validate.ts           # Schema validation command
-│   │   ├── task.ts               # JIT task lifecycle (next/start/complete/block/escalate/propose-patch)
-│   │   ├── worktree.ts           # Parallel agent Git worktree isolation (create/list/merge)
-│   │   ├── db.ts                 # Database commands (status/inspect/diff/sync/ui)
-│   │   └── mcp.ts                # `nativ mcp` stdio server command
-│   ├── governor/                 # Deterministic Contract Governor subsystem
-│   │   ├── types.ts              # Blast radius, patch, verdict & diagnostic types
-│   │   ├── rules/
-│   │   │   ├── db-rules.ts       # Database schema mutation rules & collision guards
-│   │   │   └── api-rules.ts      # API endpoint & payload rules (Postel's Law)
-│   │   ├── circuit-breaker.ts    # 3-strike failure ledger & escalation diagnostic serializer
-│   │   └── evaluator.ts          # Core governor engine & atomic patch applier
+│   │   ├── init.ts               # Project scaffolding
+│   │   ├── update.ts             # Non-destructive directive sync
+│   │   ├── status.ts             # Status & execution telemetry display
+│   │   ├── task.ts               # Concurrency-hardened task router & lifecycle
+│   │   ├── bench.ts              # Synthetic benchmark command
+│   │   ├── verify.ts             # Verification gatekeeper command
+│   │   ├── worktree.ts           # Git worktree lifecycle & merge gatekeeper
+│   │   ├── db.ts                 # Database introspection, status, diff & sync
+│   │   ├── test-gen.ts           # API contract & DB test suite synthesizer
+│   │   └── mcp.ts                # Native MCP stdio server
+│   ├── core/
+│   │   ├── lock-manager.ts       # Advisory OS file locking & atomic mutations
+│   │   ├── telemetry.ts          # Token heuristics, cost & execution tracking
+│   │   ├── benchmark.ts          # 5-scenario synthetic evaluation matrix
+│   │   ├── verifier.ts           # Cross-platform test execution engine
+│   │   └── test-generator.ts     # Automated contract test generator
+│   ├── governor/                 # Deterministic Contract Governor
+│   │   ├── evaluator.ts          # Blast radius & invariant evaluation engine
+│   │   ├── circuit-breaker.ts    # 3-strike failure ledger & escalation recorder
+│   │   └── rules/                # Database & API mutation invariants
 │   ├── mcp/
-│   │   └── server.ts             # MCP tools (including nativ_task_propose_patch) & resources
-│   ├── db/
-│   │   ├── types.ts              # Telemetry, schema & diff types (mirrors .ai/api_contracts.json)
-│   │   ├── env-parser.ts         # Safe .env reader & connection-string masking
-│   │   ├── introspector.ts       # PostgreSQL / MySQL / SQLite schema introspection + ping
-│   │   └── diff.ts               # Schema drift engine & contract loader
-│   ├── server/
-│   │   ├── studio-server.ts      # Loopback-only HTTP server & REST API
-│   │   └── studio-ui.ts          # Self-contained dark-mode dashboard
-│   └── scanner/
-│       ├── types.ts              # TypeScript interfaces
-│       ├── detector.ts           # Multi-ecosystem tech stack scanner
-│       └── context-builder.ts    # Template interpolator
-├── templates/
-│   ├── CLAUDE.md                 # Middle-Tier PM directive for Claude Code
-│   ├── GEMINI.md                 # Tier-1 Mission Control directive for Antigravity
-│   ├── .claudeignore             # Zero-credential ignore rules for agent context
-│   └── dot-ai/
-│       ├── context.md            # Auto-generated project context & guardrails
-│       ├── db_schema.json        # Database schema contract
-│       ├── api_contracts.json    # REST/GraphQL API endpoint & payload contract
-│       ├── ui_specs.md           # UI/UX layout specification
-│       ├── master_plan.json      # Milestone & task dependency graph
-│       └── subagents/            # Sub-agent role specifications
-│           ├── backend.md            # Backend & API development
-│           ├── frontend.md           # Web UI/UX components & pages
-│           ├── database.md           # Schema migrations & ORM models
-│           ├── qa-tester.md          # Verification & automated test suites
-│           ├── flutter-developer.md  # Mobile screens, widgets & state
-│           ├── devops-agent.md       # Docker, CI/CD & deployment scripts
-│           ├── security-auditor.md   # Vulnerability scans & auth audit
-│           └── db-migration.md       # Zero-downtime & advanced indexing
-├── tests/
-│   ├── test-contract-governor.mjs    # Comprehensive Governor invariant tests
-│   ├── test-task-router.mjs          # Dual-track router tests
-│   ├── test-verify-gatekeeper.mjs    # Gatekeeper tests
+│   │   └── server.ts             # Native MCP server over stdio
+│   └── db/
+│       ├── introspector.ts       # PostgreSQL, MySQL & SQLite introspection
+│       ├── env-parser.ts         # Zero-credential masked connection reader
+│       └── diff.ts               # Schema drift engine
+├── tests/                        # 12 automated regression test suites
+│   ├── test-concurrency-locks.mjs
+│   ├── test-telemetry-engine.mjs
+│   ├── test-benchmark-suite.mjs
+│   ├── test-contract-governor.mjs
+│   ├── test-verify-gatekeeper.mjs
+│   ├── test-worktree-lifecycle.mjs
 │   └── ...
 ├── package.json
 └── tsconfig.json
 ```
+
+---
+
+## 📄 License
+
+MIT © [njeybe](https://github.com/njeybe)
