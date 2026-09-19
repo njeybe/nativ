@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -35,6 +36,15 @@ import {
 import { fetchData, insertRecord, updateRecord, deleteRecord } from '../db/data-engine.js';
 import { generateContractTests, TestGenError } from '../core/test-generator.js';
 import { isTestFramework, TEST_FRAMEWORKS, type TestGenResult } from '../core/test-generator-types.js';
+import { loadPlan } from '../core/lock-manager.js';
+import { loadTelemetry } from '../core/telemetry.js';
+import { resolveProjectRoot } from '../core/root-resolver.js';
+import type { BenchmarkReport } from '../core/benchmark.js';
+import { CircuitBreaker } from '../governor/index.js';
+import { runTaskBlock, runTaskComplete, runTaskStart } from '../commands/task.js';
+import { runWorktreeMerge, runWorktreeRemove, type WorktreeInfo } from '../commands/worktree.js';
+import { runBench } from '../commands/bench.js';
+import type { MasterPlan, MasterPlanMilestone, MasterPlanTask } from '../scanner/types.js';
 
 /**
  * Embedded Studio HTTP server (native node:http).
@@ -57,6 +67,8 @@ export interface StudioServerOptions {
   html?: string | (() => string);
   /** Pre-seeded connection URLs; defaults to those resolved from .env files. */
   connections?: Partial<Record<DatabaseEnv, string | null>>;
+  /** Interval between `heartbeat` events on /api/events. Defaults to 15s. */
+  heartbeatMs?: number;
 }
 
 export interface StudioServerHandle {
@@ -184,6 +196,11 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown): void
 
 function sendError(res: http.ServerResponse, status: number, code: string, message: string): void {
   sendJson(res, status, { error: { code, message } });
+}
+
+/** /api/pipeline/* errors use the contract's `{ ok: false, error }` envelope. */
+function sendPipelineError(res: http.ServerResponse, status: number, code: string, message: string): void {
+  sendJson(res, status, { ok: false, error: message, code });
 }
 
 async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
@@ -666,6 +683,464 @@ async function handleDataDelete(session: StudioSession, cwd: string, body: Recor
   }
 }
 
+// ─── Pipeline (Mission Control) ────────────────────────────────────────────────
+
+const AI_DIR = '.ai';
+const TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const MAX_REASON_LENGTH = 1000;
+const MAX_ERROR_OUTPUT_CHARS = 4000;
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+export const DEFAULT_HEARTBEAT_MS = 15_000;
+const EVENT_DEBOUNCE_MS = 100;
+const WATCH_POLL_INTERVAL_MS = 1000;
+
+type PipelineEventName = 'plan_change' | 'telemetry_change';
+
+/** Files in .ai/ that drive /api/events, mapped to the event a change emits. Anything else (tmp/lock files) is ignored. */
+const WATCHED_FILES = new Map<string, PipelineEventName>([
+  ['master_plan.json', 'plan_change'],
+  ['escalation.json', 'plan_change'],
+  ['.governor_ledger.json', 'plan_change'],
+  ['context.md', 'plan_change'],
+  ['db_schema.json', 'plan_change'],
+  ['api_contracts.json', 'plan_change'],
+  ['ui_specs.md', 'plan_change'],
+  ['telemetry.json', 'telemetry_change'],
+  ['benchmark_report.json', 'telemetry_change'],
+]);
+
+const CONTRACT_FILES = {
+  masterPlanExists: 'master_plan.json',
+  contextExists: 'context.md',
+  dbSchemaExists: 'db_schema.json',
+  apiContractsExists: 'api_contracts.json',
+  uiSpecsExists: 'ui_specs.md',
+} as const;
+
+const TASK_ACTION_STATUS = { start: 'in_progress', complete: 'completed', block: 'blocked' } as const;
+type TaskAction = keyof typeof TASK_ACTION_STATUS;
+
+let cachedVersion: string | null = null;
+
+function packageVersion(): string {
+  if (cachedVersion === null) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: string };
+      cachedVersion = pkg.version ?? 'unknown';
+    } catch {
+      cachedVersion = 'unknown';
+    }
+  }
+  return cachedVersion;
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function percent(part: number, total: number): number {
+  return total > 0 ? Math.round((part / total) * 100) : 0;
+}
+
+function truncateOutput(text: string): string {
+  return text.length > MAX_ERROR_OUTPUT_CHARS ? `${text.slice(0, MAX_ERROR_OUTPUT_CHARS)}…` : text;
+}
+
+function readPlan(root: string): MasterPlan | null {
+  return loadPlan(path.join(root, AI_DIR, 'master_plan.json'), { silent: true, retries: 3 });
+}
+
+/** Milestones with a usable task list; tolerates hand-edited or half-written plans. */
+function planMilestones(plan: MasterPlan | null): MasterPlanMilestone[] {
+  const milestones = plan?.milestones;
+  if (!Array.isArray(milestones)) return [];
+  return milestones.filter((m) => m && Array.isArray(m.tasks));
+}
+
+function findTask(plan: MasterPlan | null, taskId: string): MasterPlanTask | null {
+  for (const m of planMilestones(plan)) {
+    const task = m.tasks.find((t) => t.id === taskId);
+    if (task) return task;
+  }
+  return null;
+}
+
+/** Task ids reach git branch names and shell commands in the worktree handlers, so the charset is strict. */
+function parseTaskId(value: unknown): string {
+  const taskId = typeof value === 'string' ? value.trim() : '';
+  if (!TASK_ID_PATTERN.test(taskId)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"taskId" must be a task id (letters, digits, ".", "_" or "-")');
+  }
+  return taskId;
+}
+
+// The CLI command handlers report through console.* and process.exitCode, which are process-global,
+// so captured runs are serialized (same approach as the MCP server).
+let captureQueue: Promise<unknown> = Promise.resolve();
+
+interface CapturedRun<T> {
+  result: T;
+  /** Console output with ANSI colors stripped. */
+  output: string;
+  /** True when the handler set a non-zero process.exitCode. */
+  failed: boolean;
+}
+
+function runCaptured<T>(fn: () => Promise<T>): Promise<CapturedRun<T>> {
+  const run = async (): Promise<CapturedRun<T>> => {
+    const lines: string[] = [];
+    const original = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+    const previousExitCode = process.exitCode;
+    process.exitCode = undefined;
+    console.log = console.error = console.warn = console.info = (...args: unknown[]) => {
+      lines.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+    };
+    try {
+      const result = await fn();
+      const failed = process.exitCode !== undefined && process.exitCode !== 0;
+      return { result, failed, output: lines.join('\n').replace(ANSI_PATTERN, '').trim() };
+    } finally {
+      Object.assign(console, original);
+      process.exitCode = previousExitCode;
+    }
+  };
+  const result = captureQueue.then(run, run);
+  captureQueue = result.catch(() => undefined);
+  return result;
+}
+
+/** `--json` CLI handlers print `{ success: false, error }` on failure. */
+function jsonErrorMessage(output: string): string | null {
+  try {
+    const parsed = JSON.parse(output) as { error?: unknown } | null;
+    return typeof parsed?.error === 'string' ? parsed.error : null;
+  } catch {
+    return null;
+  }
+}
+
+/** GET /api/pipeline/status: contract matrix, milestone/task burndown and telemetry KPIs. */
+function handlePipelineStatus(root: string) {
+  const aiDir = path.join(root, AI_DIR);
+  const contracts = Object.fromEntries(
+    Object.entries(CONTRACT_FILES).map(([key, file]) => [key, fs.existsSync(path.join(aiDir, file))]),
+  ) as Record<keyof typeof CONTRACT_FILES, boolean>;
+
+  const milestones = planMilestones(readPlan(root));
+  const tasks = milestones.flatMap((m) => m.tasks);
+  const count = (items: Array<{ status: string }>, status: string) => items.filter((i) => i.status === status).length;
+  const completedTasks = count(tasks, 'completed');
+  const { summary, tasks: trackedTasks } = loadTelemetry(path.join(aiDir, 'telemetry.json'));
+
+  return {
+    ok: true,
+    pipeline: {
+      version: packageVersion(),
+      contracts,
+      milestones: {
+        total: milestones.length,
+        completed: count(milestones, 'completed'),
+        inProgress: count(milestones, 'in_progress'),
+        pending: count(milestones, 'pending'),
+      },
+      tasks: {
+        total: tasks.length,
+        completed: completedTasks,
+        inProgress: count(tasks, 'in_progress'),
+        pending: count(tasks, 'pending'),
+        blocked: count(tasks, 'blocked'),
+        progressPercentage: percent(completedTasks, tasks.length),
+      },
+      telemetry: {
+        totalTokens: finiteOr(summary?.estimatedTotalTokens, 0),
+        estimatedCostUsd: finiteOr(summary?.estimatedTotalCostUsd, 0),
+        totalTasksTracked: trackedTasks.length,
+        // Ratio in [0, 1], as stored in telemetry.json.
+        passRate: finiteOr(summary?.verificationPassRate, 1),
+        circuitBreakerTrips: finiteOr(summary?.circuitBreakerTrips, 0),
+      },
+    },
+  };
+}
+
+/** GET /api/pipeline/tasks: milestones with per-task dependency readiness and circuit-breaker attempts. */
+function handlePipelineTasks(root: string) {
+  const plan = readPlan(root);
+  const milestones = planMilestones(plan);
+  const completedIds = new Set(
+    milestones.flatMap((m) => m.tasks).filter((t) => t.status === 'completed').map((t) => t.id),
+  );
+  return {
+    ok: true,
+    projectName: plan?.projectName ?? null,
+    overallStatus: plan?.overallStatus ?? null,
+    activeMilestoneId: plan?.activeMilestoneId ?? null,
+    milestones: milestones.map((m) => ({
+      ...m,
+      progressPercentage: percent(m.tasks.filter((t) => t.status === 'completed').length, m.tasks.length),
+      tasks: m.tasks.map((t) => ({
+        ...t,
+        // Same readiness rule as `nativ task list --available`.
+        isAvailable:
+          (t.status === 'pending' || t.status === 'in_progress') &&
+          (t.dependencies ?? []).every((d) => completedIds.has(d)),
+        circuitBreaker: CircuitBreaker.getStatus(root, t.id),
+      })),
+    })),
+  };
+}
+
+/** POST /api/pipeline/tasks/action: the same lock-guarded transitions as `nativ task start|complete|block`. */
+async function handleTaskAction(root: string, body: Record<string, unknown>) {
+  const { action } = body;
+  if (typeof action !== 'string' || !Object.hasOwn(TASK_ACTION_STATUS, action)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"action" must be one of: ${Object.keys(TASK_ACTION_STATUS).join(', ')}`);
+  }
+  const taskAction = action as TaskAction;
+  const taskId = parseTaskId(body.taskId);
+  if (body.reason !== undefined && body.reason !== null && typeof body.reason !== 'string') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"reason" must be a string');
+  }
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (reason.length > MAX_REASON_LENGTH) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"reason" must be at most ${MAX_REASON_LENGTH} characters`);
+  }
+  if (taskAction === 'block' && !reason) throw new HttpError(400, 'VALIDATION_ERROR', '"reason" is required when blocking a task');
+
+  const task = findTask(readPlan(root), taskId);
+  if (!task) throw new HttpError(400, 'TASK_NOT_FOUND', `Task "${taskId}" not found in .ai/master_plan.json`);
+  if (task.status === TASK_ACTION_STATUS[taskAction]) {
+    throw new HttpError(400, 'INVALID_TRANSITION', `Task "${taskId}" is already ${task.status}`);
+  }
+
+  // `complete` runs the task's verificationCommand as a gatekeeper, exactly like the CLI.
+  const { failed, output } = await runCaptured(async () => {
+    if (taskAction === 'start') await runTaskStart(taskId, root);
+    else if (taskAction === 'complete') await runTaskComplete(taskId, root);
+    else await runTaskBlock(taskId, reason, root);
+  });
+  if (failed) throw new HttpError(400, 'TASK_ACTION_FAILED', truncateOutput(output || `Task ${taskAction} failed`));
+
+  return { ok: true, task: findTask(readPlan(root), taskId) ?? task };
+}
+
+interface PipelineWorktree extends WorktreeInfo {
+  taskStatus: MasterPlanTask['status'] | null;
+  mergeEligible: boolean;
+  mergeBlockedReason: string | null;
+}
+
+function git(cwd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, { cwd, timeout: 10_000, windowsHide: true, maxBuffer: 1024 * 1024 }, (err, stdout) =>
+      err ? reject(err) : resolve(stdout),
+    );
+  });
+}
+
+/** Async twin of `nativ worktree list --json` (which blocks on execSync and prints to the console). */
+async function listGitWorktrees(root: string): Promise<WorktreeInfo[]> {
+  let raw: string;
+  try {
+    raw = await git(root, ['worktree', 'list', '--porcelain']);
+  } catch {
+    return []; // Not a git repository, or git is unavailable.
+  }
+
+  const worktrees: WorktreeInfo[] = [];
+  for (const block of raw.trim().split(/\r?\n\r?\n/)) {
+    let wtPath = '';
+    let head = '';
+    let branch = '';
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith('worktree ')) wtPath = line.slice(9).trim();
+      else if (line.startsWith('HEAD ')) head = line.slice(5).trim();
+      else if (line.startsWith('branch ')) branch = line.slice(7).trim().replace(/^refs\/heads\//, '');
+    }
+    if (!wtPath) continue;
+    worktrees.push({
+      path: wtPath,
+      head,
+      branch: branch || 'detached',
+      isAgentWorktree: wtPath.includes('.worktrees') || branch.startsWith('agent/task-'),
+      taskId: /^agent\/task-(.+)$/.exec(branch)?.[1],
+    });
+  }
+  return worktrees;
+}
+
+/**
+ * GET /api/pipeline/worktrees. Merge eligibility mirrors the `nativ worktree merge` gatekeeper (task completed,
+ * circuit breaker not tripped), and additionally requires the task to be declared in the plan.
+ */
+async function describeWorktrees(root: string): Promise<PipelineWorktree[]> {
+  const statusById = new Map(planMilestones(readPlan(root)).flatMap((m) => m.tasks.map((t) => [t.id, t.status] as const)));
+  return (await listGitWorktrees(root)).map((wt) => {
+    const taskStatus = (wt.taskId && statusById.get(wt.taskId)) || null;
+    let mergeBlockedReason: string | null = null;
+    if (!wt.isAgentWorktree || !wt.taskId) mergeBlockedReason = 'Not an agent task worktree';
+    else if (!taskStatus) mergeBlockedReason = `Task "${wt.taskId}" is not declared in .ai/master_plan.json`;
+    else if (taskStatus !== 'completed') mergeBlockedReason = `Task status is '${taskStatus}'; only completed tasks may be merged`;
+    else if (CircuitBreaker.getStatus(root, wt.taskId).tripped) mergeBlockedReason = 'Circuit breaker is tripped; resolve the escalation before merging';
+    return { ...wt, taskStatus, mergeEligible: mergeBlockedReason === null, mergeBlockedReason };
+  });
+}
+
+/** POST /api/pipeline/worktrees/action: `nativ worktree merge|remove`, never forced past the merge gatekeeper. */
+async function handleWorktreeAction(root: string, body: Record<string, unknown>) {
+  const { action } = body;
+  if (action !== 'merge' && action !== 'remove') throw new HttpError(400, 'VALIDATION_ERROR', '"action" must be one of: merge, remove');
+  const taskId = parseTaskId(body.taskId);
+
+  const worktree = (await describeWorktrees(root)).find((wt) => wt.isAgentWorktree && wt.taskId === taskId);
+  if (!worktree) throw new HttpError(400, 'WORKTREE_NOT_FOUND', `No agent worktree found for task "${taskId}"`);
+  if (action === 'merge' && !worktree.mergeEligible) {
+    throw new HttpError(400, 'MERGE_REJECTED', worktree.mergeBlockedReason ?? 'Merge rejected by the gatekeeper');
+  }
+
+  const { result, failed, output } = await runCaptured<{ message: string } | null>(() =>
+    action === 'merge' ? runWorktreeMerge(taskId, root, { json: true }) : runWorktreeRemove(taskId, root, { json: true }),
+  );
+  if (failed || !result) {
+    throw new HttpError(400, 'WORKTREE_ACTION_FAILED', jsonErrorMessage(output) ?? truncateOutput(output || `Worktree ${action} failed`));
+  }
+  return { ok: true, message: result.message };
+}
+
+/** GET /api/pipeline/benchmarks: the cached report written by `nativ bench` or benchmarks/run. */
+function handleBenchmarks(root: string) {
+  let report: unknown = null;
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(root, AI_DIR, 'benchmark_report.json'), 'utf8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) report = parsed;
+  } catch {
+    // No benchmark has been run yet, or the report is unreadable.
+  }
+  return { ok: true, report };
+}
+
+/**
+ * Fan-out for GET /api/events. Watches .ai/ only while a client is connected, coalesces write bursts
+ * (tmp file + atomic rename + lock files) into one event per type, and sends heartbeats so idle
+ * streams survive proxies and sleep/wake.
+ *
+ * Frames: `event: plan_change` / `event: telemetry_change` with `data: {"files":[...],"at":"<ISO>"}`,
+ * and `event: heartbeat` with `data: {"at":"<ISO>"}`.
+ */
+class PipelineEventHub {
+  private readonly clients = new Set<http.ServerResponse>();
+  private readonly pending = new Map<PipelineEventName, Set<string>>();
+  private watcher: fs.FSWatcher | null = null;
+  private pollers: Array<{ file: string; listener: (curr: fs.Stats, prev: fs.Stats) => void }> = [];
+  private heartbeat: NodeJS.Timeout | null = null;
+  private flushTimer: NodeJS.Timeout | null = null;
+  private closed = false;
+
+  constructor(
+    private readonly aiDir: string,
+    private readonly heartbeatMs: number,
+  ) {}
+
+  subscribe(res: http.ServerResponse): void {
+    if (this.closed) {
+      sendPipelineError(res, 503, 'SHUTTING_DOWN', 'Studio server is shutting down');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-store',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.socket?.setNoDelay(true);
+    // Reconnect delay for EventSource; the comment line flushes the headers right away.
+    res.write('retry: 3000\n: connected\n\n');
+    this.clients.add(res);
+    res.on('close', () => {
+      this.clients.delete(res);
+      if (this.clients.size === 0) this.stop();
+    });
+    this.start();
+  }
+
+  /** SSE responses never finish on their own; drop them so http.Server#close() can complete. */
+  close(): void {
+    this.closed = true;
+    for (const res of this.clients) res.destroy();
+    this.clients.clear();
+    this.stop();
+  }
+
+  private start(): void {
+    if (!this.heartbeat) {
+      this.heartbeat = setInterval(() => this.broadcast('heartbeat', { at: new Date().toISOString() }), this.heartbeatMs);
+      this.heartbeat.unref();
+    }
+    if (this.watcher || this.pollers.length) return;
+    try {
+      this.watcher = fs.watch(this.aiDir, { persistent: false }, (_event, filename) => {
+        if (filename) this.queue(String(filename));
+      });
+      this.watcher.on('error', () => {
+        this.closeWatcher();
+        if (this.clients.size) this.startPolling();
+      });
+    } catch {
+      // .ai/ is missing (studio started before `nativ init`) or not watchable: poll the files instead.
+      this.startPolling();
+    }
+  }
+
+  private startPolling(): void {
+    if (this.pollers.length) return;
+    for (const file of WATCHED_FILES.keys()) {
+      // Missing files report zeroed stats, so an unchanged mtime means nothing happened.
+      const listener = (curr: fs.Stats, prev: fs.Stats) => {
+        if (curr.mtimeMs !== prev.mtimeMs) this.queue(file);
+      };
+      fs.watchFile(path.join(this.aiDir, file), { interval: WATCH_POLL_INTERVAL_MS, persistent: false }, listener);
+      this.pollers.push({ file, listener });
+    }
+  }
+
+  private stop(): void {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.heartbeat = this.flushTimer = null;
+    this.pending.clear();
+    this.closeWatcher();
+    for (const { file, listener } of this.pollers) fs.unwatchFile(path.join(this.aiDir, file), listener);
+    this.pollers = [];
+  }
+
+  private closeWatcher(): void {
+    this.watcher?.close();
+    this.watcher = null;
+  }
+
+  private queue(file: string): void {
+    const event = WATCHED_FILES.get(file);
+    if (!event) return;
+    const files = this.pending.get(event) ?? new Set<string>();
+    files.add(file);
+    this.pending.set(event, files);
+    this.flushTimer ??= setTimeout(() => this.flush(), EVENT_DEBOUNCE_MS);
+  }
+
+  private flush(): void {
+    this.flushTimer = null;
+    const at = new Date().toISOString();
+    for (const [event, files] of this.pending) this.broadcast(event, { files: [...files], at });
+    this.pending.clear();
+  }
+
+  private broadcast(event: string, data: unknown): void {
+    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of this.clients) res.write(frame);
+  }
+}
+
 // ─── Server ────────────────────────────────────────────────────────────────────
 
 export function createStudioServer(options: StudioServerOptions = {}): http.Server {
@@ -702,10 +1177,31 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
     return options.html ?? '<!doctype html><title>AgentJ DB Studio</title><p>Studio API is running. See /api/status.</p>';
   };
 
-  return http.createServer(async (req, res) => {
+  // Pipeline endpoints read the project that owns .ai/ (climbing out of .worktrees/task-* when needed).
+  const root = resolveProjectRoot(cwd);
+  const heartbeatMs = options.heartbeatMs && options.heartbeatMs > 0 ? options.heartbeatMs : DEFAULT_HEARTBEAT_MS;
+  const events = new PipelineEventHub(path.join(root, AI_DIR), heartbeatMs);
+
+  // Concurrent "Run Benchmark" requests share one in-flight run.
+  let benchmarkRun: Promise<BenchmarkReport> | null = null;
+  const runBenchmarkSuite = (): Promise<BenchmarkReport> => {
+    benchmarkRun ??= runCaptured(() => runBench(root, { json: true }))
+      .then(({ result, output }) => {
+        if (!result) throw new HttpError(500, 'BENCHMARK_FAILED', truncateOutput(output || 'Benchmark suite failed to run'));
+        return result;
+      })
+      .finally(() => {
+        benchmarkRun = null;
+      });
+    return benchmarkRun;
+  };
+
+  const server = http.createServer(async (req, res) => {
+    let pathname = '';
     try {
       assertLocalRequest(req);
       const url = new URL(req.url ?? '/', 'http://localhost');
+      pathname = url.pathname;
       const fresh = url.searchParams.get('refresh') === '1';
       const route = `${req.method ?? 'GET'} ${url.pathname.replace(/\/+$/, '') || '/'}`;
 
@@ -751,24 +1247,55 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, await handleDataDelete(session, cwd, await readJsonBody(req), req));
         case 'POST /api/tests/generate':
           return sendJson(res, 200, handleTestGenerate(cwd, await readJsonBody(req)));
+        case 'GET /api/events':
+          events.subscribe(res);
+          return;
+        case 'GET /api/pipeline/status':
+          return sendJson(res, 200, handlePipelineStatus(root));
+        case 'GET /api/pipeline/tasks':
+          return sendJson(res, 200, handlePipelineTasks(root));
+        case 'POST /api/pipeline/tasks/action':
+          return sendJson(res, 200, await handleTaskAction(root, await readJsonBody(req)));
+        case 'GET /api/pipeline/worktrees':
+          return sendJson(res, 200, { ok: true, worktrees: await describeWorktrees(root) });
+        case 'POST /api/pipeline/worktrees/action':
+          return sendJson(res, 200, await handleWorktreeAction(root, await readJsonBody(req)));
+        case 'GET /api/pipeline/benchmarks':
+          return sendJson(res, 200, handleBenchmarks(root));
+        case 'POST /api/pipeline/benchmarks/run':
+          return sendJson(res, 200, { ok: true, report: await runBenchmarkSuite() });
         case 'GET /favicon.ico':
           res.writeHead(204).end();
           return;
       }
 
       if (url.pathname.startsWith('/api/')) {
-        const known = ['/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data', '/api/tests/generate'];
+        const known = [
+          '/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data', '/api/tests/generate',
+          '/api/events', '/api/pipeline/status', '/api/pipeline/tasks', '/api/pipeline/tasks/action', '/api/pipeline/worktrees',
+          '/api/pipeline/worktrees/action', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
+        ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
       }
       throw new HttpError(404, 'NOT_FOUND', 'Not found');
     } catch (err) {
-      if (err instanceof HttpError) return sendError(res, err.status, err.code, err.message);
+      const send = pathname.startsWith('/api/pipeline/') ? sendPipelineError : sendError;
+      if (err instanceof HttpError) return send(res, err.status, err.code, err.message);
       // Unexpected failures: generic message only, to avoid echoing anything credential-bearing.
       session.invalidate();
-      return sendError(res, 500, 'INTERNAL_ERROR', 'Unexpected studio server error');
+      return send(res, 500, 'INTERNAL_ERROR', 'Unexpected studio server error');
     }
   });
+
+  // Open SSE streams would otherwise keep close() waiting forever.
+  const closeServer = server.close.bind(server);
+  server.close = ((callback?: (err?: Error) => void) => {
+    events.close();
+    return closeServer(callback);
+  }) as typeof server.close;
+
+  return server;
 }
 
 /** Starts the studio on loopback, trying up to 10 consecutive ports if the preferred one is busy. */
