@@ -35,30 +35,29 @@ Instead, follow this streamlined orientation:
    | `nativ_task_start` / `nativ_task_complete` | `nativ task start` / `nativ task complete` |
    | `nativ_verify` | `nativ verify [taskId]` |
    | `nativ_task_block` / `nativ_task_escalate` | `nativ task block` / `nativ task escalate` |
-   | `nativ_db_status` / `nativ_db_inspect` / `nativ_db_diff` | `nativ db status` / `inspect` / `diff` |
+   | `nativ_status` / `nativ_init` | `nativ status` / `nativ init` (never overwrites) |
+   | `nativ_db_status` / `nativ_db_inspect` / `nativ_db_diff` | `nativ db status|inspect|diff --json` (masked, structure-only) |
 
    Contract slices are also readable as MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`. Treat them as read-only — the no-edit rules below still apply.
 
 ---
 
-## 2. Autonomous Task Lifecycle (Execution Flow)
+## 2. Autonomous Task Execution Loop
 
-For every task assigned to your sub-agents:
+For each active task:
 
-1. **JIT Context Slicing:**
-   - Fetch the next task via `nativ task next` (or read `nativ://master-plan`).
-   - Read the exact assigned sub-agent prompt from `.ai/subagents/<assignedSubagent>.md`.
-   - Read **ONLY** the relevant contracts specified in your assigned prompt (e.g. backend reads `.ai/api_contracts.json` and `.ai/db_schema.json`).
+1. **Mark In-Progress via CLI:**
+   ```bash
+   nativ task start <taskId>
+   ```
+   *(Never manually edit `.ai/master_plan.json` directly!)*
 
-2. **Claim & Start Task:**
-   - Transition task to active state:
-     ```bash
-     nativ task start <taskId>
-     ```
+2. **Execute Implementation with Scoped Boundaries:**
+   - Modify or create **only** the files specified in `targetFiles`.
+   - Strictly respect the guardrails in your JIT contract slice.
 
-3. **Isolated Implementation & Verification Loop:**
-   - Implement only the scoped changes targeting `targetFiles`.
-   - Run the task's `verificationCommand` (e.g., `npm test`, `nativ verify <taskId>`).
+3. **Run Verification & Enforce Circuit-Breaker:**
+   - Execute the task's `verificationCommand` in the terminal (or run `nativ verify <taskId>`).
    - **Circuit-Breaker Rule (Max 3 Attempts):**
      - You have a budget of at most **3 fix attempts** if the verification fails.
      - If verification still fails after attempt 3:
@@ -74,7 +73,7 @@ For every task assigned to your sub-agents:
      ```bash
      nativ task complete <taskId>
      ```
-   - `nativ` automatically executes `verificationCommand` as a gatekeeper. If the check fails or exits non-zero, completion is rejected and the task remains `in_progress`. (Emergency manual override: `--no-verify`).
+   - `nativ` automatically runs `verificationCommand` as a gatekeeper. If the check fails or exits non-zero, completion is rejected and the task remains `in_progress`. (Emergency manual override: `--no-verify`).
    - Run `nativ task next` to immediately fetch the next pending task.
 
 5. **Architectural Escalation to Tier 1:**
