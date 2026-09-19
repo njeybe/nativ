@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import { MasterPlan, MasterPlanTask } from '../scanner/types.js';
-import { resolveProjectRoot, linkWorktreeAiDirectory } from '../core/root-resolver.js';
+import { resolveProjectRoot, linkWorktreeAiDirectory, safeUnlinkWorktreeAiDirectory } from '../core/root-resolver.js';
 import { CircuitBreaker } from '../governor/index.js';
 
 function isGitRepo(targetDir: string): boolean {
@@ -291,8 +291,9 @@ export async function runWorktreeMerge(
       console.log(pc.cyan(`\n🔀 Merging worktree for Task [${taskId}]...`));
     }
 
-    // 1. Remove worktree directory
+    // 1. Remove worktree directory safely (unlinking .ai junction first)
     if (fs.existsSync(worktreeDir)) {
+      safeUnlinkWorktreeAiDirectory(worktreeDir);
       execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
       if (!options.json) {
         console.log(pc.dim(`  ✔ Removed worktree directory: ${worktreeDir}`));
@@ -379,6 +380,7 @@ export async function runWorktreeRemove(
     }
 
     if (fs.existsSync(worktreeDir)) {
+      safeUnlinkWorktreeAiDirectory(worktreeDir);
       execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
       if (!options.json) {
         console.log(pc.dim(`  ✔ Removed worktree directory: ${worktreeDir}`));

@@ -85,3 +85,24 @@ export function linkWorktreeAiDirectory(worktreeDir: string, rootDir: string): b
     return false;
   }
 }
+
+/**
+ * Safely unlinks the .ai junction/symlink in a worktree directory before
+ * Git or filesystem deletion touches it. On Windows, recursive deletion of an untracked
+ * junction by tools like `git worktree remove --force` can traverse into the junction and
+ * delete original files in the project root. This guarantees only the link itself is removed.
+ */
+export function safeUnlinkWorktreeAiDirectory(worktreeDir: string): boolean {
+  const targetAi = path.join(worktreeDir, '.ai');
+  try {
+    const stat = fs.lstatSync(targetAi);
+    if (stat.isSymbolicLink() || (process.platform === 'win32' && stat.isDirectory())) {
+      fs.unlinkSync(targetAi);
+      return true;
+    }
+  } catch {
+    // If it doesn't exist or isn't a link, ignore
+  }
+  return false;
+}
+
