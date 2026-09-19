@@ -13,44 +13,17 @@ import {
   EscalationRecord,
   EscalationType,
 } from '../scanner/types.js';
-import { executeVerification } from '../core/verifier.js';
+import { executeVerification, VerificationResult } from '../core/verifier.js';
 import { ContractGovernor, CircuitBreaker, ContractPatch } from '../governor/index.js';
+import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
+import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
+
+export { loadPlan, savePlan, withPlanLock };
 
 function getPlanPath(targetDirArg?: string): { targetDir: string; planPath: string } {
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const planPath = path.join(targetDir, '.ai', 'master_plan.json');
   return { targetDir, planPath };
-}
-
-function loadPlan(planPath: string): MasterPlan | null {
-  if (!fs.existsSync(planPath)) {
-    console.error(pc.red(`\n✖ No .ai/master_plan.json found at: ${planPath}`));
-    console.log(pc.yellow('Run `nativ init` first to scaffold the workflow.\n'));
-    return null;
-  }
-
-  try {
-    const raw = fs.readFileSync(planPath, 'utf8');
-    return JSON.parse(raw) as MasterPlan;
-  } catch (err: any) {
-    console.error(pc.red(`\n✖ Failed to parse .ai/master_plan.json: ${err.message}\n`));
-    return null;
-  }
-}
-
-/** Writes the plan atomically (temp file + rename) so a crash never leaves truncated JSON. */
-function savePlan(planPath: string, plan: MasterPlan): boolean {
-  const tmpPath = `${planPath}.${process.pid}.tmp`;
-  try {
-    plan.lastUpdated = new Date().toISOString();
-    fs.writeFileSync(tmpPath, JSON.stringify(plan, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, planPath);
-    return true;
-  } catch (err: any) {
-    fs.rmSync(tmpPath, { force: true });
-    console.error(pc.red(`\n✖ Failed to save .ai/master_plan.json: ${err.message}\n`));
-    return false;
-  }
 }
 
 export function getRoleGuide(assignedSubagent: SubagentType): string {
@@ -278,7 +251,9 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
       activeMilestone = plan.milestones.find((m) => m.status !== 'completed');
       if (activeMilestone) {
         plan.activeMilestoneId = activeMilestone.id;
-        savePlan(planPath, plan);
+        await withPlanLock(planPath, (p) => {
+          p.activeMilestoneId = activeMilestone.id;
+        });
       }
     }
 
@@ -370,42 +345,43 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
 }
 
 export async function runTaskStart(taskId: string, targetDirArg?: string) {
-  const { planPath } = getPlanPath(targetDirArg);
-  const plan = loadPlan(planPath);
-  if (!plan) {
-    process.exitCode = 1;
-    return;
-  }
+  const { targetDir, planPath } = getPlanPath(targetDirArg);
+  return withPlanLock(planPath, async (plan, ctx) => {
+    let foundTask: MasterPlanTask | null = null;
+    let foundMilestone: any = null;
 
-  let foundTask: MasterPlanTask | null = null;
-  let foundMilestone: any = null;
-
-  for (const m of plan.milestones) {
-    const t = m.tasks.find((task) => task.id === taskId);
-    if (t) {
-      foundTask = t;
-      foundMilestone = m;
-      break;
+    for (const m of plan.milestones) {
+      const t = m.tasks.find((task) => task.id === taskId);
+      if (t) {
+        foundTask = t;
+        foundMilestone = m;
+        break;
+      }
     }
-  }
 
-  if (!foundTask) {
-    console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
-    process.exitCode = 1;
-    return;
-  }
+    if (!foundTask) {
+      ctx.abort();
+      console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+      process.exitCode = 1;
+      return;
+    }
 
-  foundTask.status = 'in_progress';
-  if (foundMilestone.status === 'pending') {
-    foundMilestone.status = 'in_progress';
-  }
-  if (plan.overallStatus === 'pending') {
-    plan.overallStatus = 'in_progress';
-  }
-  plan.activeMilestoneId = foundMilestone.id;
+    foundTask.status = 'in_progress';
+    if (foundMilestone.status === 'pending') {
+      foundMilestone.status = 'in_progress';
+    }
+    if (plan.overallStatus === 'pending') {
+      plan.overallStatus = 'in_progress';
+    }
+    plan.activeMilestoneId = foundMilestone.id;
 
-  savePlan(planPath, plan);
-  console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] marked as `) + pc.yellow('▶ in_progress') + '\n');
+    try {
+      await recordTaskStart(targetDir, foundTask);
+    } catch {
+      // Non-fatal
+    }
+    console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] marked as `) + pc.yellow('▶ in_progress') + '\n');
+  });
 }
 
 export interface TaskCompleteOptions {
@@ -445,8 +421,9 @@ export async function runTaskComplete(
   }
 
   // ── Verification Gatekeeper ────────────────────────────────────────────────
+  let vResult: VerificationResult | null = null;
   if (!options.skipVerify) {
-    const vResult = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
+    vResult = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
     if (!vResult.success) {
       console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] verification FAILED with exit code ${vResult.exitCode}:`));
       console.error(pc.yellow(`  Command: \`${foundTask.verificationCommand}\``));
@@ -477,33 +454,69 @@ export async function runTaskComplete(
       console.log(pc.green(`\n✔ Verification passed (${elapsed}s): `) + pc.yellow(`\`${foundTask.verificationCommand}\``));
     }
   } else {
+    vResult = {
+      command: foundTask.verificationCommand || 'none',
+      durationMs: 0,
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+      skipped: true,
+      success: true,
+    };
     console.log(pc.yellow(`\n⚠ Verification skipped via --no-verify for [${taskId}]`));
   }
 
-  foundTask.status = 'completed';
-  if (options.notes) {
-    foundTask.notes = options.notes;
-  }
+  await withPlanLock(planPath, (plan, ctx) => {
+    let taskToComplete: MasterPlanTask | null = null;
+    let milestoneToComplete: any = null;
 
-  // Check if milestone is completed
-  const allMilestoneTasksDone = foundMilestone.tasks.every((t: MasterPlanTask) => t.status === 'completed');
-  if (allMilestoneTasksDone) {
-    foundMilestone.status = 'completed';
-    console.log(pc.green(`\n🏁 Milestone [${pc.bold(foundMilestone.id)}] completed!`));
-
-    // Find next milestone
-    const nextMilestone = plan.milestones.find((m) => m.status !== 'completed');
-    if (nextMilestone) {
-      plan.activeMilestoneId = nextMilestone.id;
-      console.log(pc.cyan(`▶ Active milestone advanced to: [${nextMilestone.id}] ${nextMilestone.name}`));
-    } else {
-      plan.overallStatus = 'completed';
-      console.log(pc.bold(pc.green('🎉 All project milestones completed!')));
+    for (const m of plan.milestones) {
+      const t = m.tasks.find((task) => task.id === taskId);
+      if (t) {
+        taskToComplete = t;
+        milestoneToComplete = m;
+        break;
+      }
     }
+
+    if (!taskToComplete) {
+      ctx.abort();
+      console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+      process.exitCode = 1;
+      return;
+    }
+
+    taskToComplete.status = 'completed';
+    if (options.notes) {
+      taskToComplete.notes = options.notes;
+    }
+
+    // Check if milestone is completed
+    const allMilestoneTasksDone = milestoneToComplete.tasks.every((t: MasterPlanTask) => t.status === 'completed');
+    if (allMilestoneTasksDone) {
+      milestoneToComplete.status = 'completed';
+      console.log(pc.green(`\n🏁 Milestone [${pc.bold(milestoneToComplete.id)}] completed!`));
+
+      // Find next milestone
+      const nextMilestone = plan.milestones.find((m) => m.status !== 'completed');
+      if (nextMilestone) {
+        plan.activeMilestoneId = nextMilestone.id;
+        console.log(pc.cyan(`▶ Active milestone advanced to: [${nextMilestone.id}] ${nextMilestone.name}`));
+      } else {
+        plan.overallStatus = 'completed';
+        console.log(pc.bold(pc.green('🎉 All project milestones completed!')));
+      }
+    }
+  });
+
+  CircuitBreaker.recordSuccess(targetDir, taskId);
+
+  try {
+    await recordTaskComplete(targetDir, foundTask, vResult, options.notes);
+  } catch {
+    // Non-fatal telemetry recording
   }
 
-  savePlan(planPath, plan);
-  CircuitBreaker.recordSuccess(targetDir, taskId);
   console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] successfully marked as `) + pc.green('✔ completed') + '\n');
 }
 
@@ -515,34 +528,30 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
   }
 
   const { planPath } = getPlanPath(targetDirArg);
-  const plan = loadPlan(planPath);
-  if (!plan) {
-    process.exitCode = 1;
-    return;
-  }
+  return withPlanLock(planPath, (plan, ctx) => {
+    let foundTask: MasterPlanTask | null = null;
 
-  let foundTask: MasterPlanTask | null = null;
-
-  for (const m of plan.milestones) {
-    const t = m.tasks.find((task) => task.id === taskId);
-    if (t) {
-      foundTask = t;
-      break;
+    for (const m of plan.milestones) {
+      const t = m.tasks.find((task) => task.id === taskId);
+      if (t) {
+        foundTask = t;
+        break;
+      }
     }
-  }
 
-  if (!foundTask) {
-    console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
-    process.exitCode = 1;
-    return;
-  }
+    if (!foundTask) {
+      ctx.abort();
+      console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+      process.exitCode = 1;
+      return;
+    }
 
-  foundTask.status = 'blocked';
-  foundTask.notes = reason.trim();
+    foundTask.status = 'blocked';
+    foundTask.notes = reason.trim();
 
-  savePlan(planPath, plan);
-  console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] marked as `) + pc.red('✖ blocked'));
-  console.log(pc.dim(`  Reason: ${foundTask.notes}\n`));
+    console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] marked as `) + pc.red('✖ blocked'));
+    console.log(pc.dim(`  Reason: ${foundTask.notes}\n`));
+  });
 }
 
 export async function runTaskEscalate(
@@ -555,37 +564,42 @@ export async function runTaskEscalate(
   } = {}
 ) {
   const { targetDir, planPath } = getPlanPath(targetDirArg);
-  const plan = loadPlan(planPath);
-  if (!plan) {
-    process.exitCode = 1;
-    return;
-  }
-
-  let foundTask: MasterPlanTask | null = null;
-  for (const m of plan.milestones) {
-    const t = m.tasks.find((task) => task.id === taskId);
-    if (t) {
-      foundTask = t;
-      break;
-    }
-  }
-
-  if (!foundTask) {
-    console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
-    process.exitCode = 1;
-    return;
-  }
-
-  const escalationPath = path.join(targetDir, '.ai', 'escalation.json');
-  let escalationFile: EscalationFile;
-
-  if (fs.existsSync(escalationPath)) {
-    try {
-      escalationFile = JSON.parse(fs.readFileSync(escalationPath, 'utf8'));
-      if (!Array.isArray(escalationFile.escalations)) {
-        escalationFile.escalations = [];
+  return withPlanLock(planPath, (plan, ctx) => {
+    let foundTask: MasterPlanTask | null = null;
+    for (const m of plan.milestones) {
+      const t = m.tasks.find((task) => task.id === taskId);
+      if (t) {
+        foundTask = t;
+        break;
       }
-    } catch {
+    }
+
+    if (!foundTask) {
+      ctx.abort();
+      console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+      process.exitCode = 1;
+      return;
+    }
+
+    const escalationPath = path.join(targetDir, '.ai', 'escalation.json');
+    let escalationFile: EscalationFile;
+
+    if (fs.existsSync(escalationPath)) {
+      try {
+        escalationFile = JSON.parse(fs.readFileSync(escalationPath, 'utf8'));
+        if (!Array.isArray(escalationFile.escalations)) {
+          escalationFile.escalations = [];
+        }
+      } catch {
+        escalationFile = {
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          version: '1.0.0',
+          projectName: plan.projectName,
+          lastUpdated: new Date().toISOString(),
+          escalations: [],
+        };
+      }
+    } else {
       escalationFile = {
         $schema: 'http://json-schema.org/draft-07/schema#',
         version: '1.0.0',
@@ -594,64 +608,55 @@ export async function runTaskEscalate(
         escalations: [],
       };
     }
-  } else {
-    escalationFile = {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      version: '1.0.0',
-      projectName: plan.projectName,
-      lastUpdated: new Date().toISOString(),
-      escalations: [],
+
+    const count = escalationFile.escalations.length + 1;
+    const escId = `esc-${String(count).padStart(2, '0')}`;
+    const validTypes: EscalationType[] = [
+      'contract_drift',
+      'schema_flaw',
+      'missing_credential',
+      'dependency_conflict',
+      'architectural_ambiguity',
+    ];
+    const escType = (options.type && validTypes.includes(options.type as EscalationType))
+      ? (options.type as EscalationType)
+      : 'architectural_ambiguity';
+
+    const affectedContracts = options.affected
+      ? options.affected.split(',').map((s) => s.trim())
+      : ['.ai/db_schema.json', '.ai/api_contracts.json'];
+
+    const summary = options.details || `Task ${taskId} blocked by ${escType}`;
+
+    const newRecord: EscalationRecord = {
+      id: escId,
+      taskId,
+      type: escType,
+      reportedBy: foundTask.assignedSubagent,
+      timestamp: new Date().toISOString(),
+      summary,
+      details: options.details || '',
+      affectedContracts,
+      status: 'pending_review',
     };
-  }
 
-  const count = escalationFile.escalations.length + 1;
-  const escId = `esc-${String(count).padStart(2, '0')}`;
-  const validTypes: EscalationType[] = [
-    'contract_drift',
-    'schema_flaw',
-    'missing_credential',
-    'dependency_conflict',
-    'architectural_ambiguity',
-  ];
-  const escType = (options.type && validTypes.includes(options.type as EscalationType))
-    ? (options.type as EscalationType)
-    : 'architectural_ambiguity';
+    escalationFile.escalations.push(newRecord);
+    escalationFile.lastUpdated = new Date().toISOString();
 
-  const affectedContracts = options.affected
-    ? options.affected.split(',').map((s) => s.trim())
-    : ['.ai/db_schema.json', '.ai/api_contracts.json'];
+    fs.writeFileSync(escalationPath, JSON.stringify(escalationFile, null, 2) + '\n', 'utf8');
 
-  const summary = options.details || `Task ${taskId} blocked by ${escType}`;
+    foundTask.status = 'blocked';
+    foundTask.notes = `Escalated [${escId}]: ${summary}`;
 
-  const newRecord: EscalationRecord = {
-    id: escId,
-    taskId,
-    type: escType,
-    reportedBy: foundTask.assignedSubagent,
-    timestamp: new Date().toISOString(),
-    summary,
-    details: options.details || '',
-    affectedContracts,
-    status: 'pending_review',
-  };
-
-  escalationFile.escalations.push(newRecord);
-  escalationFile.lastUpdated = new Date().toISOString();
-
-  fs.writeFileSync(escalationPath, JSON.stringify(escalationFile, null, 2) + '\n', 'utf8');
-
-  foundTask.status = 'blocked';
-  foundTask.notes = `Escalated [${escId}]: ${summary}`;
-  savePlan(planPath, plan);
-
-  console.log(pc.bold(pc.yellow(`\n🚨 Task [${pc.bold(taskId)}] Escalated to Tier 1 (Antigravity)!`)));
-  console.log(pc.dim('  Escalation ID:      ') + pc.cyan(escId));
-  console.log(pc.dim('  Type:               ') + pc.white(escType));
-  console.log(pc.dim('  Reported By:        ') + pc.magenta(`[${foundTask.assignedSubagent}]`));
-  console.log(pc.dim('  Affected Contracts: ') + pc.white(affectedContracts.join(', ')));
-  console.log(pc.dim('  Details:            ') + pc.yellow(summary));
-  console.log(pc.dim('\nNext Step for Macro-Architect:'));
-  console.log(pc.white(`  Open Antigravity to review .ai/escalation.json, update the affected contracts, and unblock the task.\n`));
+    console.log(pc.bold(pc.yellow(`\n🚨 Task [${pc.bold(taskId)}] Escalated to Tier 1 (Antigravity)!`)));
+    console.log(pc.dim('  Escalation ID:      ') + pc.cyan(escId));
+    console.log(pc.dim('  Type:               ') + pc.white(escType));
+    console.log(pc.dim('  Reported By:        ') + pc.magenta(`[${foundTask.assignedSubagent}]`));
+    console.log(pc.dim('  Affected Contracts: ') + pc.white(affectedContracts.join(', ')));
+    console.log(pc.dim('  Details:            ') + pc.yellow(summary));
+    console.log(pc.dim('\nNext Step for Macro-Architect:'));
+    console.log(pc.white(`  Open Antigravity to review .ai/escalation.json, update the affected contracts, and unblock the task.\n`));
+  });
 }
 
 // ─── Task add: dual-track router (planned milestones + fast path) ─────────
@@ -742,100 +747,106 @@ function findMilestone(plan: MasterPlan, query: string): MasterPlanMilestone | M
  */
 export async function runTaskAdd(title: string, targetDirArg?: string, options: TaskAddOptions = {}): Promise<TaskAddResult | null> {
   const { planPath } = getPlanPath(targetDirArg);
-  const plan = loadPlan(planPath);
-  if (!plan) {
-    process.exitCode = 1;
-    return null;
-  }
-  if (!Array.isArray(plan.milestones)) {
-    return failTaskAdd('INVALID_PLAN', '.ai/master_plan.json is missing its "milestones" array', options.json);
-  }
-
-  const cleanTitle = (title ?? '').trim();
-  if (!cleanTitle) return failTaskAdd('INVALID_TITLE', 'A task title is required', options.json);
-
-  const agent = (options.agent ?? 'backend').trim();
-  if (!isSubagentType(agent)) {
-    return failTaskAdd('INVALID_AGENT', `Unknown sub-agent "${agent}". Expected one of: ${SUBAGENT_TYPES.join(', ')}`, options.json);
-  }
-
-  const existingIds = new Set(plan.milestones.flatMap((m) => m.tasks.map((t) => t.id)));
-  const deps = [...new Set(splitList(options.deps))];
-  const unknownDeps = deps.filter((d) => !existingIds.has(d));
-  if (unknownDeps.length) {
-    return failTaskAdd('UNKNOWN_DEPENDENCY', `Unknown dependency task ID(s): ${unknownDeps.join(', ')}`, options.json);
-  }
-
-  const fastPath = options.fastPath === true;
-  let milestone: MasterPlanMilestone | undefined;
-  let createdMilestone = false;
-
-  if (options.milestone) {
-    const found = findMilestone(plan, options.milestone);
-    if (Array.isArray(found)) {
-      return failTaskAdd('AMBIGUOUS_MILESTONE', `"${options.milestone}" matches several milestones: ${found.map((m) => m.id).join(', ')}`, options.json);
+  return withPlanLock(planPath, (plan, ctx) => {
+    if (!Array.isArray(plan.milestones)) {
+      ctx.abort();
+      return failTaskAdd('INVALID_PLAN', '.ai/master_plan.json is missing its "milestones" array', options.json);
     }
-    if (!found) return failTaskAdd('UNKNOWN_MILESTONE', `Milestone "${options.milestone}" not found`, options.json);
-    milestone = found;
-  } else if (fastPath) {
-    milestone = plan.milestones.find((m) => m.fastPath === true);
-    if (!milestone) {
-      milestone = { id: generateNextMilestoneId(plan), name: FAST_PATH_MILESTONE_NAME, status: 'pending', fastPath: true, tasks: [] };
-      plan.milestones.push(milestone);
-      createdMilestone = true;
+
+    const cleanTitle = (title ?? '').trim();
+    if (!cleanTitle) {
+      ctx.abort();
+      return failTaskAdd('INVALID_TITLE', 'A task title is required', options.json);
     }
-  } else {
-    const active = plan.milestones.find((m) => m.id === plan.activeMilestoneId);
-    milestone = active && active.status !== 'completed' ? active : plan.milestones.find((m) => m.status !== 'completed');
-    if (!milestone) {
-      return failTaskAdd('NO_OPEN_MILESTONE', 'Every milestone is completed. Pass --milestone <id> to reopen one, or --fast-path', options.json);
+
+    const agent = (options.agent ?? 'backend').trim();
+    if (!isSubagentType(agent)) {
+      ctx.abort();
+      return failTaskAdd('INVALID_AGENT', `Unknown sub-agent "${agent}". Expected one of: ${SUBAGENT_TYPES.join(', ')}`, options.json);
     }
-  }
 
-  const task: MasterPlanTask = {
-    id: generateNextTaskId(plan),
-    title: cleanTitle,
-    description: (options.description ?? '').trim(),
-    assignedSubagent: agent,
-    dependencies: deps,
-    targetFiles: splitList(options.files),
-    status: 'pending',
-    verificationCommand: (options.verify ?? '').trim(),
-    notes: (options.notes ?? '').trim(),
-    ...(fastPath ? { fastPath: true } : {}),
-  };
+    const existingIds = new Set(plan.milestones.flatMap((m) => m.tasks.map((t) => t.id)));
+    const deps = [...new Set(splitList(options.deps))];
+    const unknownDeps = deps.filter((d) => !existingIds.has(d));
+    if (unknownDeps.length) {
+      ctx.abort();
+      return failTaskAdd('UNKNOWN_DEPENDENCY', `Unknown dependency task ID(s): ${unknownDeps.join(', ')}`, options.json);
+    }
 
-  const problems = validateMasterPlanTask(task);
-  if (problems.length) return failTaskAdd('INVALID_TASK', problems.join('; '), options.json);
+    const fastPath = options.fastPath === true;
+    let milestone: MasterPlanMilestone | undefined;
+    let createdMilestone = false;
 
-  milestone.tasks.push(task);
-  const reopenedMilestone = milestone.status === 'completed';
-  if (reopenedMilestone) milestone.status = 'in_progress';
-  if (plan.overallStatus === 'completed') plan.overallStatus = 'in_progress';
+    if (options.milestone) {
+      const found = findMilestone(plan, options.milestone);
+      if (Array.isArray(found)) {
+        ctx.abort();
+        return failTaskAdd('AMBIGUOUS_MILESTONE', `"${options.milestone}" matches several milestones: ${found.map((m) => m.id).join(', ')}`, options.json);
+      }
+      if (!found) {
+        ctx.abort();
+        return failTaskAdd('UNKNOWN_MILESTONE', `Milestone "${options.milestone}" not found`, options.json);
+      }
+      milestone = found;
+    } else if (fastPath) {
+      milestone = plan.milestones.find((m) => m.fastPath === true);
+      if (!milestone) {
+        milestone = { id: generateNextMilestoneId(plan), name: FAST_PATH_MILESTONE_NAME, status: 'pending', fastPath: true, tasks: [] };
+        plan.milestones.push(milestone);
+        createdMilestone = true;
+      }
+    } else {
+      const active = plan.milestones.find((m) => m.id === plan.activeMilestoneId);
+      milestone = active && active.status !== 'completed' ? active : plan.milestones.find((m) => m.status !== 'completed');
+      if (!milestone) {
+        ctx.abort();
+        return failTaskAdd('NO_OPEN_MILESTONE', 'Every milestone is completed. Pass --milestone <id> to reopen one, or --fast-path', options.json);
+      }
+    }
 
-  if (!savePlan(planPath, plan)) {
-    process.exitCode = 1;
-    return null;
-  }
+    const task: MasterPlanTask = {
+      id: generateNextTaskId(plan),
+      title: cleanTitle,
+      description: (options.description ?? '').trim(),
+      assignedSubagent: agent,
+      dependencies: deps,
+      targetFiles: splitList(options.files),
+      status: 'pending',
+      verificationCommand: (options.verify ?? '').trim(),
+      notes: (options.notes ?? '').trim(),
+      ...(fastPath ? { fastPath: true } : {}),
+    };
 
-  const result: TaskAddResult = { task, milestoneId: milestone.id, milestoneName: milestone.name, createdMilestone, reopenedMilestone };
+    const problems = validateMasterPlanTask(task);
+    if (problems.length) {
+      ctx.abort();
+      return failTaskAdd('INVALID_TASK', problems.join('; '), options.json);
+    }
 
-  if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
+    milestone.tasks.push(task);
+    const reopenedMilestone = milestone.status === 'completed';
+    if (reopenedMilestone) milestone.status = 'in_progress';
+    if (plan.overallStatus === 'completed') plan.overallStatus = 'in_progress';
+
+    const result: TaskAddResult = { task, milestoneId: milestone.id, milestoneName: milestone.name, createdMilestone, reopenedMilestone };
+
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return result;
+    }
+
+    const track = fastPath ? pc.magenta(' [fast path]') : '';
+    console.log(pc.green(`\n✔ Task [${pc.bold(task.id)}] added to [${milestone.id}] ${milestone.name}`) + track);
+    if (createdMilestone) console.log(pc.cyan(`  Created fast-path milestone [${milestone.id}]`));
+    if (reopenedMilestone) console.log(pc.yellow(`  Reopened completed milestone [${milestone.id}]`));
+    console.log(pc.dim('  Title:    ') + task.title);
+    console.log(pc.dim('  Agent:    ') + pc.magenta(`[${task.assignedSubagent}]`) + pc.dim(` -> ${getRoleGuide(task.assignedSubagent)}`));
+    console.log(pc.dim('  Files:    ') + (task.targetFiles.length ? pc.cyan(task.targetFiles.join(', ')) : pc.dim('none')));
+    console.log(pc.dim('  Verify:   ') + (task.verificationCommand ? pc.yellow(`\`${task.verificationCommand}\``) : pc.dim('none (completion will not be gated)')));
+    if (task.dependencies.length) console.log(pc.dim('  Deps:     ') + task.dependencies.join(', '));
+    console.log(pc.dim('\n  Start it: ') + pc.white(`nativ task start ${task.id}\n`));
     return result;
-  }
-
-  const track = fastPath ? pc.magenta(' [fast path]') : '';
-  console.log(pc.green(`\n✔ Task [${pc.bold(task.id)}] added to [${milestone.id}] ${milestone.name}`) + track);
-  if (createdMilestone) console.log(pc.cyan(`  Created fast-path milestone [${milestone.id}]`));
-  if (reopenedMilestone) console.log(pc.yellow(`  Reopened completed milestone [${milestone.id}]`));
-  console.log(pc.dim('  Title:    ') + task.title);
-  console.log(pc.dim('  Agent:    ') + pc.magenta(`[${task.assignedSubagent}]`) + pc.dim(` -> ${getRoleGuide(task.assignedSubagent)}`));
-  console.log(pc.dim('  Files:    ') + (task.targetFiles.length ? pc.cyan(task.targetFiles.join(', ')) : pc.dim('none')));
-  console.log(pc.dim('  Verify:   ') + (task.verificationCommand ? pc.yellow(`\`${task.verificationCommand}\``) : pc.dim('none (completion will not be gated)')));
-  if (task.dependencies.length) console.log(pc.dim('  Deps:     ') + task.dependencies.join(', '));
-  console.log(pc.dim('\n  Start it: ') + pc.white(`nativ task start ${task.id}\n`));
-  return result;
+  });
 }
 
 export interface ProposePatchOptions {

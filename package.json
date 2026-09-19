@@ -18,7 +18,7 @@
     "watch": "tsc -w",
     "prepare": "npm run build",
     "start": "node bin/cli.js",
-    "test": "node tests/test-task-router.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs && node tests/test-contract-governor.mjs && node tests/test-worktree-lifecycle.mjs"
+    "test": "node tests/test-task-router.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs && node tests/test-contract-governor.mjs && node tests/test-worktree-lifecycle.mjs && node tests/test-concurrency-locks.mjs && node tests/test-telemetry-engine.mjs && node tests/test-benchmark-suite.mjs"
   },
   "repository": {
     "type": "git",
@@ -47,11 +47,13 @@
     "mysql2": "^3.24.4",
     "pg": "^8.23.0",
     "picocolors": "^1.1.0",
+    "proper-lockfile": "^4.1.2",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
     "@types/pg": "^8.23.1",
+    "@types/proper-lockfile": "^4.1.4",
     "typescript": "^5.5.4"
   }
 }

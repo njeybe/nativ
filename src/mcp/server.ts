@@ -26,6 +26,7 @@ import {
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
 import { runVerify } from '../commands/verify.js';
 import { runTestGen } from '../commands/test-gen.js';
+import { runBench } from '../commands/bench.js';
 import { TEST_FRAMEWORKS } from '../core/test-generator-types.js';
 
 /**
@@ -53,6 +54,7 @@ const RESOURCES = [
   { name: 'db-schema', uris: ['nativ://db-schema', 'agentj://db-schema'], file: 'db_schema.json', mimeType: 'application/json', description: 'Database schema contract (.ai/db_schema.json)' },
   { name: 'api-contracts', uris: ['nativ://api-contracts', 'agentj://api-contracts'], file: 'api_contracts.json', mimeType: 'application/json', description: 'API route and schema contracts (.ai/api_contracts.json)' },
   { name: 'escalation', uris: ['nativ://escalation', 'agentj://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
+  { name: 'telemetry', uris: ['nativ://telemetry', 'agentj://telemetry'], file: 'telemetry.json', mimeType: 'application/json', description: 'Execution duration, token usage and cost telemetry (.ai/telemetry.json)' },
 ] as const;
 
 function packageVersion(): string {
@@ -391,6 +393,25 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     },
   );
 
+  // ─── Synthetic Benchmark Matrix ──────────────────────────────────────────
+
+  registerDualTool(
+    'bench',
+    {
+      description:
+        'Run synthetic evaluation benchmarks across concurrency, invariants, verifications, and telemetry (JSON report).',
+      inputSchema: {
+        scenario: z
+          .enum(['all', 'concurrency', 'governor', 'verification', 'telemetry', 'e2e'])
+          .optional()
+          .describe('Target scenario to benchmark (default all)'),
+        concurrency: z.number().optional().describe('Number of simulated concurrent agent workers (default 6)'),
+      },
+    },
+    async ({ scenario, concurrency }) =>
+      captureOutput(() => runBench(targetDir, { scenario, concurrency, json: true })),
+  );
+
   // ─── Contract resources ────────────────────────────────────────────────────
 
   for (const res of RESOURCES) {
@@ -406,6 +427,23 @@ export function createMcpServer(targetDirArg?: string): McpServer {
             text = fs.readFileSync(filePath, 'utf8');
           } else if (res.name === 'escalation') {
             text = JSON.stringify({ escalations: [] }, null, 2);
+          } else if (res.name === 'telemetry') {
+            text = JSON.stringify(
+              {
+                version: '1.0.0',
+                summary: {
+                  totalTasksCompleted: 0,
+                  totalDurationMs: 0,
+                  estimatedTotalTokens: 0,
+                  estimatedTotalCostUsd: 0,
+                  verificationPassRate: 1.0,
+                  circuitBreakerTrips: 0,
+                },
+                tasks: [],
+              },
+              null,
+              2
+            );
           } else {
             throw new Error(`.ai/${res.file} not found in ${targetDir}. Run nativ_init first.`);
           }

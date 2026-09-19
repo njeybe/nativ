@@ -23,6 +23,7 @@ import { runDbStatus, runDbInspect, runDbDiff, runDbSync, runDbUi } from './comm
 import { runMcp } from './commands/mcp.js';
 import { runVerify } from './commands/verify.js';
 import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
+import { runBench } from './commands/bench.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -49,9 +50,11 @@ export function createProgram(): Command {
 
   program
     .command('status [targetDir]')
-    .description('Inspect current execution progress from .ai/master_plan.json')
-    .action(async (targetDir) => {
-      await runStatus(targetDir);
+    .description('Inspect current execution progress and telemetry from .ai/master_plan.json')
+    .option('-t, --telemetry', 'Display token usage, duration, and cost estimation telemetry')
+    .option('--json', 'Output project status and telemetry as JSON')
+    .action(async (targetDir, options) => {
+      await runStatus(targetDir, options);
     });
 
   program
@@ -82,6 +85,17 @@ export function createProgram(): Command {
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
+    });
+
+  program
+    .command('bench [targetDir]')
+    .description('Run synthetic evaluation benchmarks across concurrency, invariants, verifications, and telemetry')
+    .option('-s, --scenario <scenario>', 'Target scenario to benchmark (concurrency, governor, verification, telemetry, e2e, all)', 'all')
+    .option('-c, --concurrency <number>', 'Number of simulated concurrent agent workers', parseInt)
+    .option('-o, --output <file>', 'Path to write the JSON benchmark report')
+    .option('--json', 'Output raw benchmark metrics as JSON')
+    .action(async (targetDir, options) => {
+      await runBench(targetDir, options);
     });
 
   const task = program

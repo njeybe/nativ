@@ -7,6 +7,8 @@ import {
   RuleEvaluationResult,
 } from './types.js';
 import { EscalationFile, EscalationRecord, MasterPlan } from '../scanner/types.js';
+import { withPlanLockSync } from '../core/lock-manager.js';
+import { recordCircuitBreakerTrip } from '../core/telemetry.js';
 
 const MAX_FAILURE_THRESHOLD = 3;
 
@@ -194,9 +196,8 @@ export class CircuitBreaker {
 
     // 2. Mark task as blocked in .ai/master_plan.json
     const planPath = path.join(targetDir, '.ai', 'master_plan.json');
-    if (fs.existsSync(planPath)) {
-      try {
-        const plan: MasterPlan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+    try {
+      withPlanLockSync(planPath, (plan) => {
         for (const milestone of plan.milestones) {
           const task = milestone.tasks.find((t) => t.id === taskId);
           if (task) {
@@ -205,12 +206,12 @@ export class CircuitBreaker {
             break;
           }
         }
-        plan.lastUpdated = new Date().toISOString();
-        fs.writeFileSync(planPath, JSON.stringify(plan, null, 2) + '\n', 'utf8');
-      } catch {
-        // Non-fatal
-      }
+      });
+    } catch {
+      // Non-fatal
     }
+
+    recordCircuitBreakerTrip(targetDir, taskId).catch(() => {});
 
     return diagnosticBundle;
   }
