@@ -44,6 +44,12 @@ import { CircuitBreaker } from '../governor/index.js';
 import { runTaskBlock, runTaskComplete, runTaskStart } from '../commands/task.js';
 import { runWorktreeMerge, runWorktreeRemove, type WorktreeInfo } from '../commands/worktree.js';
 import { runBench } from '../commands/bench.js';
+import {
+  AgentSupervisor,
+  SupervisorError,
+  type AgentSupervisorOptions,
+  type RunnerRecord,
+} from '../runner/agent-supervisor.js';
 import type { MasterPlan, MasterPlanMilestone, MasterPlanTask } from '../scanner/types.js';
 
 /**
@@ -69,6 +75,8 @@ export interface StudioServerOptions {
   connections?: Partial<Record<DatabaseEnv, string | null>>;
   /** Interval between `heartbeat` events on /api/events. Defaults to 15s. */
   heartbeatMs?: number;
+  /** Agent supervisor tuning (runner command, timeout budget, log buffer size). `cwd` is always the project root. */
+  supervisor?: Omit<AgentSupervisorOptions, 'cwd'>;
 }
 
 export interface StudioServerHandle {
@@ -1007,6 +1015,110 @@ async function handleWorktreeAction(root: string, body: Record<string, unknown>)
   return { ok: true, message: result.message };
 }
 
+// ─── Autonomous agent dispatch (/api/pipeline/tasks/dispatch|abort|runs|logs) ──
+
+const MAX_RUNNER_COMMAND_LENGTH = 2000;
+const MAX_TIMEOUT_SECONDS = 24 * 60 * 60;
+const DEFAULT_TAIL_LINES = 200;
+const MAX_TAIL_LINES = 5000;
+
+/** Supervisor guard rails (unmet dependencies, already running, unknown task) map to the contract's 400 envelope. */
+function toHttpError(err: unknown): never {
+  if (err instanceof SupervisorError) throw new HttpError(err.status, err.code, err.message);
+  throw err;
+}
+
+function parseRunnerCommand(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') throw new HttpError(400, 'VALIDATION_ERROR', '"runnerCommand" must be a string');
+  const command = value.trim();
+  if (!command) throw new HttpError(400, 'VALIDATION_ERROR', '"runnerCommand" must not be empty');
+  if (command.length > MAX_RUNNER_COMMAND_LENGTH) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"runnerCommand" must be at most ${MAX_RUNNER_COMMAND_LENGTH} characters`);
+  }
+  return command;
+}
+
+function parseTimeoutSeconds(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > MAX_TIMEOUT_SECONDS) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"timeoutSeconds" must be a number between 1 and ${MAX_TIMEOUT_SECONDS}`);
+  }
+  return Math.floor(value);
+}
+
+function parseOptionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') throw new HttpError(400, 'VALIDATION_ERROR', `"${field}" must be a boolean`);
+  return value;
+}
+
+/** Query strings carry booleans as text: `?activeOnly=1|true|yes`. */
+function parseBooleanParam(value: string | null): boolean {
+  return value !== null && ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
+function parseTailLines(value: string | null): number {
+  if (value === null || value === '') return DEFAULT_TAIL_LINES;
+  const tail = Number(value);
+  if (!Number.isFinite(tail) || tail <= 0 || tail > MAX_TAIL_LINES) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"tailLines" must be a number between 1 and ${MAX_TAIL_LINES}`);
+  }
+  return Math.floor(tail);
+}
+
+/** POST /api/pipeline/tasks/dispatch: hands a task to a background Claude runner in an isolated worktree. */
+async function handleTaskDispatch(supervisor: AgentSupervisor, body: Record<string, unknown>) {
+  const taskId = parseTaskId(body.taskId);
+  const runnerCommand = parseRunnerCommand(body.runnerCommand);
+  const timeoutSeconds = parseTimeoutSeconds(body.timeoutSeconds);
+  const useWorktree = parseOptionalBoolean(body.useWorktree, 'useWorktree');
+  const verify = parseOptionalBoolean(body.verify, 'verify');
+  const autoMerge = parseOptionalBoolean(body.autoMerge, 'autoMerge');
+
+  let run: RunnerRecord;
+  try {
+    run = await supervisor.dispatch({ taskId, runnerCommand, timeoutSeconds, useWorktree, verify, autoMerge });
+  } catch (err) {
+    toHttpError(err);
+  }
+  return { ok: true, run };
+}
+
+/** POST /api/pipeline/tasks/abort: terminates the runner's process tree and settles the run as aborted. */
+async function handleTaskAbort(supervisor: AgentSupervisor, body: Record<string, unknown>) {
+  const taskId = parseTaskId(body.taskId);
+  if (body.reason !== undefined && body.reason !== null && typeof body.reason !== 'string') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"reason" must be a string');
+  }
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (reason.length > MAX_REASON_LENGTH) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"reason" must be at most ${MAX_REASON_LENGTH} characters`);
+  }
+
+  try {
+    const { status, message } = await supervisor.abort(taskId, reason || undefined);
+    return { ok: true, taskId, status, message };
+  } catch (err) {
+    toHttpError(err);
+  }
+}
+
+/** GET /api/pipeline/tasks/runs: active and recent runs, newest first. */
+function handleTaskRuns(supervisor: AgentSupervisor, searchParams: URLSearchParams) {
+  const rawTaskId = searchParams.get('taskId');
+  const taskId = rawTaskId === null || rawTaskId === '' ? undefined : parseTaskId(rawTaskId);
+  return { ok: true, runs: supervisor.listRuns({ taskId, activeOnly: parseBooleanParam(searchParams.get('activeOnly')) }) };
+}
+
+/** GET /api/pipeline/tasks/logs: tail of a runner's streaming log buffer. */
+function handleTaskLogs(supervisor: AgentSupervisor, searchParams: URLSearchParams) {
+  const taskId = parseTaskId(searchParams.get('taskId'));
+  const { status, totalBytes, log, runId, truncated } = supervisor.getLogs(taskId, parseTailLines(searchParams.get('tailLines')));
+  if (status === null) throw new HttpError(400, 'RUN_NOT_FOUND', `No runner history for task "${taskId}"`);
+  return { ok: true, taskId, runId, status, totalBytes, log, truncated };
+}
+
 /** GET /api/pipeline/benchmarks: the cached report written by `nativ bench` or benchmarks/run. */
 function handleBenchmarks(root: string) {
   let report: unknown = null;
@@ -1062,6 +1174,12 @@ class PipelineEventHub {
       if (this.clients.size === 0) this.stop();
     });
     this.start();
+  }
+
+  /** Pushes an agent-supervisor event (`runner_status`, `runner_log`) to every connected client. */
+  publish(event: 'runner_status' | 'runner_log', data: unknown): void {
+    if (this.closed || this.clients.size === 0) return;
+    this.broadcast(event, data);
   }
 
   /** SSE responses never finish on their own; drop them so http.Server#close() can complete. */
@@ -1182,6 +1300,11 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   const heartbeatMs = options.heartbeatMs && options.heartbeatMs > 0 ? options.heartbeatMs : DEFAULT_HEARTBEAT_MS;
   const events = new PipelineEventHub(path.join(root, AI_DIR), heartbeatMs);
 
+  // Background agent runs: lifecycle phases and stdout/stderr chunks fan out over /api/events.
+  const supervisor = new AgentSupervisor({ ...options.supervisor, cwd: root });
+  supervisor.on('runner_status', (record: RunnerRecord) => events.publish('runner_status', record));
+  supervisor.on('runner_log', (entry: unknown) => events.publish('runner_log', entry));
+
   // Concurrent "Run Benchmark" requests share one in-flight run.
   let benchmarkRun: Promise<BenchmarkReport> | null = null;
   const runBenchmarkSuite = (): Promise<BenchmarkReport> => {
@@ -1256,6 +1379,14 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, handlePipelineTasks(root));
         case 'POST /api/pipeline/tasks/action':
           return sendJson(res, 200, await handleTaskAction(root, await readJsonBody(req)));
+        case 'POST /api/pipeline/tasks/dispatch':
+          return sendJson(res, 200, await handleTaskDispatch(supervisor, await readJsonBody(req)));
+        case 'POST /api/pipeline/tasks/abort':
+          return sendJson(res, 200, await handleTaskAbort(supervisor, await readJsonBody(req)));
+        case 'GET /api/pipeline/tasks/runs':
+          return sendJson(res, 200, handleTaskRuns(supervisor, url.searchParams));
+        case 'GET /api/pipeline/tasks/logs':
+          return sendJson(res, 200, handleTaskLogs(supervisor, url.searchParams));
         case 'GET /api/pipeline/worktrees':
           return sendJson(res, 200, { ok: true, worktrees: await describeWorktrees(root) });
         case 'POST /api/pipeline/worktrees/action':
@@ -1272,7 +1403,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
       if (url.pathname.startsWith('/api/')) {
         const known = [
           '/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data', '/api/tests/generate',
-          '/api/events', '/api/pipeline/status', '/api/pipeline/tasks', '/api/pipeline/tasks/action', '/api/pipeline/worktrees',
+          '/api/events', '/api/pipeline/status', '/api/pipeline/tasks', '/api/pipeline/tasks/action', '/api/pipeline/tasks/dispatch',
+          '/api/pipeline/tasks/abort', '/api/pipeline/tasks/runs', '/api/pipeline/tasks/logs', '/api/pipeline/worktrees',
           '/api/pipeline/worktrees/action', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
@@ -1288,9 +1420,10 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
     }
   });
 
-  // Open SSE streams would otherwise keep close() waiting forever.
+  // Open SSE streams and in-flight agent runners would otherwise keep close() waiting forever.
   const closeServer = server.close.bind(server);
   server.close = ((callback?: (err?: Error) => void) => {
+    supervisor.shutdown('Studio server shutting down');
     events.close();
     return closeServer(callback);
   }) as typeof server.close;

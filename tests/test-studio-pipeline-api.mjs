@@ -70,7 +70,11 @@ function buildPlan() {
         tasks: [
           fixtureTask('task-c', 'in_progress', 'frontend'),
           fixtureTask('task-d', 'pending', 'qa-tester', { dependencies: ['task-a'] }),
-          fixtureTask('task-e', 'blocked', 'security-auditor', { notes: 'Verification failed after 3 attempts' }),
+          // task-g never completes (its verification fails), so task-e is permanently dependency-blocked.
+          fixtureTask('task-e', 'blocked', 'security-auditor', {
+            notes: 'Verification failed after 3 attempts',
+            dependencies: ['task-g'],
+          }),
           fixtureTask('task-f', 'pending', 'backend'),
         ],
       },
@@ -333,6 +337,29 @@ async function waitForEvent(stream, type, since, timeoutMs = EVENT_TIMEOUT_MS) {
   assert.fail(`${stream.label}: no "${type}" event within ${timeoutMs}ms (saw: [${seen.join(', ')}]).${hint}`);
 }
 
+/** Runner events are interleaved per task and phase, so match on the decoded payload, not just the type. */
+async function waitForRunnerEvent(stream, type, predicate, since, label, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  const seen = [];
+  while (Date.now() < deadline) {
+    for (const ev of stream.events.slice(since)) {
+      if (ev.type !== type) continue;
+      let data;
+      try {
+        data = JSON.parse(ev.data);
+      } catch {
+        assert.fail(`${stream.label}: "${type}" carried non-JSON data: ${ev.data.slice(0, 120)}`);
+      }
+      seen.push(`${data.taskId}:${data.status ?? data.stream}`);
+      if (predicate(data)) return data;
+    }
+    if (stream.error) throw stream.error;
+    if (stream.closed) assert.fail(`${stream.label}: SSE stream closed before ${label}`);
+    await delay(25);
+  }
+  assert.fail(`${stream.label}: no "${type}" event matching ${label} within ${timeoutMs}ms (saw: [${seen.join(', ')}])`);
+}
+
 async function connectStream(baseUrl, label) {
   const stream = openEventStream(baseUrl, label);
   const res = await withTimeout(
@@ -548,7 +575,204 @@ try {
     console.log(`✔ POST /api/pipeline/benchmarks/run executed ${report.scenarios.length} scenarios (score ${report.summary.score}%)`);
   }
 
-  // 12. Loopback guard covers the pipeline and SSE routes (DNS rebinding / cross-site)
+  // ─── Autonomous agent dispatch ───────────────────────────────────────────────
+  // Deterministic stand-ins for the `claude` runner, quoted for cmd.exe and POSIX shells alike.
+  const mocksDir = path.join(fullDir, 'mocks');
+  fs.mkdirSync(mocksDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(mocksDir, 'runner-ok.mjs'),
+    "process.stdout.write(`CWD:${process.cwd()}\\n`);\nprocess.stdout.write('agent: hello\\n');\n",
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(mocksDir, 'runner-hang.mjs'),
+    "process.stdout.write('agent: started\\n');\nsetInterval(() => {}, 1000);\n",
+    'utf8',
+  );
+  const mockRunner = (name) => `"${process.execPath}" "${path.join(mocksDir, name)}"`;
+  const dispatch = (payload) => requestJson(studio.url, 'POST', '/api/pipeline/tasks/dispatch', payload);
+
+  // 12. POST /api/pipeline/tasks/dispatch — background runner with runner_log / runner_status SSE
+  {
+    await settle();
+    const mark = alpha.events.length;
+    const { status, body } = await dispatch({
+      taskId: 'task-h',
+      runnerCommand: mockRunner('runner-ok.mjs'),
+      useWorktree: false,
+      timeoutSeconds: 60,
+    });
+    assert.equal(status, 200, `dispatch task-h → HTTP ${status}: ${JSON.stringify(body)}`);
+    assert.equal(body.ok, true);
+
+    const { run } = body;
+    assert.ok(run && typeof run === 'object', 'dispatch must return the run record');
+    assert.equal(run.taskId, 'task-h');
+    assert.equal(run.status, 'running', 'an in-place dispatch reports `running` once the process is spawned');
+    assert.equal(typeof run.runId, 'string');
+    assert.ok(run.runId.length > 0, 'runId identifies the execution across runs of the same task');
+    assert.equal(typeof run.pid, 'number', 'the contract exposes the spawned PID');
+    assert.equal(run.branch, null, 'useWorktree:false runs carry no agent branch');
+    assert.equal(run.worktreeDir, fullDir, 'useWorktree:false runs execute at the project root');
+    assert.ok(!Number.isNaN(Date.parse(run.startedAt)), 'startedAt must be an ISO timestamp');
+
+    const logEvent = await waitForRunnerEvent(alpha, 'runner_log', (d) => d.taskId === 'task-h', mark, 'runner_log for task-h');
+    assert.equal(logEvent.runId, run.runId, 'log chunks are tagged with the run they came from');
+    assert.ok(['stdout', 'stderr'].includes(logEvent.stream), 'runner_log names the stream it came from');
+    assert.equal(typeof logEvent.chunk, 'string');
+
+    const finished = await waitForRunnerEvent(
+      alpha,
+      'runner_status',
+      (d) => d.taskId === 'task-h' && d.status === 'completed',
+      mark,
+      'runner_status completed for task-h',
+    );
+    assert.equal(finished.exitCode, 0);
+    assert.equal(finished.pid, null, 'a settled run releases its PID');
+    assert.ok(finished.endedAt, 'a settled run records endedAt');
+    console.log('✔ POST /api/pipeline/tasks/dispatch spawned a background runner and streamed runner_log/runner_status');
+  }
+
+  // 13. GET /api/pipeline/tasks/logs and /runs — buffered output, filtering and history
+  {
+    const logs = await getOk(studio.url, '/api/pipeline/tasks/logs?taskId=task-h');
+    assert.equal(logs.taskId, 'task-h');
+    assert.equal(logs.status, 'completed');
+    assert.ok(logs.log.includes('agent: hello'), `log buffer must contain the runner output, got: ${logs.log.slice(0, 200)}`);
+    assert.ok(logs.log.includes(`CWD:${fullDir}`), 'an in-place runner executes in the project root');
+    assert.ok(logs.totalBytes > 0, 'totalBytes reports the captured size');
+
+    const tailed = await getOk(studio.url, '/api/pipeline/tasks/logs?taskId=task-h&tailLines=1');
+    assert.ok(tailed.log.split('\n').length <= 2, 'tailLines must bound the returned chunk');
+
+    const { runs } = await getOk(studio.url, '/api/pipeline/tasks/runs');
+    assert.ok(Array.isArray(runs), '"runs" must be an array');
+    assert.ok(runs.some((r) => r.taskId === 'task-h' && r.status === 'completed'), 'finished runs stay in the recent history');
+
+    const filtered = await getOk(studio.url, '/api/pipeline/tasks/runs?taskId=task-h');
+    assert.equal(filtered.runs.length, 1, 'taskId filters the run list');
+    assert.equal(filtered.runs[0].taskId, 'task-h');
+
+    const active = await getOk(studio.url, '/api/pipeline/tasks/runs?activeOnly=true');
+    assert.deepEqual(active.runs, [], 'activeOnly hides settled runs');
+    console.log('✔ GET /api/pipeline/tasks/logs and /runs serve buffered output, filtering and run history');
+  }
+
+  // 14. POST /api/pipeline/tasks/abort — killswitch on a long-running agent
+  {
+    await settle();
+    const mark = alpha.events.length;
+    const started = await dispatch({
+      taskId: 'task-g',
+      runnerCommand: mockRunner('runner-hang.mjs'),
+      useWorktree: false,
+      timeoutSeconds: 120,
+    });
+    assert.equal(started.status, 200, `dispatch task-g → HTTP ${started.status}: ${JSON.stringify(started.body)}`);
+    await waitForRunnerEvent(alpha, 'runner_log', (d) => d.taskId === 'task-g', mark, 'runner_log for task-g');
+
+    const active = await getOk(studio.url, '/api/pipeline/tasks/runs?activeOnly=1');
+    assert.equal(active.runs.length, 1, 'the hung runner must be listed as active');
+    assert.equal(active.runs[0].taskId, 'task-g');
+    assert.equal(active.runs[0].status, 'running');
+
+    assertContractError(
+      'dispatch while already running',
+      await dispatch({ taskId: 'task-g', runnerCommand: mockRunner('runner-ok.mjs'), useWorktree: false }),
+    );
+
+    const aborted = await requestJson(studio.url, 'POST', '/api/pipeline/tasks/abort', {
+      taskId: 'task-g',
+      reason: 'operator cancelled',
+    });
+    assert.equal(aborted.status, 200, `abort task-g → HTTP ${aborted.status}: ${JSON.stringify(aborted.body)}`);
+    assert.equal(aborted.body.ok, true);
+    assert.equal(aborted.body.taskId, 'task-g');
+    assert.equal(aborted.body.status, 'aborted');
+    assert.ok(aborted.body.message.includes('operator cancelled'), 'the abort reason is echoed back to the operator');
+
+    const settledRun = await waitForRunnerEvent(
+      alpha,
+      'runner_status',
+      (d) => d.taskId === 'task-g' && d.status === 'aborted',
+      mark,
+      'runner_status aborted for task-g',
+    );
+    assert.equal(settledRun.abortReason, 'operator cancelled');
+    assert.deepEqual((await getOk(studio.url, '/api/pipeline/tasks/runs?activeOnly=1')).runs, [], 'abort frees the runner slot');
+    assertContractError('abort without a running task', await requestJson(studio.url, 'POST', '/api/pipeline/tasks/abort', { taskId: 'task-g' }));
+    console.log('✔ POST /api/pipeline/tasks/abort terminated the agent process tree and broadcast the aborted phase');
+  }
+
+  // 15. Dispatch guard rails and log/run validation follow the { ok: false, error } contract
+  {
+    assertContractError('dispatch without taskId', await dispatch({}));
+    assertContractError('dispatch unknown task', await dispatch({ taskId: 'task-does-not-exist', useWorktree: false }));
+    assertContractError(
+      'dispatch with unmet dependencies',
+      await dispatch({ taskId: 'task-e', runnerCommand: mockRunner('runner-ok.mjs'), useWorktree: false }),
+    );
+    assertContractError('dispatch with a negative timeout', await dispatch({ taskId: 'task-h', timeoutSeconds: -1 }));
+    assertContractError('dispatch with a non-string runnerCommand', await dispatch({ taskId: 'task-h', runnerCommand: 42 }));
+    assertContractError('dispatch with a non-boolean useWorktree', await dispatch({ taskId: 'task-h', useWorktree: 'yes' }));
+    assertContractError('logs without taskId', await requestJson(studio.url, 'GET', '/api/pipeline/tasks/logs'));
+    assertContractError('logs for a task that never ran', await requestJson(studio.url, 'GET', '/api/pipeline/tasks/logs?taskId=task-b'));
+    assertContractError('logs with tailLines=0', await requestJson(studio.url, 'GET', '/api/pipeline/tasks/logs?taskId=task-h&tailLines=0'));
+
+    const wrongMethod = await requestJson(studio.url, 'GET', '/api/pipeline/tasks/dispatch');
+    assert.equal(wrongMethod.status, 405, 'GET on the dispatch route is a method error, not a 404');
+    assert.equal(wrongMethod.body.ok, false);
+    assert.deepEqual((await getOk(studio.url, '/api/pipeline/tasks/runs?activeOnly=1')).runs, [], 'rejected dispatches must not spawn anything');
+    console.log('✔ Dispatch, abort and log routes reject invalid payloads with HTTP 400 and never spawn a runner');
+  }
+
+  // 16. Worktree-isolated dispatch — agent branch, mounted contracts, and cleanup through the worktree API
+  {
+    await settle();
+    const mark = alpha.events.length;
+    const { status, body } = await dispatch({
+      taskId: 'task-d',
+      runnerCommand: mockRunner('runner-ok.mjs'),
+      timeoutSeconds: 120,
+    });
+    assert.equal(status, 200, `worktree dispatch → HTTP ${status}: ${JSON.stringify(body)}`);
+
+    const worktreeDir = path.join(fullDir, '.worktrees', 'task-task-d');
+    assert.equal(body.run.branch, 'agent/task-task-d', 'isolated runs execute on the task agent branch');
+    assert.equal(body.run.worktreeDir, worktreeDir);
+    assert.ok(fs.existsSync(worktreeDir), 'the worktree must exist on disk before the runner starts');
+    assert.ok(fs.existsSync(path.join(worktreeDir, '.ai')), '.ai contracts must be mounted into the worktree');
+
+    await waitForRunnerEvent(
+      alpha,
+      'runner_status',
+      (d) => d.taskId === 'task-d' && d.status === 'spawning_worktree',
+      mark,
+      'runner_status spawning_worktree for task-d',
+    );
+    await waitForRunnerEvent(
+      alpha,
+      'runner_status',
+      (d) => d.taskId === 'task-d' && d.status === 'completed',
+      mark,
+      'runner_status completed for task-d',
+    );
+
+    const logs = await getOk(studio.url, `/api/pipeline/tasks/logs?taskId=task-d`);
+    assert.ok(logs.log.includes(`CWD:${worktreeDir}`), `the runner must execute inside the worktree, got: ${logs.log.slice(0, 200)}`);
+
+    const { worktrees } = await getOk(studio.url, '/api/pipeline/worktrees');
+    assert.ok(worktrees.some((wt) => wt.taskId === 'task-d' && wt.isAgentWorktree), 'the dispatched worktree is listed for Mission Control');
+
+    const removed = await requestJson(studio.url, 'POST', '/api/pipeline/worktrees/action', { action: 'remove', taskId: 'task-d' });
+    assert.equal(removed.status, 200, `worktree remove → HTTP ${removed.status}: ${JSON.stringify(removed.body)}`);
+    assert.ok(!fs.existsSync(worktreeDir), 'the worktree is discarded without touching the mounted contracts');
+    assert.ok(fs.existsSync(path.join(fullDir, '.ai', 'master_plan.json')), 'removing the worktree must never follow the .ai mount');
+    console.log('✔ Worktree-isolated dispatch ran on the agent branch with mounted contracts, then cleaned up');
+  }
+
+  // 17. Loopback guard covers the pipeline and SSE routes (DNS rebinding / cross-site)
   {
     const forgedHost = await rawRequest(studio.port, { pathname: '/api/pipeline/status', headers: { Host: 'evil.example' } });
     assert.equal(forgedHost.status, 403, 'non-loopback Host must be rejected on /api/pipeline/status');
@@ -573,7 +797,7 @@ try {
     console.log('✔ Loopback Host/Origin guard protects pipeline endpoints and the SSE stream');
   }
 
-  // 13. Sparse, non-git project: missing contracts/telemetry/benchmarks degrade gracefully
+  // 18. Sparse, non-git project: missing contracts/telemetry/benchmarks degrade gracefully
   {
     const sparseDir = createFixture('nativ-studio-sparse-', { full: false });
     const sparse = await startStudioServer({ port: 0, cwd: sparseDir, connections: { dev: null, prod: null } });

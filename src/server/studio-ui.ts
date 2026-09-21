@@ -51,6 +51,16 @@ export function renderStudioHtml(options: StudioUiOptions = {}): string {
   --success-line: color-mix(in srgb, var(--success) 30%, #fff);
   --active-line: color-mix(in srgb, var(--active) 30%, #fff);
   --danger-line: color-mix(in srgb, var(--danger) 30%, #fff);
+  /* Autonomous runner + console drawer tokens (ui_specs.md §1). */
+  --run: #10b981;
+  --run-line: #6366f1;
+  --warn: #f59e0b;
+  --warn-bg: #fffbeb;
+  --primary-active: #3730a3;
+  --term-bg: #0f172a;
+  --term-text: #f8fafc;
+  --term-muted: #94a3b8;
+  --term-line: rgb(148 163 184 / 0.28);
   --r-control: 6px;
   --r-card: 10px;
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
@@ -223,7 +233,7 @@ button.badge-media:hover { background: var(--primary-tint); }
 .tcard.is-blocked { border-color: var(--danger); }
 .tcard.is-updated { animation: card-updated 1.6s ease-out; }
 @keyframes card-updated { 0%, 30% { background: var(--active-bg); } 100% { background: var(--surface); } }
-.tcard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.tcard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .tcard-id { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tcard-check { display: inline-flex; color: var(--success); }
 .tcard-title { margin: 0; font-size: 13.5px; font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
@@ -239,6 +249,58 @@ button.badge-media:hover { background: var(--primary-tint); }
 .cmd { flex: 1; min-width: 0; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tcard-actions { display: flex; gap: 6px; flex: none; }
 .done-label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--success); }
+
+/* Autonomous runner: status pills and the live card treatment */
+.tcard.is-running { border-color: var(--run-line); box-shadow: 0 0 0 3px color-mix(in srgb, var(--run-line) 12%, transparent), 0 0 18px -4px color-mix(in srgb, var(--run-line) 40%, transparent); animation: run-border 2.6s ease-in-out infinite; }
+@keyframes run-border { 0%, 100% { border-color: var(--run-line); } 50% { border-color: color-mix(in srgb, var(--run-line) 45%, #fff); } }
+.run-pill { display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 2px 7px; font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--success); background: var(--success-bg); border: 1px solid var(--success-line); border-radius: var(--r-control); white-space: nowrap; }
+.run-pill .run-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--run); animation: run-pulse 1.4s ease-in-out infinite; }
+.run-pill.is-warn { color: #b45309; background: var(--warn-bg); border-color: var(--warn); }
+.run-pill.is-warn .run-dot { background: var(--warn); animation: none; }
+.run-pill.is-danger { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-line); }
+.run-pill.is-danger .run-dot { background: var(--danger); animation: none; }
+.run-pill.is-done { color: var(--muted); background: var(--chip); border-color: var(--chip-border); }
+.run-pill.is-done .run-dot { background: var(--chip-border); animation: none; }
+@keyframes run-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+
+/* Live runner console drawer */
+body.has-console { padding-bottom: min(58vh, 520px); }
+body.has-console-min { padding-bottom: 56px; }
+#runner-console-drawer { position: fixed; inset: auto 0 0 0; z-index: 60; display: flex; flex-direction: column; max-height: min(58vh, 520px); background: var(--term-bg); color: var(--term-text); border-top: 1px solid var(--chip-border); box-shadow: var(--shadow-float); animation: rc-slide-up .28s cubic-bezier(.2, .8, .2, 1); }
+#runner-console-drawer[hidden] { display: none; }
+#runner-console-drawer.is-min .rc-body, #runner-console-drawer.is-min .rc-foot { display: none; }
+@keyframes rc-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--term-line); }
+.rc-task { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.rc-title { font-size: 12px; color: var(--term-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34ch; }
+.rc-steps { display: flex; align-items: center; gap: 6px; margin: 0 0 0 auto; padding: 0; list-style: none; }
+.rc-step { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font-size: 11px; color: var(--term-muted); border: 1px solid var(--term-line); border-radius: var(--r-control); }
+.rc-step.is-done { color: var(--run); border-color: color-mix(in srgb, var(--run) 55%, transparent); }
+.rc-step.is-active { color: var(--term-text); background: color-mix(in srgb, var(--primary) 32%, transparent); border-color: var(--primary); }
+.rc-step.is-failed { color: var(--term-text); background: color-mix(in srgb, var(--danger) 32%, transparent); border-color: var(--danger); }
+.rc-controls { display: flex; gap: 6px; flex: none; }
+.rc-btn { padding: 5px 9px; font: 500 11px/1 var(--font); color: var(--term-text); background: transparent; border: 1px solid var(--term-line); border-radius: var(--r-control); cursor: pointer; }
+.rc-btn:hover { background: color-mix(in srgb, var(--term-muted) 22%, transparent); }
+.rc-btn:disabled { opacity: .45; cursor: not-allowed; }
+.rc-btn[aria-pressed="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 34%, transparent); }
+.rc-btn.danger { color: var(--term-text); border-color: var(--danger); }
+.rc-btn.danger:hover { background: color-mix(in srgb, var(--danger) 30%, transparent); }
+.rc-btn:focus-visible { outline: 2px solid var(--term-text); outline-offset: 2px; }
+.rc-body { flex: 1 1 auto; min-height: 120px; margin: 0; padding: 10px 14px; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rc-body:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.rc-empty { color: var(--term-muted); }
+.rc-fg-muted { color: var(--term-muted); }
+.rc-fg-warn { color: var(--warn); }
+.rc-fg-ok { color: var(--run); }
+.rc-fg-info { color: var(--run-line); }
+.rc-fg-danger { color: color-mix(in srgb, var(--danger) 55%, #fff); }
+.rc-bold { font-weight: 700; }
+.rc-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 7px 14px; font-size: 11px; color: var(--term-muted); border-top: 1px solid var(--term-line); }
+.rc-foot strong { font-family: var(--mono); font-weight: 600; color: var(--term-text); }
+@media (max-width: 760px) {
+  .rc-steps { order: 3; margin-left: 0; width: 100%; }
+  .rc-title { max-width: 100%; }
+}
 
 /* Agent worktrees */
 .wt-card { overflow: hidden; }
@@ -543,6 +605,28 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     <div id="view" role="tabpanel" tabindex="-1"></div>
   </section>
 </main>
+
+<section id="runner-console-drawer" aria-labelledby="rc-task" hidden>
+  <header class="rc-head">
+    <code class="rc-task" id="rc-task">&#8211;</code>
+    <span class="rc-title" id="rc-title"></span>
+    <ol class="rc-steps" id="rc-steps" aria-label="Runner lifecycle"></ol>
+    <div class="rc-controls">
+      <button class="rc-btn" type="button" id="rc-autoscroll" aria-pressed="true" aria-label="Toggle console auto-scroll">Auto-scroll</button>
+      <button class="rc-btn" type="button" id="rc-clear" aria-label="Clear the console buffer">Clear</button>
+      <button class="rc-btn danger" type="button" id="rc-abort" aria-label="Abort the running agent">Abort</button>
+      <button class="rc-btn" type="button" id="rc-minimize" aria-expanded="true" aria-controls="rc-body">Minimize</button>
+      <button class="rc-btn" type="button" id="rc-close" aria-label="Close the runner console">Close</button>
+    </div>
+  </header>
+  <pre class="rc-body" id="rc-body" role="log" aria-live="polite" aria-label="Runner output" tabindex="0"></pre>
+  <footer class="rc-foot">
+    <span>Elapsed <strong id="rc-elapsed">00:00</strong></span>
+    <span>Output <strong id="rc-bytes">0 B</strong></span>
+    <span>Gatekeeper <strong id="rc-gate">Idle</strong></span>
+    <span id="rc-exit"></span>
+  </footer>
+</section>
 
 <dialog id="block-dialog" class="narrow" aria-labelledby="block-title">
   <form class="modal" method="dialog">
@@ -881,9 +965,15 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 
   // ─── Mission Control: pipeline state ───────────────────────────────────────
   var VIEWS = ['overview', 'tasks', 'worktrees', 'benchmarks', 'database'];
-  var VIEW_DEPS = { overview: ['status', 'tasks'], tasks: ['tasks'], worktrees: ['worktrees', 'tasks'], benchmarks: ['benchmarks'] };
-  var PIPE_PATHS = { status: '/api/pipeline/status', tasks: '/api/pipeline/tasks', worktrees: '/api/pipeline/worktrees', benchmarks: '/api/pipeline/benchmarks' };
-  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks'];
+  var VIEW_DEPS = { overview: ['status', 'tasks'], tasks: ['tasks', 'runs'], worktrees: ['worktrees', 'tasks'], benchmarks: ['benchmarks'] };
+  var PIPE_PATHS = {
+    status: '/api/pipeline/status',
+    tasks: '/api/pipeline/tasks',
+    worktrees: '/api/pipeline/worktrees',
+    benchmarks: '/api/pipeline/benchmarks',
+    runs: '/api/pipeline/tasks/runs'
+  };
+  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs'];
   /** Circuit-breaker budget from the task execution loop. */
   var MAX_ATTEMPTS = 3;
   var REDUCED_MOTION = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
@@ -893,6 +983,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     status: null,
     milestones: [],
     worktrees: [],
+    runs: [],
     report: null,
     loaded: {},
     errors: {},
@@ -971,6 +1062,8 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       }
     } else if (part === 'worktrees') {
       pipe.worktrees = Array.isArray(body.worktrees) ? body.worktrees : [];
+    } else if (part === 'runs') {
+      pipe.runs = Array.isArray(body.runs) ? body.runs : [];
     } else if (part === 'benchmarks') {
       pipe.report = body.report || null;
     }
@@ -1227,7 +1320,53 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     { status: 'completed', label: 'Completed', empty: 'No completed tasks yet.' },
     { status: 'blocked', label: 'Blocked', empty: 'No blocked tasks.' }
   ];
-  var BUSY_LABEL = { start: 'Starting…', complete: 'Verifying…', block: 'Blocking…' };
+  var BUSY_LABEL = { start: 'Starting…', complete: 'Verifying…', block: 'Blocking…', dispatch: 'Dispatching…', abort: 'Aborting…' };
+
+  // ─── Autonomous runner state (/api/pipeline/tasks/runs + runner_* SSE) ─────
+  var RUN_ACTIVE = { spawning_worktree: 1, running: 1, verifying: 1, merging: 1 };
+  var RUN_LABEL = {
+    spawning_worktree: 'Worktree',
+    running: 'Claude Running',
+    verifying: 'Verifying',
+    merging: 'Merging',
+    completed: 'Run completed',
+    failed: 'Run failed',
+    aborted: 'Run aborted'
+  };
+  var RUN_TONE = { completed: 'is-done', failed: 'is-danger', aborted: 'is-warn' };
+
+  function runFor(taskId) {
+    var found = null;
+    (pipe.runs || []).some(function (r) { if (r.taskId === taskId) { found = r; return true; } return false; });
+    return found;
+  }
+  function isRunActive(run) { return !!run && !!RUN_ACTIVE[run.status]; }
+  function upsertRun(run) {
+    if (!run || !run.taskId) return;
+    pipe.runs = [run].concat((pipe.runs || []).filter(function (r) { return r.taskId !== run.taskId; }));
+  }
+  function unmetDeps(t) {
+    return (t.dependencies || []).filter(function (d) { var dep = taskById(d); return !dep || dep.status !== 'completed'; });
+  }
+  function elapsedOf(run) {
+    if (!run || !run.startedAt) return null;
+    var ms = isRunActive(run) ? Date.now() - Date.parse(run.startedAt) : run.durationMs;
+    return typeof ms === 'number' && isFinite(ms) && ms >= 0 ? ms : null;
+  }
+  /** mm:ss, the elapsed format ui_specs.md asks for on running cards and in the drawer. */
+  function clock(ms) {
+    var total = Math.floor((ms || 0) / 1000);
+    var mm = Math.floor(total / 60), ss = total % 60;
+    return (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+  }
+  function runPill(run) {
+    if (!run) return '';
+    var label = RUN_LABEL[run.status] || run.status;
+    var ms = elapsedOf(run);
+    var text = label + (isRunActive(run) && ms != null ? ' (' + clock(ms) + ')' : '');
+    return '<span class="run-pill ' + (RUN_TONE[run.status] || '') + '" title="' + esc(label + ' · run ' + (run.runId || '')) + '">' +
+      '<span class="run-dot" aria-hidden="true"></span>' + esc(text) + '</span>';
+  }
 
   function taskFilters() {
     var opts = '<option value="all">All milestones</option>' + (pipe.milestones || []).map(function (m) {
@@ -1284,18 +1423,30 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     return '<button class="btn small' + (tone ? ' ' + tone : '') + '" type="button" data-action="' + action + '" data-key="' + esc(key) + '" aria-label="' + esc(label + ' ' + key) + '">' + label + '</button>';
   }
 
+  /** Primary dispatch affordance; disabled (with the blocking dependency named) until the task is ready. */
+  function dispatchBtn(t) {
+    var unmet = unmetDeps(t);
+    if (!unmet.length) return actionBtn('task-dispatch', t.id, 'Dispatch Claude', 'primary');
+    var why = 'Waiting on ' + unmet.join(', ');
+    return '<button class="btn small primary" type="button" disabled title="' + esc(why) + '" aria-label="' + esc('Dispatch Claude for ' + t.id + ' is unavailable: ' + why) + '">Dispatch Claude</button>';
+  }
+
   function taskActions(t) {
     var busy = pipe.busy['task:' + t.id];
     if (busy) return '<button class="btn small" type="button" disabled><span class="spinner" aria-hidden="true"></span>' + BUSY_LABEL[busy] + '</button>';
-    if (t.status === 'pending') return actionBtn('task-start', t.id, 'Start', 'primary');
-    if (t.status === 'in_progress') return actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary');
-    if (t.status === 'blocked') return actionBtn('task-start', t.id, 'Retry', '');
-    return '<span class="done-label">' + ICON.check + 'Done</span>';
+    var run = runFor(t.id);
+    if (isRunActive(run)) return actionBtn('run-console', t.id, 'Console', '') + actionBtn('run-abort', t.id, 'Abort', 'danger');
+    var console_ = run ? actionBtn('run-console', t.id, 'Console', '') : '';
+    if (t.status === 'pending') return console_ + actionBtn('task-start', t.id, 'Start', '') + dispatchBtn(t);
+    if (t.status === 'in_progress') return console_ + actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary');
+    if (t.status === 'blocked') return console_ + actionBtn('task-start', t.id, 'Retry', '') + dispatchBtn(t);
+    return console_ + '<span class="done-label">' + ICON.check + 'Done</span>';
   }
 
   function taskCard(t) {
     var files = t.targetFiles || [];
-    var unmet = (t.dependencies || []).filter(function (d) { var dep = taskById(d); return !dep || dep.status !== 'completed'; });
+    var unmet = unmetDeps(t);
+    var run = runFor(t.id);
     var updated = pipe.changedAt[t.id] && Date.now() - pipe.changedAt[t.id] < 1500;
     var blocked = '';
     if (t.status === 'blocked') {
@@ -1303,8 +1454,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       blocked = '<div class="tcard-blocked">' + (attempts != null ? '<span class="attempts">Attempts: ' + attempts + '/' + attemptLimit(t) + '</span>' : '') +
         (t.notes ? '<p>' + esc(t.notes) + '</p>' : '') + '</div>';
     }
-    return '<article class="tcard is-' + esc(t.status) + (updated ? ' is-updated' : '') + '" role="listitem" data-flip="' + esc(t.id) + '">' +
+    return '<article class="tcard is-' + esc(t.status) + (isRunActive(run) ? ' is-running' : '') + (updated ? ' is-updated' : '') + '" role="listitem" data-flip="' + esc(t.id) + '">' +
       '<header class="tcard-head"><code class="tcard-id">' + (t.status === 'completed' ? '<span class="tcard-check">' + ICON.check + '</span>' : '') + esc(t.id) + '</code>' +
+      (run ? runPill(run) : '') +
       '<span class="badge badge-agent">' + esc(t.assignedSubagent || 'unassigned') + '</span></header>' +
       '<h3 class="tcard-title">' + esc(t.title) + '</h3>' +
       (files.length ? '<ul class="file-list" aria-label="Target files">' + files.map(function (f) { return '<li class="file" title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
@@ -1333,6 +1485,223 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       delete pipe.busy[key];
       return fetchPipeline(['status', 'tasks', 'worktrees']);
     });
+  }
+
+  // ─── Autonomous dispatch: POST /tasks/dispatch and /tasks/abort ────────────
+  function runDispatch(taskId) {
+    var key = 'task:' + taskId;
+    if (pipe.busy[key]) return;
+    pipe.busy[key] = 'dispatch';
+    repaint('tasks');
+    postJson('/api/pipeline/tasks/dispatch', { taskId: taskId }).then(function (body) {
+      upsertRun(body && body.run);
+      toast('Dispatched Claude for ' + taskId, 'ok');
+      openConsole(taskId, true);
+    }, function (e) {
+      toast('Could not dispatch ' + taskId + ': ' + e.message);
+    }).then(function () {
+      delete pipe.busy[key];
+      return fetchPipeline(['status', 'tasks', 'runs', 'worktrees']);
+    });
+  }
+
+  function runAbort(taskId) {
+    var key = 'task:' + taskId;
+    if (pipe.busy[key]) return;
+    pipe.busy[key] = 'abort';
+    repaint('tasks');
+    postJson('/api/pipeline/tasks/abort', { taskId: taskId, reason: 'Aborted from Nativ Studio' }).then(function () {
+      toast('Abort signal sent to ' + taskId, 'ok');
+    }, function (e) {
+      toast('Could not abort ' + taskId + ': ' + e.message);
+    }).then(function () {
+      delete pipe.busy[key];
+      return fetchPipeline(['status', 'tasks', 'runs']);
+    });
+  }
+
+  function confirmAbort(taskId) {
+    confirmDialog({
+      title: 'Abort agent run',
+      body: 'Terminate the Claude process tree for ' + taskId + '? The isolated worktree and its branch are left in place so the partial work can be inspected.',
+      confirmLabel: 'Abort Run',
+      danger: true
+    }, function () { runAbort(taskId); });
+  }
+
+  // ─── Live runner console drawer ────────────────────────────────────────────
+  var RC_STEPS = ['Worktree', 'Claude', 'Verify', 'Merge'];
+  var RC_STAGE = { spawning_worktree: 0, running: 1, verifying: 2, merging: 3 };
+  var RC_MAX_NODES = 3000;
+  var rc = { taskId: null, autoscroll: true, minimized: false, stage: 0, ticker: null, backfilled: false };
+
+  /** Minimal SGR parser: escapes the chunk, then maps the colors agents actually emit. */
+  var ANSI_CLASS = {
+    '0': null, '39': null, '1': 'rc-bold', '2': 'rc-fg-muted', '90': 'rc-fg-muted',
+    '31': 'rc-fg-danger', '91': 'rc-fg-danger', '32': 'rc-fg-ok', '92': 'rc-fg-ok',
+    '33': 'rc-fg-warn', '93': 'rc-fg-warn', '34': 'rc-fg-info', '94': 'rc-fg-info',
+    '36': 'rc-fg-info', '96': 'rc-fg-info'
+  };
+  function ansiToHtml(text, fallbackClass) {
+    var out = '', open = 0, cls = fallbackClass || '';
+    var parts = String(text == null ? '' : text).split(/\x1b\[([0-9;]*)m/);
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        var codes = parts[i].split(';');
+        for (var c = 0; c < codes.length; c++) {
+          var code = codes[c] || '0';
+          if (!Object.prototype.hasOwnProperty.call(ANSI_CLASS, code)) continue;
+          while (open > 0) { out += '</span>'; open--; }
+          cls = ANSI_CLASS[code] ? ANSI_CLASS[code] : (fallbackClass || '');
+        }
+        continue;
+      }
+      // Other CSI sequences (cursor moves, clears) carry no meaning in a log pane.
+      var chunk = parts[i].replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '');
+      if (!chunk) continue;
+      if (cls) { out += '<span class="' + cls + '">' + esc(chunk) + '</span>'; }
+      else out += esc(chunk);
+    }
+    while (open > 0) { out += '</span>'; open--; }
+    return out;
+  }
+
+  function rcStepper(run) {
+    var status = run ? run.status : null;
+    var stage = RC_STAGE[status] != null ? RC_STAGE[status] : rc.stage;
+    var settled = !!status && !RUN_ACTIVE[status];
+    var failed = status === 'failed' || status === 'aborted';
+    if (RC_STAGE[status] != null) rc.stage = stage;
+    return RC_STEPS.map(function (label, i) {
+      var cls = 'rc-step';
+      if (status === 'completed') cls += ' is-done';
+      else if (settled && failed) cls += i < stage ? ' is-done' : (i === stage ? ' is-failed' : '');
+      else if (i < stage) cls += ' is-done';
+      else if (i === stage) cls += ' is-active';
+      return '<li class="' + cls + '">' + esc(label) + '</li>';
+    }).join('<li class="rc-sep" aria-hidden="true">&#8250;</li>');
+  }
+
+  function syncConsole() {
+    var run = rc.taskId ? runFor(rc.taskId) : null;
+    var task = rc.taskId ? taskById(rc.taskId) : null;
+    $('rc-task').textContent = rc.taskId || '–';
+    $('rc-title').textContent = task ? task.title : '';
+    $('rc-steps').innerHTML = rcStepper(run);
+    $('rc-abort').disabled = !isRunActive(run);
+    $('rc-elapsed').textContent = clock(elapsedOf(run) || 0);
+    $('rc-bytes').textContent = formatBytes((run && run.logBytes) || 0);
+    var gate = 'Idle';
+    if (run && run.verification) gate = run.verification.success ? 'Passed' : 'Failed';
+    else if (run && run.status === 'verifying') gate = 'Running';
+    $('rc-gate').textContent = gate;
+    var exit = '';
+    if (run && !isRunActive(run)) {
+      exit = RUN_LABEL[run.status] || run.status;
+      if (typeof run.exitCode === 'number') exit += ' (exit ' + run.exitCode + ')';
+      if (run.error) exit += ' · ' + run.error;
+    }
+    $('rc-exit').textContent = exit;
+  }
+
+  function rcTick() {
+    clearInterval(rc.ticker);
+    rc.ticker = setInterval(function () {
+      var run = rc.taskId ? runFor(rc.taskId) : null;
+      if (!rc.taskId || !isRunActive(run)) { clearInterval(rc.ticker); rc.ticker = null; return; }
+      $('rc-elapsed').textContent = clock(elapsedOf(run) || 0);
+      repaint('tasks');
+    }, 1000);
+  }
+
+  function appendConsole(html) {
+    var body = $('rc-body');
+    var stick = rc.autoscroll || body.scrollTop + body.clientHeight >= body.scrollHeight - 4;
+    var frag = document.createElement('span');
+    frag.innerHTML = html;
+    body.appendChild(frag);
+    while (body.childElementCount > RC_MAX_NODES) body.removeChild(body.firstChild);
+    if (stick) body.scrollTop = body.scrollHeight;
+  }
+
+  function loadConsoleLogs(taskId) {
+    return api('/api/pipeline/tasks/logs?taskId=' + encodeURIComponent(taskId) + '&tailLines=500').then(function (body) {
+      if (rc.taskId !== taskId) return;
+      $('rc-body').innerHTML = body.log ? ansiToHtml(body.log) : '<span class="rc-empty">No output captured yet.</span>';
+      $('rc-body').scrollTop = $('rc-body').scrollHeight;
+      rc.backfilled = true;
+      syncConsole();
+    }, function () {
+      if (rc.taskId !== taskId) return;
+      $('rc-body').innerHTML = '<span class="rc-empty">Waiting for the runner to emit output…</span>';
+      rc.backfilled = true;
+    });
+  }
+
+  function openConsole(taskId, quiet) {
+    var drawer = $('runner-console-drawer');
+    if (rc.taskId !== taskId) {
+      rc.taskId = taskId;
+      rc.backfilled = false;
+      rc.stage = 0;
+      $('rc-body').innerHTML = '<span class="rc-empty">Loading runner output…</span>';
+      loadConsoleLogs(taskId);
+    }
+    rc.minimized = false;
+    drawer.hidden = false;
+    drawer.classList.remove('is-min');
+    $('rc-minimize').textContent = 'Minimize';
+    $('rc-minimize').setAttribute('aria-expanded', 'true');
+    document.body.classList.add('has-console');
+    document.body.classList.remove('has-console-min');
+    syncConsole();
+    rcTick();
+    if (!quiet) $('rc-body').focus();
+  }
+
+  function closeConsole() {
+    rc.taskId = null;
+    clearInterval(rc.ticker);
+    rc.ticker = null;
+    $('runner-console-drawer').hidden = true;
+    document.body.classList.remove('has-console', 'has-console-min');
+  }
+
+  function toggleConsoleMinimized() {
+    rc.minimized = !rc.minimized;
+    var drawer = $('runner-console-drawer');
+    drawer.classList.toggle('is-min', rc.minimized);
+    document.body.classList.toggle('has-console', !rc.minimized);
+    document.body.classList.toggle('has-console-min', rc.minimized);
+    var btn = $('rc-minimize');
+    btn.textContent = rc.minimized ? 'Expand' : 'Minimize';
+    btn.setAttribute('aria-expanded', String(!rc.minimized));
+  }
+
+  function onRunnerStatus(run) {
+    if (!run || !run.taskId) return;
+    upsertRun(run);
+    if (rc.taskId === run.taskId) {
+      syncConsole();
+      if (isRunActive(run)) rcTick();
+    }
+    repaint('tasks');
+    if (!RUN_ACTIVE[run.status]) {
+      toast((RUN_LABEL[run.status] || run.status) + ': ' + run.taskId, run.status === 'completed' ? 'ok' : 'err');
+      // The agent may have moved the task through "nativ task complete" while it ran.
+      queueRefresh(['status', 'tasks', 'worktrees', 'runs']);
+    }
+  }
+
+  function onRunnerLog(entry) {
+    if (!entry || !entry.taskId) return;
+    var run = runFor(entry.taskId);
+    if (run) run.logBytes = (run.logBytes || 0) + (entry.chunk ? entry.chunk.length : 0);
+    if (rc.taskId !== entry.taskId || !rc.backfilled) return;
+    var empty = $('rc-body').querySelector('.rc-empty');
+    if (empty) $('rc-body').innerHTML = '';
+    appendConsole(ansiToHtml(entry.chunk, entry.stream === 'stderr' ? 'rc-fg-warn' : ''));
+    $('rc-bytes').textContent = formatBytes((run && run.logBytes) || 0);
   }
 
   var pendingBlock = null;
@@ -1625,6 +1994,20 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     Object.keys(EVENT_PARTS).concat(['heartbeat', 'ping']).forEach(function (name) {
       es.addEventListener(name, function () { onStreamEvent(name); });
     });
+    // Runner events carry a payload, so they bypass the slice-invalidation table.
+    es.addEventListener('runner_status', function (e) {
+      live.lastBeat = Date.now();
+      flashLive();
+      onRunnerStatus(parseEventData(e));
+    });
+    es.addEventListener('runner_log', function (e) {
+      live.lastBeat = Date.now();
+      onRunnerLog(parseEventData(e));
+    });
+  }
+
+  function parseEventData(e) {
+    try { return JSON.parse(e.data); } catch (err) { return null; }
   }
 
   function scheduleReconnect() {
@@ -2830,6 +3213,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (action === 'task-start') runTaskAction('start', key);
     else if (action === 'task-complete') runTaskAction('complete', key);
     else if (action === 'task-block') openBlockDialog(key);
+    else if (action === 'task-dispatch') runDispatch(key);
+    else if (action === 'run-console') openConsole(key);
+    else if (action === 'run-abort') confirmAbort(key);
     else if (action === 'wt-merge') confirmWorktree('merge', key);
     else if (action === 'wt-remove') confirmWorktree('remove', key);
     else if (action === 'bench-run') runBenchmark();
@@ -2854,6 +3240,22 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     pendingBlock = null;
     $('block-dialog').close();
     if (id) runTaskAction('block', id, reason);
+  });
+
+  // ─── Events: live runner console drawer ────────────────────────────────────
+  $('rc-autoscroll').addEventListener('click', function () {
+    rc.autoscroll = !rc.autoscroll;
+    this.setAttribute('aria-pressed', String(rc.autoscroll));
+    if (rc.autoscroll) $('rc-body').scrollTop = $('rc-body').scrollHeight;
+  });
+  $('rc-clear').addEventListener('click', function () {
+    $('rc-body').innerHTML = '<span class="rc-empty">Console cleared. New output will stream in here.</span>';
+  });
+  $('rc-abort').addEventListener('click', function () { if (rc.taskId) confirmAbort(rc.taskId); });
+  $('rc-minimize').addEventListener('click', toggleConsoleMinimized);
+  $('rc-close').addEventListener('click', closeConsole);
+  $('runner-console-drawer').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { closeConsole(); $('main').focus(); }
   });
 
   $('btn-confirm-ok').addEventListener('click', function () {
