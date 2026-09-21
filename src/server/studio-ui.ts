@@ -598,7 +598,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     <nav class="tabs" role="tablist" aria-label="Database views">
       <button class="subtab" role="tab" id="tab-explorer" aria-controls="view" data-tab="explorer">Schema &amp; Structure <span class="count" id="count-explorer">0</span></button>
       <button class="subtab" role="tab" id="tab-data" aria-controls="view" data-tab="data">Live Data Browser <span class="count" id="count-data">0</span></button>
-      <button class="subtab" role="tab" id="tab-drift" aria-controls="view" data-tab="drift">Drift &amp; Diff Tracker <span class="count" id="count-drift">0</span></button>
+      <button class="subtab" role="tab" id="tab-drift" aria-controls="view" data-tab="drift">Schema Changes (Live vs Blueprint) <span class="count" id="count-drift">0</span></button>
       <button class="subtab" role="tab" id="tab-sql" aria-controls="view" data-tab="sql">Migration Script Preview <span class="count" id="count-sql">0</span></button>
     </nav>
 
@@ -1217,7 +1217,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 
   function renderOverview() {
     var synced = pipe.syncedAt ? ' · synced ' + esc(pipe.syncedAt.toLocaleTimeString()) : '';
-    var head = panelHead('Overview &amp; Status', 'Milestone burndown, task velocity, telemetry and contract integrity' + synced + '.');
+    var head = panelHead('Overview &amp; Status', 'Project progress, task breakdown, AI costs, and contract health' + synced + '.');
     if (!pipe.loaded.status) return head + '<div class="kpi-grid" aria-hidden="true">' + skeletonCards(4) + '</div>';
     if (pipe.errors.status && !pipe.status) return head + errorCard('pipeline status', pipe.errors.status, 'status') + burndown();
     var st = pipe.status || {};
@@ -1266,9 +1266,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       '<div class="kpi-value">' + usd(tel.estimatedCostUsd) + '<span class="kpi-of">est. cost</span></div>' +
       '<dl class="kv">' +
         kv('Estimated tokens', num(tel.totalTokens)) +
-        kv('Gatekeeper pass rate', rate == null ? '–' : rate + '%') +
-        kv('Tasks tracked', num(tel.totalTasksTracked)) +
-        kv('Circuit-breaker trips', '<span class="' + (trips ? 'text-danger' : '') + '">' + num(trips) + '</span>') +
+        kv('Test pass rate', rate == null ? '–' : rate + '%') +
+        kv('Total tasks run', num(tel.totalTasksTracked)) +
+        kv('Safety stops (retries)', '<span class="' + (trips ? 'text-danger' : '') + '">' + num(trips) + '</span>') +
       '</dl>');
   }
 
@@ -1435,8 +1435,8 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var busy = pipe.busy['task:' + t.id];
     if (busy) return '<button class="btn small" type="button" disabled><span class="spinner" aria-hidden="true"></span>' + BUSY_LABEL[busy] + '</button>';
     var run = runFor(t.id);
-    if (isRunActive(run)) return actionBtn('run-console', t.id, 'Console', '') + actionBtn('run-abort', t.id, 'Abort', 'danger');
-    var console_ = run ? actionBtn('run-console', t.id, 'Console', '') : '';
+    if (isRunActive(run)) return actionBtn('run-console', t.id, 'Live Logs', '') + actionBtn('run-abort', t.id, 'Abort', 'danger');
+    var console_ = run ? actionBtn('run-console', t.id, 'Live Logs', '') : '';
     if (t.status === 'pending') return console_ + actionBtn('task-start', t.id, 'Start', '') + dispatchBtn(t);
     if (t.status === 'in_progress') return console_ + actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary');
     if (t.status === 'blocked') return console_ + actionBtn('task-start', t.id, 'Retry', '') + dispatchBtn(t);
@@ -1463,7 +1463,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       (t.status === 'pending' && unmet.length ? '<p class="tcard-note">Waiting on ' + unmet.map(function (d) { return '<code>' + esc(d) + '</code>'; }).join(', ') + '</p>' : '') +
       blocked +
       '<footer class="tcard-foot"><code class="cmd" title="' + esc(t.verificationCommand || '') + '">' +
-      (t.verificationCommand ? '<span aria-hidden="true">$ </span>' + esc(t.verificationCommand) : 'no verification command') + '</code>' +
+      (t.verificationCommand ? '<span class="cmd-label">Test command: </span>' + esc(t.verificationCommand) : 'no test command') + '</code>' +
       '<div class="tcard-actions">' + taskActions(t) + '</div></footer></article>';
   }
 
@@ -1727,9 +1727,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
   }
 
   function worktreeBadge(w, status) {
-    if (!w.isAgentWorktree) return '<span class="badge badge-neutral">Main checkout</span>';
-    if (status === 'completed') return '<span class="badge badge-success">Ready to merge</span>';
-    if (status === 'in_progress') return '<span class="badge badge-active">In progress</span>';
+    if (!w.isAgentWorktree) return '<span class="badge badge-neutral">Main workspace</span>';
+    if (status === 'completed') return '<span class="badge badge-success">Tests Passed (Ready to merge)</span>';
+    if (status === 'in_progress') return '<span class="badge badge-active">Agent working</span>';
     if (status === 'blocked') return '<span class="badge badge-danger">Blocked</span>';
     if (status === 'pending') return '<span class="badge badge-neutral">Pending</span>';
     return '<span class="badge badge-neutral" title="No matching task in the master plan">Untracked</span>';
@@ -1745,29 +1745,29 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var actions = '<span class="muted">–</span>';
     if (w.isAgentWorktree && w.taskId) {
       actions = busy
-        ? '<button class="btn small" type="button" disabled><span class="spinner" aria-hidden="true"></span>' + (busy === 'merge' ? 'Merging…' : 'Discarding…') + '</button>'
-        : '<button class="btn small primary" type="button" data-action="wt-merge" data-key="' + esc(w.taskId) + '"' + (canMerge ? '' : ' disabled title="' + esc(blockedWhy) + '"') + '>Merge Worktree</button>' +
-          '<button class="btn small danger" type="button" data-action="wt-remove" data-key="' + esc(w.taskId) + '">Discard / Abort</button>';
+        ? '<button class="btn small" type="button" disabled><span class="spinner" aria-hidden="true"></span>' + (busy === 'merge' ? 'Merging…' : 'Deleting…') + '</button>'
+        : '<button class="btn small primary" type="button" data-action="wt-merge" data-key="' + esc(w.taskId) + '"' + (canMerge ? '' : ' disabled title="' + esc(blockedWhy) + '"') + '>Merge to Main</button>' +
+          '<button class="btn small danger" type="button" data-action="wt-remove" data-key="' + esc(w.taskId) + '">Delete Workspace</button>';
     }
     return '<tr><td data-label="Branch"><code>' + esc(w.branch) + '</code></td>' +
       '<td data-label="Task ID">' + (w.taskId ? '<div><code>' + esc(w.taskId) + '</code>' + (task ? '<div class="cell-sub" title="' + esc(task.title) + '">' + esc(task.title) + '</div>' : '') + '</div>' : '<span class="muted">–</span>') + '</td>' +
-      '<td data-label="Worktree Path"><code class="path" title="' + esc(w.path) + '">' + esc(shortPath(w.path)) + '</code></td>' +
-      '<td data-label="Commit SHA"><code>' + esc(String(w.head || '').slice(0, 7) || '–') + '</code></td>' +
+      '<td data-label="Workspace Folder"><code class="path" title="' + esc(w.path) + '">' + esc(shortPath(w.path)) + '</code></td>' +
+      '<td data-label="Latest Commit"><code>' + esc(String(w.head || '').slice(0, 7) || '–') + '</code></td>' +
       '<td data-label="Status">' + worktreeBadge(w, status) + '</td>' +
       '<td data-label="Actions"><div class="row-actions">' + actions + '</div></td></tr>';
   }
 
   function renderWorktrees() {
-    var head = panelHead('Agent Worktrees', 'Isolated git branches for parallel agent tasks. Merging re-runs the task verification gatekeeper before anything lands.');
+    var head = panelHead('Agent Worktrees', 'Isolated git workspaces for tasks. Changes are tested automatically before merging into your main branch.');
     if (!pipe.loaded.worktrees) return head + '<div class="card section" aria-hidden="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton short"></div></div>';
     if (pipe.errors.worktrees && !pipe.worktrees.length) return head + errorCard('worktrees', pipe.errors.worktrees, 'worktrees');
     var rows = pipe.worktrees.slice().sort(function (a, b) { return (a.isAgentWorktree ? 1 : 0) - (b.isAgentWorktree ? 1 : 0); });
     if (!rows.some(function (w) { return w.isAgentWorktree; })) {
       return head + staleNote('worktrees') + '<div class="card state"><div class="state-icon">' + ICON.branch + '</div><h2>No agent worktrees</h2>' +
-        '<p>Run <code>nativ worktree create &lt;taskId&gt;</code> to give an agent its own isolated branch for an independent task.</p></div>';
+        '<p>Run <code>nativ worktree create &lt;taskId&gt;</code> to give an agent its own isolated workspace folder for an independent task.</p></div>';
     }
     return head + staleNote('worktrees') + '<div class="card wt-card"><table class="grid"><thead><tr>' +
-      '<th scope="col">Branch Name</th><th scope="col">Task ID</th><th scope="col">Worktree Path</th><th scope="col">Commit SHA</th><th scope="col">Status</th><th scope="col">Actions</th>' +
+      '<th scope="col">Branch Name</th><th scope="col">Task ID</th><th scope="col">Workspace Folder</th><th scope="col">Latest Commit</th><th scope="col">Status</th><th scope="col">Actions</th>' +
       '</tr></thead><tbody>' + rows.map(worktreeRow).join('') + '</tbody></table></div>';
   }
 
@@ -1788,15 +1788,15 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var branch = w ? w.branch : 'agent/task-' + taskId;
     if (action === 'merge') {
       confirmDialog({
-        title: 'Merge worktree',
-        body: 'Merge ' + branch + ' into the main checkout? The gatekeeper re-runs the task verification first and rejects the merge if it fails.',
-        confirmLabel: 'Merge Worktree'
+        title: 'Merge to Main',
+        body: 'Merge ' + branch + ' into the main workspace? Automated tests will run first and reject the merge if tests fail.',
+        confirmLabel: 'Merge to Main'
       }, function () { runWorktreeAction('merge', taskId); });
     } else {
       confirmDialog({
-        title: 'Discard worktree',
-        body: 'Force-remove the worktree at ' + (w ? w.path : branch) + ' and delete branch ' + branch + '? Uncommitted changes and unmerged commits on it are lost.',
-        confirmLabel: 'Discard Worktree',
+        title: 'Delete workspace',
+        body: 'Remove the workspace folder for ' + taskId + ' and delete branch ' + branch + '? Uncommitted work will be removed.',
+        confirmLabel: 'Delete Workspace',
         danger: true
       }, function () { runWorktreeAction('remove', taskId); });
     }
@@ -1808,9 +1808,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     pipe.busy[key] = action;
     repaint('worktrees');
     postJson('/api/pipeline/worktrees/action', { action: action, taskId: taskId }).then(function (r) {
-      toast(r.message || (action === 'merge' ? 'Merged worktree for ' : 'Discarded worktree for ') + taskId, 'ok');
+      toast(r.message || (action === 'merge' ? 'Merged workspace for ' : 'Deleted workspace for ') + taskId, 'ok');
     }, function (e) {
-      toast((action === 'merge' ? 'Merge rejected for ' : 'Could not discard worktree for ') + taskId + ': ' + e.message);
+      toast((action === 'merge' ? 'Merge rejected for ' : 'Could not delete workspace for ') + taskId + ': ' + e.message);
     }).then(function () {
       delete pipe.busy[key];
       return fetchPipeline(['worktrees', 'tasks', 'status']);

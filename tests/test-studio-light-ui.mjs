@@ -182,7 +182,7 @@ try {
     expectText('overview KPI card', ['Active Milestones', 'Task Velocity', 'Telemetry & Costs', 'Specification Contracts']);
     expectText('contract checklist', ['master_plan', 'db_schema', 'api_contracts', 'ui_specs']);
     expectText('kanban', ['Pending', 'In Progress', 'Completed', 'Blocked', 'Attempts']);
-    expectText('worktree table', ['Branch', 'Task ID', 'Commit', 'Merge Worktree', 'Discard']);
+    expectText('worktree table', ['Branch', 'Task ID', 'Commit', 'Merge to Main', 'Delete Workspace']);
     expectText('benchmarks', ['Run Benchmark', 'ops/sec']);
     console.log('✔ Five navigation tabs with Overview KPIs, Kanban columns, Worktree table and Benchmark views');
   }
