@@ -14,7 +14,13 @@ import {
   EscalationType,
 } from '../scanner/types.js';
 import { executeVerification, VerificationResult } from '../core/verifier.js';
-import { ContractGovernor, CircuitBreaker, ContractPatch } from '../governor/index.js';
+import {
+  ContractGovernor,
+  CircuitBreaker,
+  ContractPatch,
+  TestIntegrityGuard,
+  resolveGitHead,
+} from '../governor/index.js';
 import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
 
@@ -375,6 +381,11 @@ export async function runTaskStart(taskId: string, targetDirArg?: string) {
     }
     plan.activeMilestoneId = foundMilestone.id;
 
+    // Pin the commit this task starts from so completion can prove the test
+    // suites that existed here were not deleted or weakened.
+    const baseline = resolveGitHead(targetDir);
+    if (baseline) CircuitBreaker.recordBaseline(targetDir, taskId, baseline);
+
     try {
       await recordTaskStart(targetDir, foundTask);
     } catch {
@@ -418,6 +429,47 @@ export async function runTaskComplete(
     console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
     process.exitCode = 1;
     return;
+  }
+
+  // ── Test-Integrity Invariant ───────────────────────────────────────────────
+  // Runs before verification: a suite that was deleted or weakened can pass
+  // trivially. `--no-verify` bypasses it only from an interactive terminal, so
+  // headless agents cannot use the emergency override to skip it.
+  const integrity = TestIntegrityGuard.evaluate(targetDir, taskId);
+  if (!integrity.approved) {
+    const humanOverride = Boolean(options.skipVerify && process.stdin.isTTY);
+    if (humanOverride) {
+      console.log(pc.yellow(`\n⚠ Test-integrity violations overridden via --no-verify for [${taskId}]:`));
+      integrity.findings.forEach((f) => console.log(pc.yellow(`    • ${f.detail}`)));
+    } else {
+      console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] cannot complete: ${integrity.message}`));
+      integrity.findings.forEach((f) => console.error(pc.red(`    • [${f.rule}] ${f.detail}`)));
+      console.error(
+        pc.dim(`  Compared against ${integrity.baselineRecorded ? 'the commit recorded at task start' : 'HEAD'} (${integrity.baselineRef?.slice(0, 12)}).`),
+      );
+
+      const affected = [...new Set(integrity.findings.map((f) => f.path))];
+      const { state, escalationId, proposal } = CircuitBreaker.recordGuardViolation(
+        targetDir,
+        taskId,
+        integrity,
+        { escalationType: 'architectural_ambiguity', affected, intent: `Complete task ${taskId} with modified test suites` },
+        () => TestIntegrityGuard.proposeRestoration(targetDir, integrity),
+      );
+      console.error(pc.yellow(`  Circuit Breaker: ${state.consecutiveFailures}/${state.maxThreshold} failures`));
+      if (state.tripped) {
+        console.error(pc.bold(pc.red(`  🛑 CIRCUIT BREAKER TRIPPED: Task locked to blocked.`)));
+        console.error(pc.magenta(`  Escalation record written to .ai/escalation.json (${escalationId})`));
+        if (proposal?.kind === 'restore_tests') {
+          console.error(pc.magenta(`  Self-healing proposal ${proposal.proposalId}: ${proposal.commands[0]}\n`));
+        }
+      } else {
+        console.error(pc.white('  Restore the tests (or strengthen them) and retry. If removing them is intended, escalate:'));
+        console.error(pc.white(`  nativ task escalate ${taskId} --type architectural_ambiguity --details "..."\n`));
+      }
+      process.exitCode = 1;
+      return;
+    }
   }
 
   // ── Verification Gatekeeper ────────────────────────────────────────────────
@@ -510,6 +562,7 @@ export async function runTaskComplete(
   });
 
   CircuitBreaker.recordSuccess(targetDir, taskId);
+  CircuitBreaker.clearBaseline(targetDir, taskId);
 
   try {
     await recordTaskComplete(targetDir, foundTask, vResult, options.notes);

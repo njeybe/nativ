@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  BlastRadius,
   CircuitBreakerState,
   ContractPatch,
   EscalationDiagnosticBundle,
   RuleEvaluationResult,
 } from './types.js';
-import { EscalationFile, EscalationRecord, MasterPlan } from '../scanner/types.js';
+import { EscalationFile, EscalationRecord, EscalationType } from '../scanner/types.js';
 import { withPlanLockSync } from '../core/lock-manager.js';
 import { recordCircuitBreakerTrip } from '../core/telemetry.js';
 
@@ -19,8 +20,94 @@ interface TaskFailureLedger {
     lastRuleId?: string;
     lastViolation?: string;
     patchCount: number;
+    /** Commit recorded at `nativ task start`; the test-integrity guard diffs against it. */
+    baselineRef?: string;
+    baselineRecordedAt?: string;
   };
 }
+
+// ─── Self-healing proposal types ─────────────────────────────────────────────
+
+/** A contract patch as proposed, without the task binding. */
+export type CandidatePatch = Omit<ContractPatch, 'taskId'>;
+
+export interface ProofCheck {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+/**
+ * Evidence that a proposal was exercised away from the live `.ai/` contracts
+ * before a human is asked to approve it.
+ */
+export interface VerificationProof {
+  isolated: true;
+  method: 'sandbox_governor_replay' | 'baseline_blob_check';
+  passed: boolean;
+  checks: ProofCheck[];
+  /** Hash of the live contract the candidate was replayed against. */
+  baseContractHash?: string | null;
+  /** Hash of the sandbox contract after the candidate was applied. */
+  candidateContractHash?: string | null;
+  verdict?: { approved: boolean; blastRadius: BlastRadius; ruleId: string; message: string };
+  verifiedAt: string;
+  durationMs: number;
+}
+
+export type SelfHealingStrategy =
+  | 'relax_to_nullable'
+  | 'relax_to_optional'
+  | 'deprecate_instead_of_drop'
+  | 'expand_contract_rename'
+  | 'shadow_column_for_type_change'
+  | 'alter_existing_instead_of_add'
+  | 'add_missing_target'
+  | 'rebase_on_current_contract'
+  | 'budget_override'
+  | 'restore_test_suite';
+
+interface ProposalBase {
+  proposalId: string;
+  strategy: SelfHealingStrategy;
+  rationale: string;
+  /** Proposals are never applied automatically; Tier 1 or the operator approves them. */
+  requiresHumanApproval: true;
+  candidatesEvaluated: number;
+  verificationProof: VerificationProof;
+  generatedAt: string;
+}
+
+export interface ContractPatchProposal extends ProposalBase {
+  kind: 'contract_patch';
+  candidate: CandidatePatch;
+  original: CandidatePatch;
+}
+
+export interface TestRestorationProposal extends ProposalBase {
+  kind: 'restore_tests';
+  baselineRef: string;
+  files: string[];
+  commands: string[];
+}
+
+export type SelfHealingProposal = ContractPatchProposal | TestRestorationProposal;
+
+/** `.ai/escalation.json` record carrying the optional self-healing proposal. */
+export interface SelfHealingEscalationRecord extends EscalationRecord {
+  proposedPatch?: SelfHealingProposal;
+}
+
+export type ProposalFactory = () => SelfHealingProposal | null;
+
+export interface GuardViolationContext {
+  escalationType: EscalationType;
+  /** Files or contracts the violation touches, listed on the escalation record. */
+  affected: string[];
+  intent: string;
+}
+
+// ─── Ledger persistence ──────────────────────────────────────────────────────
 
 function getLedgerPath(targetDir: string): string {
   return path.join(targetDir, '.ai', '.governor_ledger.json');
@@ -46,6 +133,21 @@ function saveLedger(targetDir: string, ledger: TaskFailureLedger): void {
   } catch {
     // Ignore non-fatal ledger write error
   }
+}
+
+/** Proposal generation must never turn a trip into a crash; a failed factory means "no proposal". */
+function buildProposal(factory?: ProposalFactory): SelfHealingProposal | null {
+  if (!factory) return null;
+  try {
+    return factory();
+  } catch {
+    return null;
+  }
+}
+
+function describeProposal(proposal: SelfHealingProposal): string {
+  const verified = proposal.verificationProof.passed ? 'verified in an isolated sandbox' : 'NOT verified';
+  return `Review self-healing proposal ${proposal.proposalId} (${proposal.strategy}, ${verified}): ${proposal.rationale}`;
 }
 
 export class CircuitBreaker {
@@ -93,12 +195,91 @@ export class CircuitBreaker {
     }
   }
 
+  /**
+   * Pins the commit a task started from. Restarting a blocked task keeps the
+   * original baseline so deletions made before the block still count.
+   */
+  static recordBaseline(targetDir: string, taskId: string, ref: string): void {
+    const ledger = loadLedger(targetDir);
+    const entry = ledger[taskId] || { consecutiveFailures: 0, lastFailureTime: '', patchCount: 0 };
+    if (entry.baselineRef) return;
+    entry.baselineRef = ref;
+    entry.baselineRecordedAt = new Date().toISOString();
+    ledger[taskId] = entry;
+    saveLedger(targetDir, ledger);
+  }
+
+  static getBaseline(targetDir: string, taskId: string): string | null {
+    return loadLedger(targetDir)[taskId]?.baselineRef ?? null;
+  }
+
+  static clearBaseline(targetDir: string, taskId: string): void {
+    const ledger = loadLedger(targetDir);
+    if (ledger[taskId]?.baselineRef) {
+      delete ledger[taskId].baselineRef;
+      delete ledger[taskId].baselineRecordedAt;
+      saveLedger(targetDir, ledger);
+    }
+  }
+
   static recordFailure(
     targetDir: string,
     taskId: string,
     patch: ContractPatch,
-    ruleResult: RuleEvaluationResult
-  ): { state: CircuitBreakerState; diagnosticBundle?: EscalationDiagnosticBundle } {
+    ruleResult: RuleEvaluationResult,
+    proposalFactory?: ProposalFactory,
+  ): { state: CircuitBreakerState; diagnosticBundle?: EscalationDiagnosticBundle & { selfHealingProposal?: SelfHealingProposal | null } } {
+    const state = this.bumpFailures(targetDir, taskId, ruleResult);
+
+    if (state.tripped) {
+      const diagnosticBundle = this.tripAndEscalate(targetDir, taskId, patch, ruleResult, state.consecutiveFailures, proposalFactory);
+      return { state, diagnosticBundle };
+    }
+
+    return { state };
+  }
+
+  /**
+   * Counts a non-contract guard violation (e.g. test integrity) toward the same
+   * 3-strike budget. On the trip the task is blocked and escalated with the
+   * factory's proposal attached.
+   */
+  static recordGuardViolation(
+    targetDir: string,
+    taskId: string,
+    ruleResult: RuleEvaluationResult,
+    context: GuardViolationContext,
+    proposalFactory?: ProposalFactory,
+  ): { state: CircuitBreakerState; escalationId?: string; proposal?: SelfHealingProposal | null } {
+    const state = this.bumpFailures(targetDir, taskId, ruleResult);
+    if (!state.tripped) return { state };
+
+    const escalationId = `esc-${Date.now().toString(36)}`;
+    const proposal = buildProposal(proposalFactory);
+    const recommendedAction = proposal
+      ? describeProposal(proposal)
+      : `Review ${context.affected.join(', ')} and decide whether the change is intended; if so, have Tier 1 update the task and unblock ${taskId}.`;
+
+    this.writeEscalation(targetDir, {
+      id: escalationId,
+      taskId,
+      type: context.escalationType,
+      reportedBy: 'backend',
+      timestamp: new Date().toISOString(),
+      summary: `Circuit Breaker Tripped (${state.consecutiveFailures}/${MAX_FAILURE_THRESHOLD}): ${ruleResult.ruleId}`,
+      details: `${context.intent}: ${ruleResult.message}`,
+      affectedContracts: context.affected,
+      recommendedAction,
+      status: 'pending_review',
+      ...(proposal ? { proposedPatch: proposal } : {}),
+    });
+    this.blockTask(targetDir, taskId, `Circuit breaker tripped by Governor: ${ruleResult.ruleId} (${escalationId})`);
+    recordCircuitBreakerTrip(targetDir, taskId).catch(() => {});
+
+    return { state, escalationId, proposal };
+  }
+
+  private static bumpFailures(targetDir: string, taskId: string, ruleResult: RuleEvaluationResult): CircuitBreakerState {
     const ledger = loadLedger(targetDir);
     const entry = ledger[taskId] || { consecutiveFailures: 0, lastFailureTime: '', patchCount: 0 };
 
@@ -109,20 +290,12 @@ export class CircuitBreaker {
     ledger[taskId] = entry;
     saveLedger(targetDir, ledger);
 
-    const tripped = entry.consecutiveFailures >= MAX_FAILURE_THRESHOLD;
-    const state: CircuitBreakerState = {
+    return {
       active: true,
       consecutiveFailures: entry.consecutiveFailures,
       maxThreshold: MAX_FAILURE_THRESHOLD,
-      tripped,
+      tripped: entry.consecutiveFailures >= MAX_FAILURE_THRESHOLD,
     };
-
-    if (tripped) {
-      const diagnosticBundle = this.tripAndEscalate(targetDir, taskId, patch, ruleResult, entry.consecutiveFailures);
-      return { state, diagnosticBundle };
-    }
-
-    return { state };
   }
 
   private static tripAndEscalate(
@@ -130,12 +303,21 @@ export class CircuitBreaker {
     taskId: string,
     patch: ContractPatch,
     ruleResult: RuleEvaluationResult,
-    failures: number
-  ): EscalationDiagnosticBundle {
+    failures: number,
+    proposalFactory?: ProposalFactory,
+  ): EscalationDiagnosticBundle & { selfHealingProposal?: SelfHealingProposal | null } {
     const escalationId = `esc-${Date.now().toString(36)}`;
     const contractFileName = patch.target === 'db_schema' ? 'db_schema.json' : 'api_contracts.json';
+    const proposal = buildProposal(proposalFactory);
 
-    const diagnosticBundle: EscalationDiagnosticBundle = {
+    const recommendedActions = [
+      `Review contract at .ai/${contractFileName} and either adjust schema or approve migration.`,
+      `If the operation is required, have Tier 1 (Antigravity) apply the change and unblock ${taskId}.`,
+      `If the operation is invalid, instruct the agent to use an alternative backward-compatible approach.`,
+    ];
+    if (proposal) recommendedActions.unshift(describeProposal(proposal));
+
+    const diagnosticBundle = {
       escalationId,
       taskId,
       circuitBreakerTripped: true,
@@ -149,14 +331,34 @@ export class CircuitBreaker {
         value: patch.value,
         reason: patch.reason,
       },
-      recommendedActions: [
-        `Review contract at .ai/${contractFileName} and either adjust schema or approve migration.`,
-        `If the operation is required, have Tier 1 (Antigravity) apply the change and unblock ${taskId}.`,
-        `If the operation is invalid, instruct the agent to use an alternative backward-compatible approach.`,
-      ],
+      recommendedActions,
+      selfHealingProposal: proposal,
     };
 
     // 1. Write to .ai/escalation.json
+    this.writeEscalation(targetDir, {
+      id: escalationId,
+      taskId,
+      type: patch.target === 'db_schema' ? 'schema_flaw' : 'contract_drift',
+      reportedBy: 'backend',
+      timestamp: new Date().toISOString(),
+      summary: `Circuit Breaker Tripped (${failures}/${MAX_FAILURE_THRESHOLD}): ${ruleResult.ruleId} on ${patch.path}`,
+      details: `Autonomous agent failed ${failures} times attempting ${patch.operation} on ${patch.path}: ${ruleResult.message}`,
+      affectedContracts: [`.ai/${contractFileName}`],
+      recommendedAction: recommendedActions[0],
+      status: 'pending_review',
+      ...(proposal ? { proposedPatch: proposal } : {}),
+    });
+
+    // 2. Mark task as blocked in .ai/master_plan.json
+    this.blockTask(targetDir, taskId, `Circuit breaker tripped by Governor: ${ruleResult.ruleId} (${escalationId})`);
+
+    recordCircuitBreakerTrip(targetDir, taskId).catch(() => {});
+
+    return diagnosticBundle;
+  }
+
+  private static writeEscalation(targetDir: string, record: SelfHealingEscalationRecord): void {
     const escalationPath = path.join(targetDir, '.ai', 'escalation.json');
     try {
       let escalationFile: EscalationFile = {
@@ -169,32 +371,21 @@ export class CircuitBreaker {
       if (fs.existsSync(escalationPath)) {
         try {
           escalationFile = JSON.parse(fs.readFileSync(escalationPath, 'utf8'));
+          if (!Array.isArray(escalationFile.escalations)) escalationFile.escalations = [];
         } catch {
           // fallback
         }
       }
 
-      const newRecord: EscalationRecord = {
-        id: escalationId,
-        taskId,
-        type: patch.target === 'db_schema' ? 'schema_flaw' : 'contract_drift',
-        reportedBy: 'backend',
-        timestamp: new Date().toISOString(),
-        summary: `Circuit Breaker Tripped (${failures}/${MAX_FAILURE_THRESHOLD}): ${ruleResult.ruleId} on ${patch.path}`,
-        details: `Autonomous agent failed ${failures} times attempting ${patch.operation} on ${patch.path}: ${ruleResult.message}`,
-        affectedContracts: [`.ai/${contractFileName}`],
-        recommendedAction: diagnosticBundle.recommendedActions[0],
-        status: 'pending_review',
-      };
-
-      escalationFile.escalations.unshift(newRecord);
+      escalationFile.escalations.unshift(record);
       escalationFile.lastUpdated = new Date().toISOString();
       fs.writeFileSync(escalationPath, JSON.stringify(escalationFile, null, 2) + '\n', 'utf8');
     } catch {
       // Non-fatal
     }
+  }
 
-    // 2. Mark task as blocked in .ai/master_plan.json
+  private static blockTask(targetDir: string, taskId: string, note: string): void {
     const planPath = path.join(targetDir, '.ai', 'master_plan.json');
     try {
       withPlanLockSync(planPath, (plan) => {
@@ -202,7 +393,7 @@ export class CircuitBreaker {
           const task = milestone.tasks.find((t) => t.id === taskId);
           if (task) {
             task.status = 'blocked';
-            task.notes = `Circuit breaker tripped by Governor: ${ruleResult.ruleId} (${escalationId})`;
+            task.notes = note;
             break;
           }
         }
@@ -210,9 +401,5 @@ export class CircuitBreaker {
     } catch {
       // Non-fatal
     }
-
-    recordCircuitBreakerTrip(targetDir, taskId).catch(() => {});
-
-    return diagnosticBundle;
   }
 }
