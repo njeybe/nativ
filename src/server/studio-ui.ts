@@ -848,7 +848,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     <fieldset class="choice-group">
       <legend>Thinking Budget</legend>
       <div class="budget-chips">
-        <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-none" value="" checked>None<small>Fast / Deterministic</small></label>
+        <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-none" value="0" checked>None<small>Fast / Deterministic</small></label>
         <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-standard" value="2048">Standard<small>2,048 tokens</small></label>
         <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-deep" value="4096">Deep<small>4,096 tokens</small></label>
       </div>
@@ -1913,8 +1913,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     if (engine === 'cli') {
       return budget ? 'Passed to Claude Code as MAX_THINKING_TOKENS=' + budget + '.' : 'Claude Code chooses its own thinking budget.';
     }
-    if (!budget) return 'Uses the model default effort (medium on Claude Opus 5.5, whose thinking cannot be switched off).';
-    var effort = budget <= 2048 ? 'low' : budget <= 8192 ? 'medium' : budget <= 24576 ? 'high' : budget <= 49152 ? 'xhigh' : 'max';
+    if (!budget) return 'Runs at low effort, the fastest setting (Claude Opus 5.5 cannot switch thinking off entirely).';
+    var effort = budget <= 2048 ? 'medium' : budget <= 8192 ? 'high' : budget <= 32768 ? 'xhigh' : 'max';
     return 'Runs at ' + effort + ' effort: the native engine maps token budgets onto effort levels.';
   }
 
@@ -1965,7 +1965,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       verify: $('dispatch-verify-gate').checked,
       autoMerge: $('dispatch-merge').checked
     };
-    if (budget) opts.thinkingBudget = budget;
+    // Always sent: 0 ("None") asks for the least thinking, which differs from leaving the model default.
+    opts.thinkingBudget = budget;
     // An untouched preview is the server's own default, which may be overridden by NATIV_RUNNER_COMMAND.
     if (engine === 'cli' && command !== pendingDispatch.preview) opts.runnerCommand = command;
     var id = pendingDispatch.taskId;

@@ -263,6 +263,7 @@ try {
       assert.ok(dlg.includes(chip), `thinking budget selector missing "${chip}"`);
     }
     assert.match(radio('dispatch-budget', 'dispatch-budget-none'), /\bchecked\b/, 'the None budget chip is the default');
+    assert.match(radio('dispatch-budget', 'dispatch-budget-none'), /value=["']0["']/, 'None sends 0 (least thinking), not "model default"');
     assert.match(radio('dispatch-budget', 'dispatch-budget-standard'), /value=["']2048["']/, 'Standard sends a 2,048-token budget');
     assert.match(radio('dispatch-budget', 'dispatch-budget-deep'), /value=["']4096["']/, 'Deep sends a 4,096-token budget');
     assert.match(dlg, /<fieldset\b[^>]*>\s*<legend>Engine<\/legend>/, 'engine options are a labelled radio group');

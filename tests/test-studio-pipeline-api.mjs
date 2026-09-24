@@ -936,7 +936,7 @@ try {
     assert.equal(status, 200, `native dispatch → HTTP ${status}: ${JSON.stringify(body)}`);
     assert.equal(body.run.engine, 'native');
     assert.equal(body.run.model, 'claude-opus-5-5');
-    assert.deepEqual(body.run.thinking, { budget: 4000, effort: 'medium', budgetTokens: null }, 'a 4k budget maps to medium effort');
+    assert.deepEqual(body.run.thinking, { budget: 4000, effort: 'high', budgetTokens: null }, 'a 4k (Deep) budget maps to high effort');
 
     const usage = await waitForRunnerEvent(
       alpha,
@@ -967,7 +967,7 @@ try {
     assert.equal(finished.usage.cacheHitRate, 0, 'runner records expose the derived cache hit rate');
 
     const request = nativeRequests.at(-1);
-    assert.deepEqual(request.output_config, { effort: 'medium' });
+    assert.deepEqual(request.output_config, { effort: 'high' });
     assert.deepEqual(request.cache_control, { type: 'ephemeral' }, 'native requests opt into prompt caching');
     assert.equal(request.thinking?.type, 'adaptive');
 

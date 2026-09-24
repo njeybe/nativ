@@ -1201,8 +1201,9 @@ function parseRunnerEngine(value: unknown): RunnerEngine | undefined {
 
 function parseThinkingBudget(value: unknown): number | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > MAX_THINKING_BUDGET) {
-    throw new HttpError(400, 'VALIDATION_ERROR', `"thinkingBudget" must be a number between 1 and ${MAX_THINKING_BUDGET}`);
+  // 0 is valid: "as little thinking as the model allows" (the Studio's None chip).
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_THINKING_BUDGET) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"thinkingBudget" must be a number between 0 and ${MAX_THINKING_BUDGET}`);
   }
   return Math.floor(value);
 }

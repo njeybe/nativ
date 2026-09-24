@@ -604,12 +604,17 @@ try {
 
   // ── 13. Native engine: thinking resolution and command policy (pure) ──────
   console.log('13. Testing native thinking resolution and the bash command policy...');
-  assert.equal(thinkingBudgetToEffort(2048), 'low');
-  assert.equal(thinkingBudgetToEffort(2049), 'medium');
-  assert.equal(thinkingBudgetToEffort(8192), 'medium');
-  assert.equal(thinkingBudgetToEffort(24576), 'high');
-  assert.equal(thinkingBudgetToEffort(49152), 'xhigh');
-  assert.equal(thinkingBudgetToEffort(49153), 'max');
+  // The Studio chips map in order: None (0) → low, Standard (2,048) → medium, Deep (4,096) → high.
+  assert.equal(thinkingBudgetToEffort(0), 'low');
+  assert.equal(thinkingBudgetToEffort(1), 'medium');
+  assert.equal(thinkingBudgetToEffort(2048), 'medium');
+  assert.equal(thinkingBudgetToEffort(2049), 'high');
+  assert.equal(thinkingBudgetToEffort(4096), 'high');
+  assert.equal(thinkingBudgetToEffort(8192), 'high');
+  assert.equal(thinkingBudgetToEffort(8193), 'xhigh');
+  assert.equal(thinkingBudgetToEffort(32768), 'xhigh');
+  assert.equal(thinkingBudgetToEffort(32769), 'max');
+  assert.deepEqual(resolveNativeThinking('claude-haiku-4-5', 0), { budget: 0, effort: null, budgetTokens: null }, 'a zero budget means no thinking on legacy models');
   assert.equal(resolveNativeThinking('claude-opus-5-5', null).effort, 'medium', 'Opus 5.5 starts at medium effort');
   assert.equal(resolveNativeThinking('claude-opus-5', null).effort, 'high');
   assert.equal(resolveNativeThinking('claude-opus-4-6', 32000).effort, 'high', 'the 4.6 generation has no xhigh');
@@ -848,6 +853,19 @@ try {
   assert.equal((await legacyDone).status, 'completed');
   assert.deepEqual(legacyRequests[0].thinking, { type: 'enabled', budget_tokens: 1024 }, 'legacy models get a literal budget_tokens');
   assert.equal(legacyRequests[0].output_config, undefined, 'legacy models get no effort parameter');
+
+  // Budget 0 (the Studio's "None") asks current models for the least thinking: low effort.
+  const fastRequests = [];
+  const fastSup = new AgentSupervisor({
+    cwd: dir,
+    anthropicClientFactory: scriptedClient([{ stop: 'end_turn', content: [{ type: 'text', text: 'ok' }], usage: usage(10, 10, 0, 0, 0) }], fastRequests),
+  });
+  const fastDone = waitForStatus(fastSup, 'task-native-legacy', ['completed', 'failed']);
+  const fastRecord = await fastSup.dispatch({ taskId: 'task-native-legacy', runnerEngine: 'native', model: 'claude-opus-5-5', thinkingBudget: 0, useWorktree: false });
+  assert.deepEqual(fastRecord.thinking, { budget: 0, effort: 'low', budgetTokens: null });
+  await fastDone;
+  assert.deepEqual(fastRequests[0].output_config, { effort: 'low' });
+  fastSup.shutdown();
   legacySup.shutdown();
   console.log('✔ Invalid engines, budgets, models and missing credentials are refused; legacy models keep budget_tokens.');
 

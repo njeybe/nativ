@@ -489,22 +489,24 @@ export function usesLegacyThinkingBudget(model: string): boolean {
 }
 
 /**
- * Buckets a token budget into an effort level. Current models reject
- * `budget_tokens`, so the contract's numeric `thinkingBudget` maps onto effort.
+ * Buckets a token budget into an effort level. Current models reject `budget_tokens`, so the
+ * contract's numeric `thinkingBudget` maps onto effort. The buckets follow the Studio's budget
+ * chips: 0 ("None, fast") is the least thinking a model allows, 2,048 ("Standard") is the
+ * standard effort, 4,096 ("Deep") is high, and larger budgets reach xhigh and max.
  */
 export function thinkingBudgetToEffort(budget: number): ThinkingEffort {
-  if (budget <= 2_048) return 'low';
-  if (budget <= 8_192) return 'medium';
-  if (budget <= 24_576) return 'high';
-  if (budget <= 49_152) return 'xhigh';
+  if (budget <= 0) return 'low';
+  if (budget <= 2_048) return 'medium';
+  if (budget <= 8_192) return 'high';
+  if (budget <= 32_768) return 'xhigh';
   return 'max';
 }
 
 export function resolveNativeThinking(model: string, budget: number | null): RunnerThinking {
   if (usesLegacyThinkingBudget(model)) {
-    // budget_tokens must be >= 1024 and below max_tokens; no budget means no thinking.
+    // budget_tokens must be >= 1024 and below max_tokens; no budget (or 0) means no thinking.
     const budgetTokens =
-      budget === null ? null : Math.min(Math.max(Math.floor(budget), 1024), NATIVE_MAX_OUTPUT_TOKENS - 1);
+      budget === null || budget <= 0 ? null : Math.min(Math.max(Math.floor(budget), 1024), NATIVE_MAX_OUTPUT_TOKENS - 1);
     return { budget, effort: null, budgetTokens };
   }
   let effort = budget === null ? defaultNativeEffort(model) : thinkingBudgetToEffort(budget);
@@ -822,10 +824,11 @@ function normalizeEngine(value: unknown, fallback: RunnerEngine): RunnerEngine {
   throw new SupervisorError('VALIDATION_ERROR', `"runnerEngine" must be 'native' or 'cli'`);
 }
 
+/** 0 is a valid budget: "as little thinking as the model allows". */
 function normalizeThinkingBudget(value: unknown): number | null {
   if (value === undefined || value === null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new SupervisorError('VALIDATION_ERROR', '"thinkingBudget" must be a positive number');
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new SupervisorError('VALIDATION_ERROR', '"thinkingBudget" must be a non-negative number');
   }
   return Math.floor(value);
 }
@@ -946,7 +949,8 @@ export class AgentSupervisor extends EventEmitter {
         .replace(/\{taskId\}/g, taskId)
         .replace(/\{taskTitle\}/g, task.title)
         .replace(/\{worktreeDir\}/g, worktreeDir);
-      if (thinkingBudget !== null) thinking = { budget: thinkingBudget, effort: null, budgetTokens: thinkingBudget };
+      // 0 ("no extra thinking") leaves Claude Code on its own default rather than exporting MAX_THINKING_TOKENS=0.
+      if (thinkingBudget !== null) thinking = { budget: thinkingBudget, effort: null, budgetTokens: thinkingBudget > 0 ? thinkingBudget : null };
     }
 
     const record: RunnerRecord = {
