@@ -765,6 +765,27 @@ try {
     const { worktrees } = await getOk(studio.url, '/api/pipeline/worktrees');
     assert.ok(worktrees.some((wt) => wt.taskId === 'task-d' && wt.isAgentWorktree), 'the dispatched worktree is listed for Mission Control');
 
+    // GET /api/pipeline/worktrees/diff — uncommitted changes inside the isolated worktree
+    assertContractError('diff without taskId', await requestJson(studio.url, 'GET', '/api/pipeline/worktrees/diff'));
+    assertContractError('diff with invalid taskId', await requestJson(studio.url, 'GET', '/api/pipeline/worktrees/diff?taskId=..%2Fetc'));
+    assertContractError('diff for a task without a worktree', await requestJson(studio.url, 'GET', '/api/pipeline/worktrees/diff?taskId=task-no-wt'));
+
+    const initialDiff = await getOk(studio.url, '/api/pipeline/worktrees/diff?taskId=task-d');
+    assert.equal(initialDiff.taskId, 'task-d');
+    assert.equal(initialDiff.branch, 'agent/task-task-d');
+    assert.equal(typeof initialDiff.hasChanges, 'boolean');
+    assert.ok(Array.isArray(initialDiff.filesChanged), '"filesChanged" must be an array');
+    assert.equal(typeof initialDiff.diff, 'string');
+
+    // An untracked file with spaces inside an untracked directory is reported by its full path.
+    fs.mkdirSync(path.join(worktreeDir, 'diff probe'), { recursive: true });
+    fs.writeFileSync(path.join(worktreeDir, 'diff probe', 'A B.txt'), 'worktree diff inspection\n', 'utf8');
+    const dirtyDiff = await getOk(studio.url, '/api/pipeline/worktrees/diff?taskId=task-d');
+    assert.equal(dirtyDiff.hasChanges, true, 'hasChanges must be true when the worktree has uncommitted files');
+    assert.ok(dirtyDiff.filesChanged.includes('diff probe/A B.txt'), `filesChanged must list the exact path, got: ${JSON.stringify(dirtyDiff.filesChanged)}`);
+    assert.ok(dirtyDiff.diff.includes('+worktree diff inspection'), 'the diff must include the untracked file contents as additions');
+    console.log('✔ GET /api/pipeline/worktrees/diff reports uncommitted worktree changes and rejects unknown worktrees');
+
     const removed = await requestJson(studio.url, 'POST', '/api/pipeline/worktrees/action', { action: 'remove', taskId: 'task-d' });
     assert.equal(removed.status, 200, `worktree remove → HTTP ${removed.status}: ${JSON.stringify(removed.body)}`);
     assert.ok(!fs.existsSync(worktreeDir), 'the worktree is discarded without touching the mounted contracts');

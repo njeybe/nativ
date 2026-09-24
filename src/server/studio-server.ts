@@ -1015,6 +1015,72 @@ async function handleWorktreeAction(root: string, body: Record<string, unknown>)
   return { ok: true, message: result.message };
 }
 
+/** GET /api/pipeline/worktrees/diff: uncommitted changes and unified diff for an agent worktree. */
+async function handleWorktreeDiff(root: string, searchParams: URLSearchParams) {
+  const rawTaskId = searchParams.get('taskId');
+  if (!rawTaskId) throw new HttpError(400, 'VALIDATION_ERROR', '"taskId" query parameter is required');
+  const taskId = parseTaskId(rawTaskId);
+
+  const worktree = (await describeWorktrees(root)).find((wt) => wt.isAgentWorktree && wt.taskId === taskId);
+  if (!worktree || !fs.existsSync(worktree.path)) {
+    throw new HttpError(400, 'WORKTREE_NOT_FOUND', `No agent worktree found for task "${taskId}"`);
+  }
+
+  let statusOut: string;
+  try {
+    // -z keeps paths unquoted and unambiguous; -uall lists the files inside untracked directories.
+    statusOut = await git(worktree.path, ['status', '--porcelain', '-z', '--untracked-files=all']);
+  } catch {
+    throw new HttpError(400, 'WORKTREE_INVALID', `Failed to read git status in the worktree for task "${taskId}"`);
+  }
+
+  const filesChanged: string[] = [];
+  const untracked: string[] = [];
+  const entries = statusOut.split('\0');
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.length < 4) continue;
+    const xy = entry.slice(0, 2);
+    const file = entry.slice(3);
+    filesChanged.push(file);
+    if (xy === '??') untracked.push(file);
+    // Renames and copies carry the original path in the next field.
+    if (xy[0] === 'R' || xy[0] === 'C') i++;
+  }
+
+  let diff = '';
+  try {
+    diff = await git(worktree.path, ['diff', 'HEAD']);
+  } catch {
+    diff = await git(worktree.path, ['diff']).catch(() => '');
+  }
+  // `git diff HEAD` skips untracked files; render them as additions without touching the index.
+  for (const file of untracked) {
+    diff += (await gitNoIndexDiff(worktree.path, file)) || `+++ b/${file} (untracked)\n`;
+  }
+
+  return {
+    ok: true,
+    taskId,
+    branch: worktree.branch,
+    hasChanges: filesChanged.length > 0,
+    filesChanged,
+    diff: diff.trim(),
+  };
+}
+
+/** `git diff --no-index` exits 1 when the inputs differ, so stdout is also read from that "error". */
+function gitNoIndexDiff(cwd: string, file: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      ['diff', '--no-index', '--', '/dev/null', file],
+      { cwd, timeout: 10_000, windowsHide: true, maxBuffer: 1024 * 1024 },
+      (err, stdout) => resolve(!err || (err as { code?: unknown }).code === 1 ? String(stdout) : ''),
+    );
+  });
+}
+
 // ─── Autonomous agent dispatch (/api/pipeline/tasks/dispatch|abort|runs|logs) ──
 
 const MAX_RUNNER_COMMAND_LENGTH = 2000;
@@ -1391,6 +1457,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, { ok: true, worktrees: await describeWorktrees(root) });
         case 'POST /api/pipeline/worktrees/action':
           return sendJson(res, 200, await handleWorktreeAction(root, await readJsonBody(req)));
+        case 'GET /api/pipeline/worktrees/diff':
+          return sendJson(res, 200, await handleWorktreeDiff(root, url.searchParams));
         case 'GET /api/pipeline/benchmarks':
           return sendJson(res, 200, handleBenchmarks(root));
         case 'POST /api/pipeline/benchmarks/run':
@@ -1405,7 +1473,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           '/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data', '/api/tests/generate',
           '/api/events', '/api/pipeline/status', '/api/pipeline/tasks', '/api/pipeline/tasks/action', '/api/pipeline/tasks/dispatch',
           '/api/pipeline/tasks/abort', '/api/pipeline/tasks/runs', '/api/pipeline/tasks/logs', '/api/pipeline/worktrees',
-          '/api/pipeline/worktrees/action', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
+          '/api/pipeline/worktrees/action', '/api/pipeline/worktrees/diff', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
