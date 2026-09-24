@@ -20,6 +20,7 @@ import {
   ContractPatch,
   TestIntegrityGuard,
   resolveGitHead,
+  appendEscalation,
 } from '../governor/index.js';
 import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
@@ -634,36 +635,6 @@ export async function runTaskEscalate(
       return;
     }
 
-    const escalationPath = path.join(targetDir, '.ai', 'escalation.json');
-    let escalationFile: EscalationFile;
-
-    if (fs.existsSync(escalationPath)) {
-      try {
-        escalationFile = JSON.parse(fs.readFileSync(escalationPath, 'utf8'));
-        if (!Array.isArray(escalationFile.escalations)) {
-          escalationFile.escalations = [];
-        }
-      } catch {
-        escalationFile = {
-          $schema: 'http://json-schema.org/draft-07/schema#',
-          version: '1.0.0',
-          projectName: plan.projectName,
-          lastUpdated: new Date().toISOString(),
-          escalations: [],
-        };
-      }
-    } else {
-      escalationFile = {
-        $schema: 'http://json-schema.org/draft-07/schema#',
-        version: '1.0.0',
-        projectName: plan.projectName,
-        lastUpdated: new Date().toISOString(),
-        escalations: [],
-      };
-    }
-
-    const count = escalationFile.escalations.length + 1;
-    const escId = `esc-${String(count).padStart(2, '0')}`;
     const validTypes: EscalationType[] = [
       'contract_drift',
       'schema_flaw',
@@ -681,22 +652,24 @@ export async function runTaskEscalate(
 
     const summary = options.details || `Task ${taskId} blocked by ${escType}`;
 
-    const newRecord: EscalationRecord = {
-      id: escId,
-      taskId,
-      type: escType,
-      reportedBy: foundTask.assignedSubagent,
-      timestamp: new Date().toISOString(),
-      summary,
-      details: options.details || '',
-      affectedContracts,
-      status: 'pending_review',
-    };
-
-    escalationFile.escalations.push(newRecord);
-    escalationFile.lastUpdated = new Date().toISOString();
-
-    fs.writeFileSync(escalationPath, JSON.stringify(escalationFile, null, 2) + '\n', 'utf8');
+    const reportedBy = foundTask.assignedSubagent;
+    // Locked append: the id is numbered under the escalation file lock, so concurrent
+    // escalations (and circuit-breaker trips) never collide or overwrite each other.
+    const escId = appendEscalation(
+      targetDir,
+      (id): EscalationRecord => ({
+        id,
+        taskId,
+        type: escType,
+        reportedBy,
+        timestamp: new Date().toISOString(),
+        summary,
+        details: options.details || '',
+        affectedContracts,
+        status: 'pending_review',
+      }),
+      { style: 'sequential', position: 'last', projectName: plan.projectName },
+    );
 
     foundTask.status = 'blocked';
     foundTask.notes = `Escalated [${escId}]: ${summary}`;

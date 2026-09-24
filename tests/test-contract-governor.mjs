@@ -87,6 +87,17 @@ function createProjectFixture() {
             verificationCommand: '',
             notes: '',
           },
+          ...['task-03', 'task-04', 'task-05'].map((id) => ({
+            id,
+            title: `Parallel ${id}`,
+            description: 'Concurrent failure accounting',
+            assignedSubagent: 'backend',
+            dependencies: [],
+            targetFiles: [],
+            status: 'in_progress',
+            verificationCommand: '',
+            notes: '',
+          })),
         ],
       },
     ],
@@ -344,6 +355,47 @@ try {
   const v4 = JSON.parse(pRes4.stdout);
   assert.equal(v4.ruleId, 'TASK_PATCH_BUDGET_EXCEEDED');
   console.log('✔ Patch budget cap correctly halts scope creep.');
+
+  // Test 9: Parallel failures are all counted and escalate once, with unique ids
+  console.log('9. Testing concurrent failures across agents (ledger + escalation locking)...');
+  const readJson = (file) => JSON.parse(fs.readFileSync(path.join(dir, '.ai', file), 'utf8'));
+  const escalationsBefore = readJson('escalation.json').escalations.length;
+  const drop = (taskId) =>
+    cli(['task', 'propose-patch', taskId, dir, '--target', 'db_schema', '--op', 'DROP', '--path', 'users.columns.email', '--reason', `parallel ${taskId}`, '--json']);
+  // Six agents fail at the same moment: three on each task. Unlocked writes lose counts and ids collide.
+  const parallel = await Promise.all([...Array(3)].flatMap(() => [drop('task-03'), drop('task-04')]));
+  assert.ok(parallel.every((r) => r.code === 1), 'every destructive proposal is rejected');
+  const ledger = readJson('.governor_ledger.json');
+  assert.equal(ledger['task-03'].consecutiveFailures, 3, 'no concurrent failure may be lost from the ledger');
+  assert.equal(ledger['task-04'].consecutiveFailures, 3, 'no concurrent failure may be lost from the ledger');
+  const allEscalations = readJson('escalation.json').escalations;
+  const tripped = allEscalations.filter((e) => e.taskId === 'task-03' || e.taskId === 'task-04');
+  assert.equal(allEscalations.length, escalationsBefore + 2, 'each task escalates exactly once, and neither write is lost');
+  assert.deepEqual(tripped.map((e) => e.taskId).sort(), ['task-03', 'task-04']);
+  const ids = allEscalations.map((e) => e.id);
+  assert.equal(new Set(ids).size, ids.length, `escalation ids must be unique: ${ids.join(', ')}`);
+  const plan9 = readJson('master_plan.json');
+  for (const id of ['task-03', 'task-04']) {
+    assert.equal(plan9.milestones[0].tasks.find((t) => t.id === id).status, 'blocked');
+  }
+
+  // A fourth failure after the trip is counted but does not file another escalation.
+  const again = await drop('task-03');
+  assert.equal(JSON.parse(again.stdout).circuitBreaker.consecutiveFailures, 4);
+  assert.equal(readJson('escalation.json').escalations.length, escalationsBefore + 2, 'a tripped breaker does not re-escalate on every failure');
+  console.log('✔ Six concurrent failures were all counted; each task escalated once with a unique id.');
+
+  // Test 10: Manual escalations keep sequential ids that never collide
+  console.log('10. Testing manual escalation ids...');
+  const esc1 = await cli(['task', 'escalate', 'task-05', dir, '--type', 'schema_flaw', '--details', 'first gap']);
+  const esc2 = await cli(['task', 'escalate', 'task-05', dir, '--type', 'schema_flaw', '--details', 'second gap']);
+  assert.equal(esc1.code, 0, esc1.stderr);
+  assert.equal(esc2.code, 0, esc2.stderr);
+  const manual = readJson('escalation.json').escalations.filter((e) => e.taskId === 'task-05');
+  assert.deepEqual(manual.map((e) => e.id), ['esc-01', 'esc-02'], 'manual escalations are numbered esc-01, esc-02, ...');
+  const allIds = readJson('escalation.json').escalations.map((e) => e.id);
+  assert.equal(new Set(allIds).size, allIds.length, 'manual and circuit-breaker ids never collide');
+  console.log('✔ Manual escalations are numbered sequentially without colliding with breaker ids.');
 
   console.log('\n🎉 ALL CONTRACT GOVERNOR INVARIANT TESTS PASSED!');
 } finally {

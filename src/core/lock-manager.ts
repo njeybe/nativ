@@ -180,6 +180,65 @@ export async function withPlanLock<T>(
 }
 
 /**
+ * Synchronous counterpart of withFileLock for callers that cannot await (the governor runs inside
+ * synchronous verdicts). Uses the same `<file>.lock` directory, so it excludes async holders too.
+ */
+export function withFileLockSync<T>(filePath: string, fn: () => T, options: LockOptions = {}): T {
+  const { retries: _ignored, ...syncOptions } = { ...DEFAULT_LOCK_OPTIONS, ...options };
+  if (!fs.existsSync(filePath)) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, '', 'utf8');
+  }
+
+  let release: (() => void) | null = null;
+  // ~5s of contention before giving up: parallel agents trip the breaker at the same moment.
+  const maxAttempts = 200;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      release = lockfile.lockSync(filePath, syncOptions as any);
+      break;
+    } catch (err: any) {
+      if (attempt === maxAttempts - 1 || err.code !== 'ELOCKED') throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+
+  try {
+    return fn();
+  } finally {
+    try {
+      release?.();
+    } catch {
+      // Best-effort release
+    }
+  }
+}
+
+/**
+ * Writes JSON through a unique temp file and a rename, so readers never observe a half-written
+ * file. Retries the rename on Windows sharing violations, like savePlan().
+ */
+export function writeJsonAtomicSync(filePath: string, data: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n', 'utf8');
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        fs.renameSync(tmpPath, filePath);
+        return;
+      } catch (err: any) {
+        if (attempt >= 10 || (err.code !== 'EPERM' && err.code !== 'EBUSY')) throw err;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+      }
+    }
+  } catch (err) {
+    fs.rmSync(tmpPath, { force: true });
+    throw err;
+  }
+}
+
+/**
  * Synchronous variant of withPlanLock using proper-lockfile lockSync.
  */
 export function withPlanLockSync<T>(
