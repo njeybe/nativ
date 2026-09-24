@@ -189,6 +189,11 @@ export interface AgentSupervisorOptions {
   nativeAllowedCommands?: readonly string[];
   /** Builds the Claude API client for native runs; injectable for tests. */
   anthropicClientFactory?: () => Anthropic;
+  /**
+   * Shell for the native bash tool: a path to bash, or `true` for the platform default shell.
+   * Defaults to NATIV_BASH_PATH, then Git Bash on Windows, then /bin/bash.
+   */
+  nativeShell?: string | boolean;
 }
 
 /** Structured failure carrying the `{ code, message }` shape used by the pipeline API. */
@@ -599,6 +604,10 @@ class ToolInputError extends Error {}
 const SECRET_PATH_PATTERN =
   /(^|[\\/\s'"=])(\.env(?!\.example\b)[\w.-]*|[\w.-]+\.(pem|key)|\.(nativ|agentj)[\\/][\w.-]*\.local\.json)(?=$|[\s'";|&)])/i;
 
+/** Top-level directories of POSIX, macOS and Git Bash (/c/, /d/ drive mounts) filesystems. */
+const FILESYSTEM_ROOT =
+  /^\/(etc|usr|bin|sbin|lib|lib32|lib64|libx32|opt|var|tmp|home|root|proc|sys|dev|mnt|media|srv|boot|run|snap|private|System|Users|Volumes|Library|Applications|[A-Za-z])(\/|$)/;
+
 /** Credentials never reach the model's shell: it could print them. */
 const SECRET_ENV_PATTERN = /^ANTHROPIC_|^CLAUDE_CODE_OAUTH|SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|DATABASE_URL|_DSN$|CREDENTIAL/i;
 
@@ -657,9 +666,17 @@ export function checkNativeBashCommand(command: string, allowed: ReadonlySet<str
   }
 
   for (const token of command.split(/\s+/)) {
-    const bare = token.replace(/^\d*[<>]+&?/, '');
+    const raw = token.replace(/^\d*[<>]+&?/, '');
+    // Quoting must not smuggle a path past the checks: look through one layer of quotes.
+    const quoted = /^['"]/.test(raw);
+    const bare = raw.replace(/^['"]+|['"]+$/g, '');
     if (!bare || bare === '/dev/null') continue;
-    if (/^(\/|~|[A-Za-z]:[\\/])/.test(bare)) {
+    if (/^(~|\$\{?(HOME|USERPROFILE)\}?|%USERPROFILE%)/i.test(bare)) {
+      return `Home-directory path '${bare}' points outside the workspace; use paths relative to the workspace root.`;
+    }
+    // Unquoted slash paths are always paths. A quoted one may be a search pattern ("/api/events"),
+    // so it is refused only when it starts at a real filesystem root.
+    if (/^[A-Za-z]:[\\/]/.test(bare) || (bare.startsWith('/') && (!quoted || FILESYSTEM_ROOT.test(bare)))) {
       return `Absolute path '${bare}' points outside the workspace; use paths relative to the workspace root.`;
     }
     if (/(^|[\\/])\.\.([\\/]|$)/.test(bare)) return `Parent-directory path '${bare}' escapes the workspace.`;
@@ -919,7 +936,7 @@ export class AgentSupervisor extends EventEmitter {
     this.nativeToolTimeoutMs = options.nativeToolTimeoutMs ?? DEFAULT_NATIVE_TOOL_TIMEOUT_MS;
     this.nativeAllowedCommands = new Set(options.nativeAllowedCommands ?? DEFAULT_NATIVE_ALLOWED_COMMANDS);
     this.anthropicClientFactory = options.anthropicClientFactory ?? (() => new Anthropic());
-    this.toolShell = resolveToolShell();
+    this.toolShell = options.nativeShell ?? resolveToolShell();
     this.restoreHistory();
   }
 
@@ -953,6 +970,13 @@ export class AgentSupervisor extends EventEmitter {
     let thinking: RunnerThinking | null = null;
 
     if (engine === 'native') {
+      // The model writes POSIX shell; Windows' cmd.exe fallback would fail on nearly every command.
+      if (process.platform === 'win32' && this.toolShell === true) {
+        throw new SupervisorError(
+          'BASH_NOT_FOUND',
+          'The native engine runs the model\'s commands in bash, which was not found. Install Git for Windows (it ships Git Bash) or set NATIV_BASH_PATH to bash.exe.',
+        );
+      }
       const model = requestedModel ?? this.defaultNativeModel;
       thinking = resolveNativeThinking(model, thinkingBudget);
       native = {

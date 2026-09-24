@@ -656,7 +656,17 @@ try {
     ['git push origin main', /reserved for the operator/],
     ['npm publish', /reserved for the operator/],
     ['node server.js &', /Background jobs/],
+    // Quotes and home shortcuts must not smuggle a path past the guard.
+    ['cat "/etc/passwd"', /Absolute path/],
+    ["cat '/home/dev/.ssh/id_rsa'", /Absolute path/],
+    ['cat "/c/Users/dev/.aws/credentials"', /Absolute path/],
+    ['type "C:\\Windows\\win.ini"', /Absolute path|allowlist/],
+    ['cat ~/.ssh/id_rsa', /Home-directory/],
+    ['ls $HOME', /Home-directory/],
+    ['cat "${HOME}/.netrc"', /Home-directory|substitution/],
   ];
+  // A quoted search pattern that merely starts with a slash is still fine.
+  assert.equal(checkNativeBashCommand("grep -rn '/api/pipeline/status' src", allow), null);
   for (const command of allowed) assert.equal(checkNativeBashCommand(command, allow), null, `must allow: ${command}`);
   for (const [command, reason] of denied) assert.match(checkNativeBashCommand(command, allow) ?? '', reason, `must reject: ${command}`);
   console.log('✔ Budgets map onto effort (legacy models keep budget_tokens) and the bash policy blocks escapes.');
@@ -860,6 +870,12 @@ try {
   const noCredentials = new AgentSupervisor({ cwd: dir, anthropicClientFactory: () => { throw new Error('no key configured'); } });
   await expectError(noCredentials.dispatch({ taskId: 'task-native-legacy', runnerEngine: 'native', useWorktree: false }), 'ANTHROPIC_CREDENTIALS_MISSING');
   noCredentials.shutdown();
+  if (process.platform === 'win32') {
+    // Without Git Bash the model's POSIX commands would all fail under cmd.exe: refuse up front.
+    const noBash = new AgentSupervisor({ cwd: dir, nativeShell: true, anthropicClientFactory: scriptedClient([], legacyRequests) });
+    await expectError(noBash.dispatch({ taskId: 'task-native-legacy', runnerEngine: 'native', useWorktree: false }), 'BASH_NOT_FOUND');
+    noBash.shutdown();
+  }
 
   const legacyDone = waitForStatus(legacySup, 'task-native-legacy', ['completed', 'failed']);
   const legacyRecord = await legacySup.dispatch({ taskId: 'task-native-legacy', runnerEngine: 'native', model: 'claude-haiku-4-5', thinkingBudget: 500, useWorktree: false });

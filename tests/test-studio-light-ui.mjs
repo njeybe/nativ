@@ -274,6 +274,8 @@ try {
       assert.ok(code.includes(label), `financial & cache telemetry card missing "${label}"`);
     }
     assert.match(code, /actualSpendUsd/, 'the spend KPI reads actualSpendUsd from /api/pipeline/status');
+    assert.match(code, /cacheSavingsUsd/, 'caching savings come from the server audit');
+    assert.doesNotMatch(code, /CACHE_RATES|claude-opus-5-5['"]\s*:\s*\[/, 'the client must not keep its own copy of the price table');
     assert.match(code, /['"]\/api\/pipeline\/telemetry\/detailed['"]/, 'client must call GET /api/pipeline/telemetry/detailed');
 
     const drawer = decodeEntities(/<section\b[^>]*id=["']runner-console-drawer["'][\s\S]*?<\/section>/i.exec(html)[0]);

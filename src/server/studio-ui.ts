@@ -1538,29 +1538,6 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       '</ul>');
   }
 
-  /**
-   * Input and cache-read list prices (USD per 1M tokens) used only to estimate what prompt caching
-   * saved. Mirrors MODEL_PRICING in core/telemetry.ts; unknown models fall back to Opus 5 rates.
-   */
-  var CACHE_RATES = {
-    'claude-fable-5-1': [10, 0.25], 'claude-fable-5': [10, 1], 'claude-opus-5-5': [4, 0.2], 'claude-opus-5': [5, 0.5],
-    'claude-opus-4-8': [5, 0.5], 'claude-opus-4-7': [5, 0.5], 'claude-opus-4-6': [5, 0.5], 'claude-sonnet-5': [2, 0.2],
-    'claude-sonnet-4-6': [3, 0.3], 'claude-haiku-4-5': [1, 0.1]
-  };
-  function cacheRates(model) {
-    var best = null;
-    Object.keys(CACHE_RATES).forEach(function (id) {
-      if (String(model || '').indexOf(id) === 0 && (!best || id.length > best.length)) best = id;
-    });
-    return CACHE_RATES[best || 'claude-opus-5'];
-  }
-  /** Cache reads billed at the read rate instead of the full input rate, summed per model. */
-  function cacheSavingsUsd(summary) {
-    return ((summary && summary.byModel) || []).reduce(function (sum, m) {
-      var r = cacheRates(m.model);
-      return sum + (Number(m.cacheReadTokens) || 0) * (r[0] - r[1]) / 1e6;
-    }, 0);
-  }
   /** Grounded spend is small per task: show four decimals below a dollar (ui_specs.md: $0.3184). */
   function usdSpend(n) {
     if (n == null || isNaN(n)) return '–';
@@ -1586,7 +1563,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     if (!hasUsage) {
       pill = '<p class="kpi-note">No native runs yet. Estimated cost so far: ' + usd(tel.estimatedCostUsd) + '. Dispatch with the Native Engine to report exact spend.</p>';
     } else {
-      var saved = summary ? cacheSavingsUsd(summary) : null;
+      // Priced server-side from the same per-model table that prices actual spend.
+      var saved = actual && Number(actual.cacheSavingsUsd) > 0 ? Number(actual.cacheSavingsUsd) : null;
       pill = '<span class="cache-pill" title="Share of prompt tokens served from the prompt cache"><span class="label">Cache Hit Rate</span><b>' + hitPct + '%</b>' +
         (saved ? '<span class="save">Saved ~' + usdSpend(saved) + ' via Ephemeral Caching</span>' : '') + '</span>';
     }

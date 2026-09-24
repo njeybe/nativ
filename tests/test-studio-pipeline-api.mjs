@@ -1009,6 +1009,8 @@ try {
     closeTo(a.estimated.costUsd, 0.096, 'task-a estimated cost');
     closeTo(a.varianceUsd, -0.0708, 'task-a variance (actual − estimate)');
     closeTo(a.actual.cacheHitRate, 0.6667, 'task-a cache hit rate', 1e-4);
+    // 6000 cache reads on Opus 5.5 billed at $0.20 instead of $4.00 per MTok.
+    closeTo(summary.actual.cacheSavingsUsd, 0.0228, 'summary.actual.cacheSavingsUsd (priced server-side)');
 
     const c = taskBreakdowns.find((b) => b.taskId === 'task-c');
     assert.ok(c.runs.some((r) => r.engine === 'native' && r.usage?.turns === 1), 'task-c lists its native run with usage');

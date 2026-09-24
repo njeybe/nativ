@@ -42,6 +42,7 @@ import {
   emptyActualUsage,
   loadTelemetry,
   mergeActualUsage,
+  resolveModelPricing,
   type ActualTokenUsage,
   type TaskTelemetryRecord,
 } from '../core/telemetry.js';
@@ -1395,6 +1396,13 @@ function handleTelemetryDetailed(root: string, supervisor: AgentSupervisor) {
         thinkingTokens: actual.thinkingTokens,
         spendUsd: roundUsd(actual.costUsd),
         cacheHitRate: cacheHitRate(actual),
+        // What the cache reads would have cost at each model's full input rate, minus what they did cost.
+        cacheSavingsUsd: roundUsd(
+          [...byModel.values()].reduce((sum, u) => {
+            const rates = resolveModelPricing(u.model);
+            return sum + (u.cacheReadTokens * (rates.inputPerM - rates.cacheReadPerM)) / 1_000_000;
+          }, 0),
+        ),
       },
       byModel: [...byModel.values()].map(usageView).sort((a, b) => b!.costUsd - a!.costUsd),
       verification: {
