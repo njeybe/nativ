@@ -81,14 +81,35 @@ export async function runWorktreeCreate(
   const worktreeDir = path.join(rootDir, '.worktrees', `task-${taskId}`);
   const branchName = `agent/task-${taskId}`;
 
-  if (fs.existsSync(worktreeDir)) {
+  if (fs.existsSync(path.join(worktreeDir, '.git'))) {
+    // A real worktree: make sure its mounts survived (they are the first thing a manual cleanup removes).
+    const aiMounted = linkWorktreeAiDirectory(worktreeDir, rootDir);
+    linkWorktreeNodeModules(worktreeDir, rootDir);
     const msg = `Worktree already exists at: ${worktreeDir}`;
     if (options.json) {
-      console.log(JSON.stringify({ success: true, taskId, branch: branchName, worktreeDir, alreadyExists: true, message: msg }, null, 2));
+      console.log(JSON.stringify({ success: true, taskId, branch: branchName, worktreeDir, alreadyExists: true, aiMounted, message: msg }, null, 2));
     } else {
       console.log(pc.yellow(`\n⚠ ${msg}\n`));
     }
-    return { success: true, taskId, branch: branchName, worktreeDir, aiMounted: false, message: msg };
+    return { success: true, taskId, branch: branchName, worktreeDir, aiMounted, message: msg };
+  }
+
+  if (fs.existsSync(worktreeDir)) {
+    // Left behind by a manual or interrupted cleanup: git no longer knows it. An empty shell is safe
+    // to clear; anything with files in it may be someone's work, so stop instead of deleting it.
+    safeUnlinkWorktreeNodeModules(worktreeDir);
+    safeUnlinkWorktreeAiDirectory(worktreeDir);
+    if (fs.readdirSync(worktreeDir).length > 0) {
+      const msg = `${worktreeDir} exists but is not a git worktree and still contains files. Move or delete it, then retry.`;
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: msg }, null, 2));
+      } else {
+        console.error(pc.red(`\n✖ ${msg}\n`));
+      }
+      process.exitCode = 1;
+      return null;
+    }
+    fs.rmdirSync(worktreeDir);
   }
 
   try {
@@ -103,10 +124,21 @@ export async function runWorktreeCreate(
       execSync('git worktree prune', { cwd: rootDir, stdio: 'ignore' });
     } catch {}
 
-    execSync(`git worktree add "${worktreeDir}" -b "${branchName}"`, {
+    // The agent branch outlives a manually deleted worktree folder; reuse it (keeping its commits)
+    // instead of failing on "a branch named ... already exists".
+    let branchExists = true;
+    try {
+      execSync(`git rev-parse --verify --quiet "refs/heads/${branchName}"`, { cwd: rootDir, stdio: 'ignore' });
+    } catch {
+      branchExists = false;
+    }
+    execSync(branchExists ? `git worktree add "${worktreeDir}" "${branchName}"` : `git worktree add "${worktreeDir}" -b "${branchName}"`, {
       cwd: rootDir,
       stdio: options.json ? 'pipe' : 'inherit',
     });
+    if (branchExists && !options.json) {
+      console.log(pc.dim(`  Reused existing branch ${branchName} (its earlier commits are kept).`));
+    }
 
     // Link/mount .ai contract directory into the worktree
     const aiMounted = linkWorktreeAiDirectory(worktreeDir, rootDir);
@@ -203,13 +235,14 @@ export async function runWorktreeList(targetDirArg?: string, options: { json?: b
     }
 
     console.log(pc.bold(pc.cyan('\n🌿 Active Git Worktrees:')));
-    for (const wt of worktrees) {
+    worktrees.forEach((wt, index) => {
       if (wt.isAgentWorktree) {
         console.log(pc.green(`  ▶ [${wt.taskId || 'agent'}] `) + pc.white(wt.branch) + pc.dim(` (${wt.path})`));
       } else {
-        console.log(pc.dim(`  • [main] `) + pc.white(wt.branch) + pc.dim(` (${wt.path})`));
+        // git always lists the main worktree first; any other non-agent entry was added outside nativ.
+        console.log(pc.dim(`  • [${index === 0 ? 'main' : 'linked'}] `) + pc.white(wt.branch) + pc.dim(` (${wt.path})`));
       }
-    }
+    });
     console.log();
     return worktrees;
   } catch (err: any) {
