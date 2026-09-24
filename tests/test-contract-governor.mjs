@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawn, execFile } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -396,6 +396,62 @@ try {
   const allIds = readJson('escalation.json').escalations.map((e) => e.id);
   assert.equal(new Set(allIds).size, allIds.length, 'manual and circuit-breaker ids never collide');
   console.log('✔ Manual escalations are numbered sequentially without colliding with breaker ids.');
+
+  // Test 11: Test-integrity invariant through the real CLI
+  console.log('11. Testing the test-integrity guard (delete/weaken existing test suites)...');
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-integrity-'));
+  tempDirs.push(repo);
+  const git = (args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  fs.mkdirSync(path.join(repo, '.ai'));
+  fs.mkdirSync(path.join(repo, 'tests'));
+  const taskDef = (id) => ({ id, title: id, description: 'integrity', assignedSubagent: 'backend', dependencies: [], targetFiles: [], status: 'pending', verificationCommand: '', notes: '' });
+  fs.writeFileSync(
+    path.join(repo, '.ai', 'master_plan.json'),
+    JSON.stringify({ version: '1', projectName: 'integrity', lastUpdated: '', overallStatus: 'in_progress', activeMilestoneId: 'm1', milestones: [{ id: 'm1', name: 'm', status: 'in_progress', tasks: [taskDef('t-ok'), taskDef('t-weaken')] }] }, null, 2),
+  );
+  fs.writeFileSync(path.join(repo, 'tests', 'a.test.mjs'), "import assert from 'node:assert';\ntest('one', () => { assert.equal(1, 1); assert.ok(true); });\ntest('two', () => { assert.ok(1); });\n");
+  fs.writeFileSync(path.join(repo, 'tests', 'b.test.mjs'), "import assert from 'node:assert';\nassert.ok(true);\n");
+  fs.writeFileSync(path.join(repo, 'src.js'), 'export const x = 1;\n');
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'integrity', scripts: { test: 'node tests/a.test.mjs && node tests/b.test.mjs' } }, null, 2));
+  fs.writeFileSync(path.join(repo, '.gitignore'), '.ai/\n');
+  git(['init', '-q']);
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '.']);
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init']);
+  const repoCli = (args) => cli([...args.slice(0, 2), args[2], repo, ...args.slice(3)]);
+  const readRepo = (file) => JSON.parse(fs.readFileSync(path.join(repo, '.ai', file), 'utf8'));
+
+  // A legitimate change completes, and the baseline pinned at start is cleared afterwards.
+  assert.equal((await repoCli(['task', 'start', 't-ok'])).code, 0);
+  assert.ok(readRepo('.governor_ledger.json')['t-ok'].baselineRef, 'task start pins a baseline commit');
+  fs.writeFileSync(path.join(repo, 'src.js'), 'export const x = 2;\n');
+  const okComplete = await repoCli(['task', 'complete', 't-ok']);
+  assert.equal(okComplete.code, 0, okComplete.stdout + okComplete.stderr);
+  assert.equal(readRepo('.governor_ledger.json')['t-ok'].baselineRef, undefined, 'completion clears the baseline');
+
+  // Weakening committed after start is still caught: the baseline, not HEAD, is the reference.
+  assert.equal((await repoCli(['task', 'start', 't-weaken'])).code, 0);
+  fs.writeFileSync(path.join(repo, 'tests', 'a.test.mjs'), "import assert from 'node:assert';\ntest('one', () => { assert.ok(true); });\ntest.skip('two', () => {});\n");
+  fs.rmSync(path.join(repo, 'tests', 'b.test.mjs'));
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'integrity', scripts: { test: 'node tests/a.test.mjs' } }, null, 2));
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '-A']);
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'weaken']);
+
+  const rejected = await repoCli(['task', 'complete', 't-weaken', '--no-verify']);
+  assert.equal(rejected.code, 1, 'a headless --no-verify must not bypass the guard');
+  const output = rejected.stdout + rejected.stderr;
+  for (const rule of ['TEST_ASSERTIONS_REMOVED', 'TEST_CASES_REMOVED', 'TESTS_SKIPPED', 'TEST_SUITE_DELETED', 'TEST_SCRIPT_WEAKENED']) {
+    assert.ok(output.includes(rule), `expected ${rule} in:\n${output}`);
+  }
+  await repoCli(['task', 'complete', 't-weaken']);
+  const third = await repoCli(['task', 'complete', 't-weaken']);
+  assert.match(third.stdout + third.stderr, /CIRCUIT BREAKER TRIPPED/, 'three violations trip the breaker');
+  const blockedTask = readRepo('master_plan.json').milestones[0].tasks.find((t) => t.id === 't-weaken');
+  assert.equal(blockedTask.status, 'blocked');
+  const [restore] = readRepo('escalation.json').escalations;
+  assert.equal(restore.proposedPatch.kind, 'restore_tests', 'the trip proposes restoring the suite');
+  assert.equal(restore.proposedPatch.verificationProof.passed, true, 'every file to restore exists at the baseline');
+  assert.deepEqual([...restore.proposedPatch.files].sort(), ['package.json', 'tests/a.test.mjs', 'tests/b.test.mjs']);
+  console.log('✔ Deleted, weakened and skipped tests are refused, trip the breaker, and propose a verified restore.');
 
   console.log('\n🎉 ALL CONTRACT GOVERNOR INVARIANT TESTS PASSED!');
 } finally {
