@@ -784,6 +784,22 @@ try {
     assert.equal(dirtyDiff.hasChanges, true, 'hasChanges must be true when the worktree has uncommitted files');
     assert.ok(dirtyDiff.filesChanged.includes('diff probe/A B.txt'), `filesChanged must list the exact path, got: ${JSON.stringify(dirtyDiff.filesChanged)}`);
     assert.ok(dirtyDiff.diff.includes('+worktree diff inspection'), 'the diff must include the untracked file contents as additions');
+
+    // Staged additions and a modified rename (porcelain -z "RM new\0old") report the new paths only.
+    const wtGit = (args) => execSync(`git ${args}`, { cwd: worktreeDir, stdio: 'ignore' });
+    fs.writeFileSync(path.join(worktreeDir, 'staged.txt'), 'staged content\n', 'utf8');
+    wtGit('add staged.txt');
+    fs.mkdirSync(path.join(worktreeDir, 'docs'), { recursive: true });
+    wtGit('mv README.md "docs/READ ME.md"');
+    fs.appendFileSync(path.join(worktreeDir, 'docs', 'READ ME.md'), 'edited line\n', 'utf8');
+    const trackedDiff = await getOk(studio.url, '/api/pipeline/worktrees/diff?taskId=task-d');
+    for (const file of ['staged.txt', 'docs/READ ME.md', 'diff probe/A B.txt']) {
+      assert.ok(trackedDiff.filesChanged.includes(file), `filesChanged must list "${file}", got: ${JSON.stringify(trackedDiff.filesChanged)}`);
+    }
+    assert.ok(!trackedDiff.filesChanged.includes('README.md'), 'a rename must report its new path, not the original');
+    assert.equal(new Set(trackedDiff.filesChanged).size, trackedDiff.filesChanged.length, 'filesChanged must not contain duplicates');
+    assert.ok(trackedDiff.diff.includes('+staged content'), 'staged additions must appear in the diff');
+    assert.ok(trackedDiff.diff.includes('+edited line'), 'modifications to a renamed file must appear in the diff');
     console.log('✔ GET /api/pipeline/worktrees/diff reports uncommitted worktree changes and rejects unknown worktrees');
 
     const removed = await requestJson(studio.url, 'POST', '/api/pipeline/worktrees/action', { action: 'remove', taskId: 'task-d' });
