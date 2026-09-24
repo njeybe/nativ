@@ -245,6 +245,7 @@ export function buildDefaultClaudeCommand(task: MasterPlanTask): string {
     task.description ? `Description: ${task.description}.` : '',
     task.verificationCommand ? `Verify your work using: ${task.verificationCommand}.` : '',
     `Start by running: nativ task start ${task.id}. When finished and verified, run: nativ task complete ${task.id}.`,
+    `If blocked, follow the Human-Centric Communication Protocol in CLAUDE.md: explain the user experience symptom, root cause in plain English, and clear options without technical jargon.`,
   ]
     .filter(Boolean)
     .join(' ');

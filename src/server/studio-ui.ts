@@ -1690,7 +1690,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       'Execute task ' + t.id + ' (' + t.title + ').',
       t.description ? 'Description: ' + t.description + '.' : '',
       t.verificationCommand ? 'Verify your work using: ' + t.verificationCommand + '.' : '',
-      'Start by running: nativ task start ' + t.id + '. When finished and verified, run: nativ task complete ' + t.id + '.'
+      'Start by running: nativ task start ' + t.id + '. When finished and verified, run: nativ task complete ' + t.id + '.',
+      'If blocked, follow the Human-Centric Communication Protocol in CLAUDE.md: explain the user experience symptom, root cause in plain English, and clear options without technical jargon.'
     ].filter(Boolean).join(' ');
     return 'claude -p "' + prompt.replace(/"/g, '\\"') + '" --dangerously-skip-permissions';
   }

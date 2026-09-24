@@ -66,7 +66,7 @@ For each active task:
           ```bash
           nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"
           ```
-       3. Stop and notify the user with the failure summary.
+       3. Stop and notify the user using the **Human-Centric UX Communication Protocol** (describe the observable symptom, plain-English cause, safety reassurance, and clear actionable options; never dump raw compiler stack traces into chat).
 
 4. **Mark Completed & Advance (Automated Gatekeeper):**
    - Run:
@@ -83,11 +83,62 @@ For each active task:
        ```bash
        nativ task escalate <taskId> --type schema_flaw --details "Explanation of contract gap"
        ```
-     - Halt execution on that task and notify the user to resolve the escalation in Antigravity.
+     - Halt execution on that task and notify the user with a plain-English explanation of what part of the user experience or design is blocked.
 
 ---
 
-## 3. Strict Operating Rules
+## 3. Human-Centric Communication Protocol (User Experience First)
+
+The Human is the **Product Owner and Chief Decision Maker**, NOT an IDE compiler or terminal log debugger. When communicating errors, blockers, trade-offs, or escalations, speak in terms of **User Experience**, **Product Behavior**, and **Plain-English Cause & Effect**.
+
+### The 4-Part UX Conversation Anatomy
+Whenever reporting an issue or requesting human guidance, format your message as:
+
+1. **User Experience Symptom (What does the human or end-user experience?):**
+   State the observable human or interface symptom in plain language without code jargon.
+   *Example:* "The 'Save Changes' button remains stuck in a loading state and does not show a success confirmation."
+2. **Root Cause in Plain English (Why is this happening?):**
+   Explain the underlying cause using relatable analogies or simple cause-and-effect.
+   *Example:* "The server requires a profile photo before saving, but the form didn't prompt the user to upload one."
+3. **User Impact & Blast Radius (What is affected?):**
+   Clarify who or what is affected, and explicitly confirm what remains safe and operational.
+   *Example:* "Existing account settings and user data are completely unaffected. Only updates to profile bios are paused."
+4. **Actionable Options & UX Trade-Offs (The Decision Request):**
+   Provide 2 or 3 distinct choices with their real-world trade-offs (experience, speed, simplicity, stability). Prefix the best approach with `(Recommended)`.
+   Always end with a simple, direct question asking for the human's preference:
+   - `Option A (Recommended):` Make the profile photo optional so the bio saves immediately.
+   - `Option B:` Add an explicit photo upload prompt on the screen before allowing save.
+   *Question:* "Which option would you like us to proceed with?"
+
+### Jargon Translation Table (Mandatory Conversion)
+
+| Technical Jargon / Error Code | Plain Human UX Translation |
+| :--- | :--- |
+| **Foreign key constraint violation / 23503** | "The app tried to link a record to an item that doesn't exist yet." |
+| **CORS preflight / Access-Control header missing** | "The browser blocked the web page from talking to the server for safety reasons." |
+| **401 Unauthorized / JWT token expired** | "The user's security pass expired, but the app didn't ask them to log back in." |
+| **AST / Transpilation / Syntax error** | "The automated builder found an unexpected character or typo in a script file." |
+| **TS2339: Property does not exist on type** | "The screen is trying to display a piece of information that wasn't included in the data." |
+| **Circuit breaker tripped (3 failed attempts)** | "The builder tried 3 different ways to fix this task, but paused so it wouldn't create side effects." |
+| **Schema drift / Contract mismatch** | "The real database has different tables or columns than what was mapped out in the design plan." |
+| **Concurrency lock / Mutex contention** | "Two automated processes tried to update the exact same file at the exact same millisecond." |
+
+### Progressive Disclosure for Technical Telemetry
+- Never dump raw stack traces, terminal dumps, or 50-line compiler errors into the main chat body.
+- If raw technical output is useful for archival or auditing purposes, tuck it neatly inside a collapsible block:
+  ```markdown
+  <details>
+  <summary>Technical Details (Logs & Error Trace)</summary>
+
+  ```
+  ...raw logs here...
+  ```
+  </details>
+  ```
+
+---
+
+## 4. Strict Operating Rules
 - **Zero Manual Plan Edits:** Always use `nativ task [start|complete|block|escalate]` to maintain state.
 - **Contract Adherence:** NEVER alter database table names, columns, API routes/schemas, or UI design tokens independently. All code must conform to `.ai/db_schema.json`, `.ai/api_contracts.json`, and `.ai/ui_specs.md`.
 - **Target File Jailing:** Do not touch or modify files outside `targetFiles` unless importing exported symbols. Never edit `.ai/` contract files directly.
@@ -95,7 +146,7 @@ For each active task:
 
 ---
 
-## 4. Zero-Credential Air-Gap (CRITICAL — Security Guardrails)
+## 5. Zero-Credential Air-Gap (CRITICAL — Security Guardrails)
 
 Database credentials exist only in `.env*` files and inside the local `nativ` process memory. You and your sub-agents work with **structure, never secrets**.
 
