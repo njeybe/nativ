@@ -36,11 +36,24 @@ import {
 import { fetchData, insertRecord, updateRecord, deleteRecord } from '../db/data-engine.js';
 import { generateContractTests, TestGenError } from '../core/test-generator.js';
 import { isTestFramework, TEST_FRAMEWORKS, type TestGenResult } from '../core/test-generator-types.js';
-import { loadPlan } from '../core/lock-manager.js';
-import { loadTelemetry } from '../core/telemetry.js';
+import { loadPlan, withFileLock, withPlanLock } from '../core/lock-manager.js';
+import {
+  cacheHitRate,
+  emptyActualUsage,
+  loadTelemetry,
+  mergeActualUsage,
+  resolveModelPricing,
+  type ActualTokenUsage,
+  type TaskTelemetryRecord,
+} from '../core/telemetry.js';
 import { resolveProjectRoot } from '../core/root-resolver.js';
 import type { BenchmarkReport } from '../core/benchmark.js';
-import { CircuitBreaker } from '../governor/index.js';
+import {
+  CircuitBreaker,
+  applySelfHealingProposal,
+  type ProposalApplication,
+  type SelfHealingEscalationRecord,
+} from '../governor/index.js';
 import { runTaskBlock, runTaskComplete, runTaskStart } from '../commands/task.js';
 import { runWorktreeMerge, runWorktreeRemove, type WorktreeInfo } from '../commands/worktree.js';
 import { runBench } from '../commands/bench.js';
@@ -48,9 +61,11 @@ import {
   AgentSupervisor,
   SupervisorError,
   type AgentSupervisorOptions,
+  type RunnerEngine,
   type RunnerRecord,
+  type RunnerTokenUsageEvent,
 } from '../runner/agent-supervisor.js';
-import type { MasterPlan, MasterPlanMilestone, MasterPlanTask } from '../scanner/types.js';
+import type { EscalationFile, MasterPlan, MasterPlanMilestone, MasterPlanTask } from '../scanner/types.js';
 
 /**
  * Embedded Studio HTTP server (native node:http).
@@ -750,6 +765,41 @@ function percent(part: number, total: number): number {
   return total > 0 ? Math.round((part / total) * 100) : 0;
 }
 
+function roundUsd(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+/** Telemetry is hand-editable JSON: coerce every counter so one bad record cannot NaN the totals. */
+function sanitizeUsage(value: unknown): ActualTokenUsage | null {
+  if (!value || typeof value !== 'object') return null;
+  const u = value as Partial<ActualTokenUsage>;
+  const n = (v: unknown) => Math.max(0, finiteOr(v, 0));
+  return {
+    model: typeof u.model === 'string' ? u.model : 'unknown',
+    turns: n(u.turns),
+    inputTokens: n(u.inputTokens),
+    outputTokens: n(u.outputTokens),
+    cacheCreationTokens: n(u.cacheCreationTokens),
+    cacheReadTokens: n(u.cacheReadTokens),
+    thinkingTokens: n(u.thinkingTokens),
+    costUsd: n(u.costUsd),
+  };
+}
+
+function aggregateActualUsage(records: TaskTelemetryRecord[]): ActualTokenUsage {
+  let total = emptyActualUsage('');
+  for (const record of records) {
+    const usage = sanitizeUsage(record?.actualUsage);
+    if (usage) total = mergeActualUsage(total, usage);
+  }
+  return total;
+}
+
+/** Usage as served by the API: the stored counters plus the derived cache hit rate. */
+function usageView(usage: ActualTokenUsage | null) {
+  return usage ? { ...usage, costUsd: roundUsd(usage.costUsd), cacheHitRate: cacheHitRate(usage) } : null;
+}
+
 function truncateOutput(text: string): string {
   return text.length > MAX_ERROR_OUTPUT_CHARS ? `${text.slice(0, MAX_ERROR_OUTPUT_CHARS)}…` : text;
 }
@@ -839,6 +889,7 @@ function handlePipelineStatus(root: string) {
   const count = (items: Array<{ status: string }>, status: string) => items.filter((i) => i.status === status).length;
   const completedTasks = count(tasks, 'completed');
   const { summary, tasks: trackedTasks } = loadTelemetry(path.join(aiDir, 'telemetry.json'));
+  const actual = aggregateActualUsage(trackedTasks);
 
   return {
     ok: true,
@@ -862,6 +913,13 @@ function handlePipelineStatus(root: string) {
       telemetry: {
         totalTokens: finiteOr(summary?.estimatedTotalTokens, 0),
         estimatedCostUsd: finiteOr(summary?.estimatedTotalCostUsd, 0),
+        // Grounded in API-reported usage (native runs), summed from the task records so a
+        // stale summary written by an older nativ can never under-report spend.
+        actualSpendUsd: roundUsd(actual.costUsd),
+        cacheReadTokens: actual.cacheReadTokens,
+        cacheCreationTokens: actual.cacheCreationTokens,
+        thinkingTokens: actual.thinkingTokens,
+        cacheHitRate: cacheHitRate(actual),
         totalTasksTracked: trackedTasks.length,
         // Ratio in [0, 1], as stored in telemetry.json.
         passRate: finiteOr(summary?.verificationPassRate, 1),
@@ -1015,6 +1073,72 @@ async function handleWorktreeAction(root: string, body: Record<string, unknown>)
   return { ok: true, message: result.message };
 }
 
+/** GET /api/pipeline/worktrees/diff: uncommitted changes and unified diff for an agent worktree. */
+async function handleWorktreeDiff(root: string, searchParams: URLSearchParams) {
+  const rawTaskId = searchParams.get('taskId');
+  if (!rawTaskId) throw new HttpError(400, 'VALIDATION_ERROR', '"taskId" query parameter is required');
+  const taskId = parseTaskId(rawTaskId);
+
+  const worktree = (await describeWorktrees(root)).find((wt) => wt.isAgentWorktree && wt.taskId === taskId);
+  if (!worktree || !fs.existsSync(worktree.path)) {
+    throw new HttpError(400, 'WORKTREE_NOT_FOUND', `No agent worktree found for task "${taskId}"`);
+  }
+
+  let statusOut: string;
+  try {
+    // -z keeps paths unquoted and unambiguous; -uall lists the files inside untracked directories.
+    statusOut = await git(worktree.path, ['status', '--porcelain', '-z', '--untracked-files=all']);
+  } catch {
+    throw new HttpError(400, 'WORKTREE_INVALID', `Failed to read git status in the worktree for task "${taskId}"`);
+  }
+
+  const filesChanged: string[] = [];
+  const untracked: string[] = [];
+  const entries = statusOut.split('\0');
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.length < 4) continue;
+    const xy = entry.slice(0, 2);
+    const file = entry.slice(3);
+    filesChanged.push(file);
+    if (xy === '??') untracked.push(file);
+    // Renames and copies carry the original path in the next field.
+    if (xy[0] === 'R' || xy[0] === 'C') i++;
+  }
+
+  let diff = '';
+  try {
+    diff = await git(worktree.path, ['diff', 'HEAD']);
+  } catch {
+    diff = await git(worktree.path, ['diff']).catch(() => '');
+  }
+  // `git diff HEAD` skips untracked files; render them as additions without touching the index.
+  for (const file of untracked) {
+    diff += (await gitNoIndexDiff(worktree.path, file)) || `+++ b/${file} (untracked)\n`;
+  }
+
+  return {
+    ok: true,
+    taskId,
+    branch: worktree.branch,
+    hasChanges: filesChanged.length > 0,
+    filesChanged,
+    diff: diff.trim(),
+  };
+}
+
+/** `git diff --no-index` exits 1 when the inputs differ, so stdout is also read from that "error". */
+function gitNoIndexDiff(cwd: string, file: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      ['diff', '--no-index', '--', '/dev/null', file],
+      { cwd, timeout: 10_000, windowsHide: true, maxBuffer: 1024 * 1024 },
+      (err, stdout) => resolve(!err || (err as { code?: unknown }).code === 1 ? String(stdout) : ''),
+    );
+  });
+}
+
 // ─── Autonomous agent dispatch (/api/pipeline/tasks/dispatch|abort|runs|logs) ──
 
 const MAX_RUNNER_COMMAND_LENGTH = 2000;
@@ -1067,10 +1191,42 @@ function parseTailLines(value: string | null): number {
   return Math.floor(tail);
 }
 
-/** POST /api/pipeline/tasks/dispatch: hands a task to a background Claude runner in an isolated worktree. */
+const MODEL_ID_PATTERN = /^[A-Za-z0-9][\w.:@-]{0,127}$/;
+const MAX_THINKING_BUDGET = 1_000_000;
+
+function parseRunnerEngine(value: unknown): RunnerEngine | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (value !== 'native' && value !== 'cli') throw new HttpError(400, 'VALIDATION_ERROR', `"runnerEngine" must be 'native' or 'cli'`);
+  return value;
+}
+
+function parseThinkingBudget(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  // 0 is valid: "as little thinking as the model allows" (the Studio's None chip).
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_THINKING_BUDGET) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"thinkingBudget" must be a number between 0 and ${MAX_THINKING_BUDGET}`);
+  }
+  return Math.floor(value);
+}
+
+function parseModel(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || !MODEL_ID_PATTERN.test(value.trim())) {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"model" must be a model ID such as claude-opus-5-5');
+  }
+  return value.trim();
+}
+
+/**
+ * POST /api/pipeline/tasks/dispatch: hands a task to a background runner, either the native
+ * Messages API engine or a CLI command (Claude Code by default), in an isolated worktree.
+ */
 async function handleTaskDispatch(supervisor: AgentSupervisor, body: Record<string, unknown>) {
   const taskId = parseTaskId(body.taskId);
+  const runnerEngine = parseRunnerEngine(body.runnerEngine);
   const runnerCommand = parseRunnerCommand(body.runnerCommand);
+  const thinkingBudget = parseThinkingBudget(body.thinkingBudget);
+  const model = parseModel(body.model);
   const timeoutSeconds = parseTimeoutSeconds(body.timeoutSeconds);
   const useWorktree = parseOptionalBoolean(body.useWorktree, 'useWorktree');
   const verify = parseOptionalBoolean(body.verify, 'verify');
@@ -1078,11 +1234,26 @@ async function handleTaskDispatch(supervisor: AgentSupervisor, body: Record<stri
 
   let run: RunnerRecord;
   try {
-    run = await supervisor.dispatch({ taskId, runnerCommand, timeoutSeconds, useWorktree, verify, autoMerge });
+    run = await supervisor.dispatch({
+      taskId,
+      runnerEngine,
+      runnerCommand,
+      thinkingBudget,
+      model,
+      timeoutSeconds,
+      useWorktree,
+      verify,
+      autoMerge,
+    });
   } catch (err) {
     toHttpError(err);
   }
-  return { ok: true, run };
+  return { ok: true, run: runView(run) };
+}
+
+/** Runner records as served by the API: usage gains its derived cache hit rate. */
+function runView(run: RunnerRecord) {
+  return { ...run, usage: usageView(sanitizeUsage(run.usage)) };
 }
 
 /** POST /api/pipeline/tasks/abort: terminates the runner's process tree and settles the run as aborted. */
@@ -1108,7 +1279,8 @@ async function handleTaskAbort(supervisor: AgentSupervisor, body: Record<string,
 function handleTaskRuns(supervisor: AgentSupervisor, searchParams: URLSearchParams) {
   const rawTaskId = searchParams.get('taskId');
   const taskId = rawTaskId === null || rawTaskId === '' ? undefined : parseTaskId(rawTaskId);
-  return { ok: true, runs: supervisor.listRuns({ taskId, activeOnly: parseBooleanParam(searchParams.get('activeOnly')) }) };
+  const runs = supervisor.listRuns({ taskId, activeOnly: parseBooleanParam(searchParams.get('activeOnly')) });
+  return { ok: true, runs: runs.map(runView) };
 }
 
 /** GET /api/pipeline/tasks/logs: tail of a runner's streaming log buffer. */
@@ -1129,6 +1301,293 @@ function handleBenchmarks(root: string) {
     // No benchmark has been run yet, or the report is unreadable.
   }
   return { ok: true, report };
+}
+
+// ─── Grounded telemetry & self-healing escalations ─────────────────────────────
+
+/**
+ * GET /api/pipeline/telemetry/detailed: per-task financial audit. Each breakdown pairs the heuristic
+ * estimate with API-reported usage and lists the task's runs (engine, model, per-run usage).
+ */
+function handleTelemetryDetailed(root: string, supervisor: AgentSupervisor) {
+  const telemetry = loadTelemetry(path.join(root, AI_DIR, 'telemetry.json'));
+  const records = telemetry.tasks.filter((t): t is TaskTelemetryRecord => Boolean(t) && typeof t.taskId === 'string');
+  const planTasks = new Map(planMilestones(readPlan(root)).flatMap((m) => m.tasks).map((t) => [t.id, t] as const));
+
+  const runsByTask = new Map<string, RunnerRecord[]>();
+  for (const run of supervisor.listRuns()) {
+    const list = runsByTask.get(run.taskId) ?? [];
+    list.push(run);
+    runsByTask.set(run.taskId, list);
+  }
+
+  const taskIds = [...new Set([...records.map((r) => r.taskId), ...runsByTask.keys()])];
+  const taskBreakdowns = taskIds
+    .map((taskId) => {
+      const record = records.find((r) => r.taskId === taskId);
+      const planTask = planTasks.get(taskId);
+      const actual = sanitizeUsage(record?.actualUsage);
+      const estimate = record?.tokens;
+      const estimated = estimate
+        ? {
+            inputTokens: finiteOr(estimate.inputEstimated, 0),
+            outputTokens: finiteOr(estimate.outputEstimated, 0),
+            totalTokens: finiteOr(estimate.totalEstimated, 0),
+            costUsd: finiteOr(estimate.costUsdEstimated, 0),
+          }
+        : null;
+      return {
+        taskId,
+        title: record?.title ?? planTask?.title ?? taskId,
+        assignedSubagent: record?.assignedSubagent ?? planTask?.assignedSubagent ?? null,
+        status: planTask?.status ?? record?.status ?? null,
+        startedAt: record?.startedAt ?? null,
+        completedAt: record?.completedAt ?? null,
+        durationMs: finiteOr(record?.durationMs, 0),
+        verification: record?.verification ?? null,
+        estimated,
+        actual: usageView(actual),
+        // Positive: the task cost more than estimated.
+        varianceUsd: actual && estimated ? roundUsd(actual.costUsd - estimated.costUsd) : null,
+        runs: (runsByTask.get(taskId) ?? []).map((run) => ({
+          runId: run.runId,
+          engine: run.engine,
+          model: run.model,
+          status: run.status,
+          startedAt: run.startedAt,
+          endedAt: run.endedAt,
+          durationMs: run.durationMs,
+          thinking: run.thinking,
+          usage: usageView(sanitizeUsage(run.usage)),
+        })),
+      };
+    })
+    // Most expensive first; tasks without grounded usage keep their telemetry order at the end.
+    .sort((a, b) => (b.actual?.costUsd ?? -1) - (a.actual?.costUsd ?? -1));
+
+  const byModel = new Map<string, ActualTokenUsage>();
+  for (const record of records) {
+    const usage = sanitizeUsage(record.actualUsage);
+    if (!usage) continue;
+    byModel.set(usage.model, mergeActualUsage(byModel.get(usage.model) ?? emptyActualUsage(usage.model), usage));
+  }
+
+  const { summary } = telemetry;
+  const actual = aggregateActualUsage(records);
+  return {
+    ok: true,
+    summary: {
+      projectName: telemetry.projectName,
+      lastUpdated: telemetry.lastUpdated,
+      modelTierDefault: telemetry.modelTierDefault,
+      tasksTracked: records.length,
+      totalTasksCompleted: finiteOr(summary?.totalTasksCompleted, 0),
+      totalDurationMs: finiteOr(summary?.totalDurationMs, 0),
+      estimated: {
+        totalTokens: finiteOr(summary?.estimatedTotalTokens, 0),
+        costUsd: finiteOr(summary?.estimatedTotalCostUsd, 0),
+      },
+      actual: {
+        turns: actual.turns,
+        inputTokens: actual.inputTokens,
+        outputTokens: actual.outputTokens,
+        cacheReadTokens: actual.cacheReadTokens,
+        cacheCreationTokens: actual.cacheCreationTokens,
+        thinkingTokens: actual.thinkingTokens,
+        spendUsd: roundUsd(actual.costUsd),
+        cacheHitRate: cacheHitRate(actual),
+        // What the cache reads would have cost at each model's full input rate, minus what they did cost.
+        cacheSavingsUsd: roundUsd(
+          [...byModel.values()].reduce((sum, u) => {
+            const rates = resolveModelPricing(u.model);
+            return sum + (u.cacheReadTokens * (rates.inputPerM - rates.cacheReadPerM)) / 1_000_000;
+          }, 0),
+        ),
+      },
+      byModel: [...byModel.values()].map(usageView).sort((a, b) => b!.costUsd - a!.costUsd),
+      verification: {
+        passRate: finiteOr(summary?.verificationPassRate, 1),
+        runs: finiteOr(summary?.totalVerificationsRun, 0),
+        passed: finiteOr(summary?.totalVerificationsPassed, 0),
+      },
+      circuitBreakerTrips: finiteOr(summary?.circuitBreakerTrips, 0),
+    },
+    taskBreakdowns,
+  };
+}
+
+const ESCALATION_FILTERS = ['pending_review', 'resolved', 'all'] as const;
+type EscalationFilter = (typeof ESCALATION_FILTERS)[number];
+
+/** Escalation records as the resolve endpoint leaves them. */
+interface ResolvedEscalationRecord extends SelfHealingEscalationRecord {
+  resolvedAt?: string;
+  resolution?: {
+    decision: 'approve' | 'reject';
+    proposalApplied: boolean;
+    ruleId: string | null;
+    unblockedTaskId: string | null;
+  };
+}
+
+function escalationFilePath(root: string): string {
+  return path.join(root, AI_DIR, 'escalation.json');
+}
+
+/** Null when no escalation has ever been filed. */
+function readEscalationFile(root: string): EscalationFile | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(escalationFilePath(root), 'utf8');
+  } catch {
+    return null;
+  }
+  // withFileLock creates the file empty when it takes the first lock.
+  if (!raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as EscalationFile;
+    if (!Array.isArray(parsed?.escalations)) parsed.escalations = [];
+    return parsed;
+  } catch {
+    throw new HttpError(500, 'ESCALATION_FILE_CORRUPT', '.ai/escalation.json is not valid JSON');
+  }
+}
+
+/** tmp-file + rename so the SSE watcher and concurrent readers never observe a half-written file. */
+function writeJsonAtomic(file: string, data: unknown): void {
+  const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= 10 || (code !== 'EPERM' && code !== 'EBUSY')) {
+        fs.rmSync(tmp, { force: true });
+        throw err;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    }
+  }
+}
+
+/**
+ * GET /api/pipeline/escalations?status=pending_review|resolved|all: escalations newest first, each
+ * with its optional self-healing `proposedPatch`. `resolved` covers every closed record (approved or rejected).
+ */
+function handleEscalations(root: string, searchParams: URLSearchParams) {
+  const rawFilter = searchParams.get('status') || 'all';
+  if (!(ESCALATION_FILTERS as readonly string[]).includes(rawFilter)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"status" must be one of: ${ESCALATION_FILTERS.join(', ')}`);
+  }
+  const filter = rawFilter as EscalationFilter;
+  const escalations = (readEscalationFile(root)?.escalations ?? [])
+    .filter((e) => e && typeof e.id === 'string')
+    .filter((e) => filter === 'all' || (filter === 'pending_review' ? e.status === 'pending_review' : e.status !== 'pending_review'))
+    .sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0));
+  return { ok: true, escalations };
+}
+
+/** Moves a blocked task back to pending so it can be dispatched again. False when it was not blocked. */
+async function unblockTask(root: string, taskId: string, note: string): Promise<boolean> {
+  const planPath = path.join(root, AI_DIR, 'master_plan.json');
+  if (!fs.existsSync(planPath)) return false;
+  const result = await withPlanLock(planPath, (plan, ctx) => {
+    const task = findTask(plan, taskId);
+    if (!task || task.status !== 'blocked') {
+      ctx.abort();
+      return false;
+    }
+    task.status = 'pending';
+    task.notes = note;
+    return true;
+  });
+  return result === true;
+}
+
+/** Test restorations run where the task's files live: its agent worktree if one exists, else the project. */
+function taskWorkspace(root: string, taskId: string): string {
+  const worktree = path.join(root, '.worktrees', `task-${taskId}`);
+  return fs.existsSync(path.join(worktree, '.git')) ? worktree : root;
+}
+
+/**
+ * POST /api/pipeline/escalations/resolve: `approve` applies the self-healing proposal (re-checked
+ * against the live contract), resets the circuit breaker and unblocks the task; `reject` dismisses
+ * the escalation and leaves the task blocked. A proposal that no longer applies leaves the
+ * escalation pending and returns 400.
+ */
+async function handleEscalationResolve(root: string, body: Record<string, unknown>) {
+  const escalationId = typeof body.escalationId === 'string' ? body.escalationId.trim() : '';
+  if (!TASK_ID_PATTERN.test(escalationId)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"escalationId" must be an escalation id such as esc-01');
+  }
+  const { decision } = body;
+  if (decision !== 'approve' && decision !== 'reject') {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"decision" must be 'approve' or 'reject'`);
+  }
+  if (body.notes !== undefined && body.notes !== null && typeof body.notes !== 'string') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"notes" must be a string');
+  }
+  const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
+  if (notes.length > MAX_REASON_LENGTH) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"notes" must be at most ${MAX_REASON_LENGTH} characters`);
+  }
+
+  const file = escalationFilePath(root);
+  if (!readEscalationFile(root)) throw new HttpError(400, 'ESCALATION_NOT_FOUND', `Escalation "${escalationId}" not found`);
+
+  // One resolution at a time per project: a double-click must not apply a proposal twice.
+  return withFileLock(file, async () => {
+    const data = readEscalationFile(root);
+    const record = data?.escalations.find((e) => e?.id === escalationId) as ResolvedEscalationRecord | undefined;
+    if (!data || !record) throw new HttpError(400, 'ESCALATION_NOT_FOUND', `Escalation "${escalationId}" not found`);
+    if (record.status !== 'pending_review') {
+      throw new HttpError(400, 'ESCALATION_ALREADY_RESOLVED', `Escalation "${escalationId}" is already ${record.status}`);
+    }
+
+    const proposal = record.proposedPatch;
+    const now = new Date().toISOString();
+    let applied: ProposalApplication | null = null;
+    let unblockedTaskId: string | null = null;
+    let message: string;
+
+    if (decision === 'approve') {
+      if (proposal) {
+        const workspace = proposal.kind === 'restore_tests' ? taskWorkspace(root, record.taskId) : root;
+        applied = applySelfHealingProposal(workspace, record.taskId, proposal);
+        if (!applied.applied) {
+          throw new HttpError(400, applied.ruleId, `Proposal ${proposal.proposalId} was not applied: ${applied.message}`);
+        }
+      } else {
+        CircuitBreaker.recordSuccess(root, record.taskId);
+      }
+      const unblocked = await unblockTask(root, record.taskId, `Unblocked by escalation ${escalationId}${notes ? `: ${notes}` : ''}`);
+      unblockedTaskId = unblocked ? record.taskId : null;
+      record.status = 'resolved';
+      record.resolutionNotes = notes || applied?.message || 'Approved by operator';
+      message = [
+        applied ? `${applied.message}.` : `Escalation ${escalationId} approved.`,
+        unblocked ? `Task ${record.taskId} is unblocked and pending.` : `Task ${record.taskId} was not blocked.`,
+      ].join(' ');
+    } else {
+      record.status = 'dismissed';
+      record.resolutionNotes = notes || (proposal ? `Proposal ${proposal.proposalId} rejected by operator` : 'Rejected by operator');
+      message = `Escalation ${escalationId} rejected; task ${record.taskId} stays blocked.`;
+    }
+
+    record.resolvedAt = now;
+    record.resolution = {
+      decision,
+      proposalApplied: Boolean(applied?.applied),
+      ruleId: applied?.ruleId ?? null,
+      unblockedTaskId,
+    };
+    data.lastUpdated = now;
+    writeJsonAtomic(file, data);
+    return { ok: true, message, unblockedTaskId };
+  });
 }
 
 /**
@@ -1176,8 +1635,8 @@ class PipelineEventHub {
     this.start();
   }
 
-  /** Pushes an agent-supervisor event (`runner_status`, `runner_log`) to every connected client. */
-  publish(event: 'runner_status' | 'runner_log', data: unknown): void {
+  /** Pushes an agent-supervisor event (`runner_status`, `runner_log`, `runner_token_usage`) to every connected client. */
+  publish(event: 'runner_status' | 'runner_log' | 'runner_token_usage', data: unknown): void {
     if (this.closed || this.clients.size === 0) return;
     this.broadcast(event, data);
   }
@@ -1300,10 +1759,12 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   const heartbeatMs = options.heartbeatMs && options.heartbeatMs > 0 ? options.heartbeatMs : DEFAULT_HEARTBEAT_MS;
   const events = new PipelineEventHub(path.join(root, AI_DIR), heartbeatMs);
 
-  // Background agent runs: lifecycle phases and stdout/stderr chunks fan out over /api/events.
+  // Background agent runs: lifecycle phases, stdout/stderr chunks and per-turn token usage
+  // (native engine) fan out over /api/events.
   const supervisor = new AgentSupervisor({ ...options.supervisor, cwd: root });
-  supervisor.on('runner_status', (record: RunnerRecord) => events.publish('runner_status', record));
+  supervisor.on('runner_status', (record: RunnerRecord) => events.publish('runner_status', runView(record)));
   supervisor.on('runner_log', (entry: unknown) => events.publish('runner_log', entry));
+  supervisor.on('runner_token_usage', (usage: RunnerTokenUsageEvent) => events.publish('runner_token_usage', usage));
 
   // Concurrent "Run Benchmark" requests share one in-flight run.
   let benchmarkRun: Promise<BenchmarkReport> | null = null;
@@ -1391,10 +1852,18 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, { ok: true, worktrees: await describeWorktrees(root) });
         case 'POST /api/pipeline/worktrees/action':
           return sendJson(res, 200, await handleWorktreeAction(root, await readJsonBody(req)));
+        case 'GET /api/pipeline/worktrees/diff':
+          return sendJson(res, 200, await handleWorktreeDiff(root, url.searchParams));
         case 'GET /api/pipeline/benchmarks':
           return sendJson(res, 200, handleBenchmarks(root));
         case 'POST /api/pipeline/benchmarks/run':
           return sendJson(res, 200, { ok: true, report: await runBenchmarkSuite() });
+        case 'GET /api/pipeline/telemetry/detailed':
+          return sendJson(res, 200, handleTelemetryDetailed(root, supervisor));
+        case 'GET /api/pipeline/escalations':
+          return sendJson(res, 200, handleEscalations(root, url.searchParams));
+        case 'POST /api/pipeline/escalations/resolve':
+          return sendJson(res, 200, await handleEscalationResolve(root, await readJsonBody(req)));
         case 'GET /favicon.ico':
           res.writeHead(204).end();
           return;
@@ -1405,7 +1874,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           '/api/status', '/api/env-info', '/api/schema', '/api/diff', '/api/connect', '/api/export-contract', '/api/data', '/api/tests/generate',
           '/api/events', '/api/pipeline/status', '/api/pipeline/tasks', '/api/pipeline/tasks/action', '/api/pipeline/tasks/dispatch',
           '/api/pipeline/tasks/abort', '/api/pipeline/tasks/runs', '/api/pipeline/tasks/logs', '/api/pipeline/worktrees',
-          '/api/pipeline/worktrees/action', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
+          '/api/pipeline/worktrees/action', '/api/pipeline/worktrees/diff', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
+          '/api/pipeline/telemetry/detailed', '/api/pipeline/escalations', '/api/pipeline/escalations/resolve',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);

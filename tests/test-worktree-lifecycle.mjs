@@ -67,6 +67,17 @@ function createGitFixture() {
             verificationCommand: '',
             notes: '',
           },
+          {
+            id: 'task-wt-3',
+            title: 'Completed Feature With Uncommitted Work',
+            description: 'Agent verified its work but never committed it',
+            assignedSubagent: 'backend',
+            dependencies: [],
+            targetFiles: [],
+            status: 'completed',
+            verificationCommand: '',
+            notes: '',
+          },
         ],
       },
     ],
@@ -181,6 +192,64 @@ try {
   assert.ok(!fs.existsSync(wt2Dir), 'Worktree directory should be cleaned up after merge');
   assert.ok(fs.existsSync(path.join(dir, 'feature.txt')), 'Feature file should be merged into base branch');
   console.log('✔ Completed task worktree cleanly merged and cleaned up.');
+
+  // Test 4b: Merge never discards work the agent left uncommitted
+  console.log('4b. Testing Merge Preserves Uncommitted Agent Work...');
+  await cli(['worktree', 'create', 'task-wt-3', dir, '--json']);
+  const wt3Dir = path.join(dir, '.worktrees', 'task-task-wt-3');
+  fs.writeFileSync(path.join(wt3Dir, 'uncommitted.txt'), 'kept\n', 'utf8');
+  const mergeDirty = await cli(['worktree', 'merge', 'task-wt-3', dir, '--json']);
+  assert.equal(mergeDirty.code, 0, `Merge failed: ${mergeDirty.stdout}${mergeDirty.stderr}`);
+  const dirtyData = JSON.parse(mergeDirty.stdout);
+  assert.equal(dirtyData.success, true);
+  assert.equal(dirtyData.committedPendingWork, true, 'uncommitted work must be committed on the agent branch first');
+  // core.autocrlf may rewrite line endings on checkout; compare content, not EOL style.
+  assert.equal(fs.readFileSync(path.join(dir, 'uncommitted.txt'), 'utf8').replace(/\r\n/g, '\n'), 'kept\n', 'uncommitted work must reach the base branch');
+  assert.ok(!fs.existsSync(wt3Dir), 'worktree is removed only after the merge succeeded');
+  console.log('✔ Uncommitted agent work was committed, merged and kept.');
+
+  // Test 4c: A worktree folder deleted by hand can be recreated, keeping the branch's commits
+  console.log('4c. Testing recovery after a worktree folder is deleted manually...');
+  await cli(['worktree', 'create', 'task-wt-4', dir, '--json']);
+  const wt4Dir = path.join(dir, '.worktrees', 'task-task-wt-4');
+  fs.writeFileSync(path.join(wt4Dir, 'progress.txt'), 'half done\n', 'utf8');
+  execSync('git add progress.txt && git commit -m "agent progress"', { cwd: wt4Dir, stdio: 'ignore' });
+  // What a careful manual cleanup does: drop the contract mount, then the folder. Git metadata and the branch remain.
+  fs.unlinkSync(path.join(wt4Dir, '.ai'));
+  fs.rmSync(wt4Dir, { recursive: true, force: true });
+  const recreate = await cli(['worktree', 'create', 'task-wt-4', dir, '--json']);
+  assert.equal(recreate.code, 0, `recreate failed: ${recreate.stdout}${recreate.stderr}`);
+  assert.ok(fs.existsSync(path.join(wt4Dir, 'progress.txt')), 'the surviving branch is reused, so earlier commits come back');
+  assert.ok(fs.existsSync(path.join(wt4Dir, '.ai', 'master_plan.json')), 'contracts are mounted again');
+  console.log('✔ A manually deleted worktree was recreated on its surviving branch with commits intact.');
+
+  // Test 4d: Leftover folders that git no longer tracks
+  console.log('4d. Testing leftover (untracked) worktree folders...');
+  const zombie = path.join(dir, '.worktrees', 'task-task-zombie');
+  fs.mkdirSync(zombie, { recursive: true });
+  const zombieRes = await cli(['worktree', 'create', 'task-zombie', dir, '--json']);
+  assert.equal(zombieRes.code, 0, `an empty leftover folder must not block create: ${zombieRes.stdout}`);
+  assert.ok(fs.existsSync(path.join(zombie, '.git')), 'the leftover shell is replaced by a real worktree');
+  const keep = path.join(dir, '.worktrees', 'task-task-keep');
+  fs.mkdirSync(keep, { recursive: true });
+  fs.writeFileSync(path.join(keep, 'notes.txt'), 'someone\'s work\n', 'utf8');
+  const keepRes = await cli(['worktree', 'create', 'task-keep', dir, '--json']);
+  assert.equal(keepRes.code, 1, 'a leftover folder with files is never deleted to make room');
+  assert.match(JSON.parse(keepRes.stdout).error, /still contains files/);
+  assert.ok(fs.existsSync(path.join(keep, 'notes.txt')), 'the files are left untouched');
+  console.log('✔ Empty leftovers are cleared; leftovers holding files are refused and preserved.');
+
+  // Test 4e: Non-agent worktrees other than the main checkout are labelled as linked
+  console.log('4e. Testing worktree list labels...');
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-wt-external-'));
+  tempDirs.push(external);
+  fs.rmSync(external, { recursive: true, force: true });
+  execSync(`git worktree add --detach "${external}"`, { cwd: dir, stdio: 'ignore' });
+  const listText = await cli(['worktree', 'list', dir]);
+  assert.equal((listText.stdout.match(/\[main\]/g) || []).length, 1, `only the main checkout is [main]:\n${listText.stdout}`);
+  assert.match(listText.stdout, /\[linked\]/);
+  execSync(`git worktree remove --force "${external}"`, { cwd: dir, stdio: 'ignore' });
+  console.log('✔ Only the main checkout is labelled [main]; other worktrees show as [linked].');
 
   // Test 5: Worktree Removal / Cleanup (Discard without merging)
   console.log('5. Testing Worktree Removal / Abort without merging...');

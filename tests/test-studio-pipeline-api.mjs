@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 // Run with `npx tsx tests/test-studio-pipeline-api.mjs`: the studio server is imported from
 // TypeScript source so the Mission Control endpoints are verified without a build step.
 import { startStudioServer } from '../src/server/studio-server.ts';
+import { ContractGovernor } from '../src/governor/index.ts';
 
 console.log('--- Starting Studio Mission Control Pipeline API & SSE Verification ---');
 
@@ -27,6 +28,64 @@ const EVENT_TIMEOUT_MS = 5000;
 const tempDirs = [];
 const servers = [];
 const streams = [];
+
+// Grounded usage of past native runs on claude-opus-5-5 ($4 in / $20 out / $5 cache write / $0.20 cache read per MTok):
+// 1000×4 + 500×20 + 2000×5 + 6000×0.2 = 25,200 µ$.
+const TASK_A_ACTUAL = {
+  model: 'claude-opus-5-5',
+  turns: 2,
+  inputTokens: 1000,
+  outputTokens: 500,
+  cacheCreationTokens: 2000,
+  cacheReadTokens: 6000,
+  thinkingTokens: 120,
+  costUsd: 0.0252,
+};
+
+// Scripted stand-in for the Claude API: every native turn ends at once with fixed usage
+// (1000×4 + 200×20 + 3000×5 = 23,000 µ$ on claude-opus-5-5).
+const NATIVE_TURN_USAGE = {
+  input_tokens: 1000,
+  output_tokens: 200,
+  cache_creation_input_tokens: 3000,
+  cache_read_input_tokens: 0,
+  output_tokens_details: { thinking_tokens: 80 },
+};
+const nativeRequests = [];
+function fakeAnthropicClient() {
+  return {
+    beta: {
+      messages: {
+        stream(params) {
+          nativeRequests.push(params);
+          const handlers = {};
+          return {
+            on(event, callback) {
+              handlers[event] = callback;
+              return this;
+            },
+            async finalMessage() {
+              handlers.text?.('native agent: done');
+              return {
+                id: 'msg_fixture',
+                type: 'message',
+                role: 'assistant',
+                model: params.model,
+                stop_reason: 'end_turn',
+                stop_details: null,
+                content: [{ type: 'text', text: 'native agent: done' }],
+                usage: NATIVE_TURN_USAGE,
+              };
+            },
+          };
+        },
+      },
+    },
+  };
+}
+
+const closeTo = (actual, expected, label, epsilon = 1e-9) =>
+  assert.ok(Math.abs(actual - expected) < epsilon, `${label}: expected ${expected}, got ${actual}`);
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -93,7 +152,7 @@ function buildPlan() {
 
 /** Self-consistent with recomputeTelemetrySummary(): 3 records, 2 completed. */
 function buildTelemetry() {
-  const record = (taskId, status, durationMs, tokens) => ({
+  const record = (taskId, status, durationMs, tokens, actualUsage) => ({
     taskId,
     title: `Fixture ${taskId}`,
     assignedSubagent: 'backend',
@@ -102,6 +161,7 @@ function buildTelemetry() {
     durationMs,
     status,
     ...(tokens ? { tokens } : {}),
+    ...(actualUsage ? { actualUsage } : {}),
   });
   return {
     version: '1.0.0',
@@ -119,7 +179,13 @@ function buildTelemetry() {
       circuitBreakerTrips: 1,
     },
     tasks: [
-      record('task-a', 'completed', 60000, { inputEstimated: 9000, outputEstimated: 3000, totalEstimated: 12000, costUsdEstimated: 0.06 }),
+      record(
+        'task-a',
+        'completed',
+        60000,
+        { inputEstimated: 9000, outputEstimated: 3000, totalEstimated: 12000, costUsdEstimated: 0.06 },
+        TASK_A_ACTUAL,
+      ),
       record('task-b', 'completed', 30000, { inputEstimated: 6000, outputEstimated: 2000, totalEstimated: 8000, costUsdEstimated: 0.04 }),
       record('task-c', 'in_progress', 0),
     ],
@@ -379,7 +445,12 @@ const settle = () => delay(400);
 
 try {
   const fullDir = createFixture('nativ-studio-pipeline-', { full: true });
-  const studio = await startStudioServer({ port: 0, cwd: fullDir, connections: { dev: null, prod: null } });
+  const studio = await startStudioServer({
+    port: 0,
+    cwd: fullDir,
+    connections: { dev: null, prod: null },
+    supervisor: { anthropicClientFactory: fakeAnthropicClient },
+  });
   servers.push(studio);
   console.log('✔ Studio server started against pipeline fixture:', studio.url);
 
@@ -409,7 +480,15 @@ try {
     assert.equal(t.totalTasksTracked, 3, 'telemetry.totalTasksTracked is the number of task records in telemetry.json');
     assert.ok(t.passRate === 0.75 || t.passRate === 75, `telemetry.passRate should be 0.75 (or 75%), got ${t.passRate}`);
     assert.equal(t.circuitBreakerTrips, 1);
-    console.log('✔ GET /api/pipeline/status aggregates contracts, milestones, task velocity and telemetry KPIs');
+
+    // Grounded KPIs come from API-reported usage, not the estimate.
+    closeTo(t.actualSpendUsd, 0.0252, 'telemetry.actualSpendUsd');
+    assert.equal(t.cacheReadTokens, 6000);
+    assert.equal(t.cacheCreationTokens, 2000);
+    assert.equal(t.thinkingTokens, 120);
+    // 6000 read / (1000 uncached + 2000 written + 6000 read)
+    closeTo(t.cacheHitRate, 0.6667, 'telemetry.cacheHitRate', 1e-4);
+    console.log('✔ GET /api/pipeline/status aggregates contracts, milestones, task velocity, telemetry and grounded spend KPIs');
   }
 
   // 2. GET /api/pipeline/tasks — milestones with tasks, subagents and verification commands
@@ -765,6 +844,43 @@ try {
     const { worktrees } = await getOk(studio.url, '/api/pipeline/worktrees');
     assert.ok(worktrees.some((wt) => wt.taskId === 'task-d' && wt.isAgentWorktree), 'the dispatched worktree is listed for Mission Control');
 
+    // GET /api/pipeline/worktrees/diff — uncommitted changes inside the isolated worktree
+    assertContractError('diff without taskId', await requestJson(studio.url, 'GET', '/api/pipeline/worktrees/diff'));
+    assertContractError('diff with invalid taskId', await requestJson(studio.url, 'GET', '/api/pipeline/worktrees/diff?taskId=..%2Fetc'));
+    assertContractError('diff for a task without a worktree', await requestJson(studio.url, 'GET', '/api/pipeline/worktrees/diff?taskId=task-no-wt'));
+
+    const initialDiff = await getOk(studio.url, '/api/pipeline/worktrees/diff?taskId=task-d');
+    assert.equal(initialDiff.taskId, 'task-d');
+    assert.equal(initialDiff.branch, 'agent/task-task-d');
+    assert.equal(typeof initialDiff.hasChanges, 'boolean');
+    assert.ok(Array.isArray(initialDiff.filesChanged), '"filesChanged" must be an array');
+    assert.equal(typeof initialDiff.diff, 'string');
+
+    // An untracked file with spaces inside an untracked directory is reported by its full path.
+    fs.mkdirSync(path.join(worktreeDir, 'diff probe'), { recursive: true });
+    fs.writeFileSync(path.join(worktreeDir, 'diff probe', 'A B.txt'), 'worktree diff inspection\n', 'utf8');
+    const dirtyDiff = await getOk(studio.url, '/api/pipeline/worktrees/diff?taskId=task-d');
+    assert.equal(dirtyDiff.hasChanges, true, 'hasChanges must be true when the worktree has uncommitted files');
+    assert.ok(dirtyDiff.filesChanged.includes('diff probe/A B.txt'), `filesChanged must list the exact path, got: ${JSON.stringify(dirtyDiff.filesChanged)}`);
+    assert.ok(dirtyDiff.diff.includes('+worktree diff inspection'), 'the diff must include the untracked file contents as additions');
+
+    // Staged additions and a modified rename (porcelain -z "RM new\0old") report the new paths only.
+    const wtGit = (args) => execSync(`git ${args}`, { cwd: worktreeDir, stdio: 'ignore' });
+    fs.writeFileSync(path.join(worktreeDir, 'staged.txt'), 'staged content\n', 'utf8');
+    wtGit('add staged.txt');
+    fs.mkdirSync(path.join(worktreeDir, 'docs'), { recursive: true });
+    wtGit('mv README.md "docs/READ ME.md"');
+    fs.appendFileSync(path.join(worktreeDir, 'docs', 'READ ME.md'), 'edited line\n', 'utf8');
+    const trackedDiff = await getOk(studio.url, '/api/pipeline/worktrees/diff?taskId=task-d');
+    for (const file of ['staged.txt', 'docs/READ ME.md', 'diff probe/A B.txt']) {
+      assert.ok(trackedDiff.filesChanged.includes(file), `filesChanged must list "${file}", got: ${JSON.stringify(trackedDiff.filesChanged)}`);
+    }
+    assert.ok(!trackedDiff.filesChanged.includes('README.md'), 'a rename must report its new path, not the original');
+    assert.equal(new Set(trackedDiff.filesChanged).size, trackedDiff.filesChanged.length, 'filesChanged must not contain duplicates');
+    assert.ok(trackedDiff.diff.includes('+staged content'), 'staged additions must appear in the diff');
+    assert.ok(trackedDiff.diff.includes('+edited line'), 'modifications to a renamed file must appear in the diff');
+    console.log('✔ GET /api/pipeline/worktrees/diff reports uncommitted worktree changes and rejects unknown worktrees');
+
     const removed = await requestJson(studio.url, 'POST', '/api/pipeline/worktrees/action', { action: 'remove', taskId: 'task-d' });
     assert.equal(removed.status, 200, `worktree remove → HTTP ${removed.status}: ${JSON.stringify(removed.body)}`);
     assert.ok(!fs.existsSync(worktreeDir), 'the worktree is discarded without touching the mounted contracts');
@@ -797,7 +913,212 @@ try {
     console.log('✔ Loopback Host/Origin guard protects pipeline endpoints and the SSE stream');
   }
 
-  // 18. Sparse, non-git project: missing contracts/telemetry/benchmarks degrade gracefully
+  // 18. Dual-mode dispatch: the native engine streams runner_token_usage and grounds telemetry in API usage
+  {
+    assertContractError('dispatch with an unknown runnerEngine', await dispatch({ taskId: 'task-c', runnerEngine: 'gpt' }));
+    assertContractError(
+      'dispatch with a negative thinkingBudget',
+      await dispatch({ taskId: 'task-c', runnerEngine: 'native', thinkingBudget: -1 }),
+    );
+    assertContractError('dispatch with a malformed model', await dispatch({ taskId: 'task-c', runnerEngine: 'native', model: 'rm -rf /' }));
+    assert.equal(nativeRequests.length, 0, 'rejected native dispatches must never reach the Claude API');
+
+    await settle();
+    const mark = alpha.events.length;
+    const { status, body } = await dispatch({
+      taskId: 'task-c',
+      runnerEngine: 'native',
+      model: 'claude-opus-5-5',
+      thinkingBudget: 4000,
+      useWorktree: false,
+      timeoutSeconds: 60,
+    });
+    assert.equal(status, 200, `native dispatch → HTTP ${status}: ${JSON.stringify(body)}`);
+    assert.equal(body.run.engine, 'native');
+    assert.equal(body.run.model, 'claude-opus-5-5');
+    assert.deepEqual(body.run.thinking, { budget: 4000, effort: 'high', budgetTokens: null }, 'a 4k (Deep) budget maps to high effort');
+
+    const usage = await waitForRunnerEvent(
+      alpha,
+      'runner_token_usage',
+      (d) => d.taskId === 'task-c',
+      mark,
+      'runner_token_usage for task-c',
+    );
+    assert.equal(usage.runId, body.run.runId, 'usage events are tagged with their run');
+    assert.equal(usage.model, 'claude-opus-5-5', 'usage names the model that served the turn');
+    assert.equal(usage.turn, 1);
+    assert.deepEqual(
+      [usage.delta.inputTokens, usage.delta.outputTokens, usage.delta.cacheCreationTokens, usage.delta.cacheReadTokens, usage.delta.thinkingTokens],
+      [1000, 200, 3000, 0, 80],
+      'the delta carries the API-reported counters verbatim',
+    );
+    closeTo(usage.total.costUsd, 0.023, 'runner_token_usage total.costUsd');
+    assert.equal(usage.total.cacheHitRate, 0);
+
+    const finished = await waitForRunnerEvent(
+      alpha,
+      'runner_status',
+      (d) => d.taskId === 'task-c' && d.status === 'completed',
+      mark,
+      'runner_status completed for task-c',
+    );
+    assert.equal(finished.usage.turns, 1, 'runner_status carries the accumulated usage');
+    assert.equal(finished.usage.cacheHitRate, 0, 'runner records expose the derived cache hit rate');
+
+    const request = nativeRequests.at(-1);
+    assert.deepEqual(request.output_config, { effort: 'high' });
+    assert.deepEqual(request.cache_control, { type: 'ephemeral' }, 'native requests opt into prompt caching');
+    assert.equal(request.thinking?.type, 'adaptive');
+
+    const runs = await getOk(studio.url, '/api/pipeline/tasks/runs?taskId=task-c');
+    assert.equal(runs.runs[0].engine, 'native');
+    closeTo(runs.runs[0].usage.costUsd, 0.023, 'runs[0].usage.costUsd');
+
+    // Usage is folded into telemetry.json after the run settles; the KPIs are read from there.
+    const deadline = Date.now() + 10_000;
+    let pipeline;
+    do {
+      ({ pipeline } = await getOk(studio.url, '/api/pipeline/status'));
+      if (Math.abs(pipeline.telemetry.actualSpendUsd - 0.0482) < 1e-9) break;
+      await delay(100);
+    } while (Date.now() < deadline);
+    closeTo(pipeline.telemetry.actualSpendUsd, 0.0482, 'actualSpendUsd after the native run (task-a + task-c)');
+    assert.equal(pipeline.telemetry.cacheCreationTokens, 5000);
+    assert.equal(pipeline.telemetry.thinkingTokens, 200);
+    // 6000 read / (2000 uncached + 5000 written + 6000 read)
+    closeTo(pipeline.telemetry.cacheHitRate, 0.4615, 'cacheHitRate after the native run', 1e-4);
+    console.log('✔ Native dispatch streamed runner_token_usage over SSE and grounded the spend KPIs in API usage');
+  }
+
+  // 19. GET /api/pipeline/telemetry/detailed — per-task financial audit
+  {
+    const { summary, taskBreakdowns } = await getOk(studio.url, '/api/pipeline/telemetry/detailed');
+    closeTo(summary.actual.spendUsd, 0.0482, 'summary.actual.spendUsd');
+    assert.equal(summary.actual.turns, 3);
+    assert.equal(typeof summary.estimated.costUsd, 'number', 'the heuristic estimate is reported alongside actual spend');
+    assert.equal(summary.byModel.length, 1, 'all grounded usage so far ran on one model');
+    assert.equal(summary.byModel[0].model, 'claude-opus-5-5');
+    assert.ok(Array.isArray(taskBreakdowns), '"taskBreakdowns" must be an array');
+
+    assert.deepEqual(taskBreakdowns.slice(0, 2).map((b) => b.taskId), ['task-a', 'task-c'], 'the most expensive tasks come first');
+    const [a] = taskBreakdowns;
+    assert.equal(a.status, 'completed');
+    // The native run's telemetry write re-priced the stored estimate at current Opus 5.5 rates:
+    // 9,000 in × $4 + 3,000 out × $20 = $0.096 (the fixture's hand-written $0.06 is replaced).
+    closeTo(a.estimated.costUsd, 0.096, 'task-a estimated cost');
+    closeTo(a.varianceUsd, -0.0708, 'task-a variance (actual − estimate)');
+    closeTo(a.actual.cacheHitRate, 0.6667, 'task-a cache hit rate', 1e-4);
+    // 6000 cache reads on Opus 5.5 billed at $0.20 instead of $4.00 per MTok.
+    closeTo(summary.actual.cacheSavingsUsd, 0.0228, 'summary.actual.cacheSavingsUsd (priced server-side)');
+
+    const c = taskBreakdowns.find((b) => b.taskId === 'task-c');
+    assert.ok(c.runs.some((r) => r.engine === 'native' && r.usage?.turns === 1), 'task-c lists its native run with usage');
+    const h = taskBreakdowns.find((b) => b.taskId === 'task-h');
+    assert.ok(h, 'tasks with runs but no telemetry record are still audited');
+    assert.equal(h.actual, null, 'cli runs report no grounded usage');
+    assert.ok(h.runs.every((r) => r.engine === 'cli' && r.usage === null));
+    console.log('✔ GET /api/pipeline/telemetry/detailed pairs estimates with grounded usage per task and run');
+  }
+
+  // 20. Self-healing escalations — 3-strike trips file sandbox-verified proposals; approve applies + unblocks, reject dismisses
+  {
+    const dbPath = path.join(fullDir, '.ai', 'db_schema.json');
+    writeJsonAtomic(dbPath, {
+      tables: [
+        {
+          name: 'users',
+          columns: [
+            { name: 'id', type: 'UUID', primaryKey: true, nullable: false },
+            { name: 'email', type: 'TEXT', nullable: false },
+            { name: 'legacy_flag', type: 'BOOLEAN', nullable: false },
+          ],
+          indexes: [],
+          foreignKeys: [],
+        },
+      ],
+    });
+    const listEscalations = (query = '') => getOk(studio.url, `/api/pipeline/escalations${query}`);
+    const resolve = (payload) => requestJson(studio.url, 'POST', '/api/pipeline/escalations/resolve', payload);
+    const trip = async (taskId, column) => {
+      for (let i = 0; i < 3; i++) {
+        ContractGovernor.evaluate(fullDir, { taskId, target: 'db_schema', operation: 'DROP', path: `users.columns.${column}`, reason: `drop ${column}` });
+      }
+      await delay(20); // escalation ids and timestamps are time-based
+    };
+
+    assert.deepEqual((await listEscalations()).escalations, [], 'no escalation.json yet → an empty list, not an error');
+
+    await trip('task-f', 'email');
+    await trip('task-h', 'legacy_flag');
+    assert.equal(readPlanTask(fullDir, 'task-h').status, 'blocked', 'the third strike blocks the task');
+
+    const { escalations } = await listEscalations();
+    assert.equal(escalations.length, 2);
+    const escF = escalations.find((e) => e.taskId === 'task-f');
+    const escH = escalations.find((e) => e.taskId === 'task-h');
+    assert.equal(escalations[0].id, escH.id, 'escalations are listed newest first');
+    for (const esc of [escF, escH]) {
+      assert.equal(esc.status, 'pending_review');
+      assert.equal(esc.proposedPatch?.kind, 'contract_patch', `${esc.taskId} carries a self-healing proposal`);
+      assert.equal(esc.proposedPatch.strategy, 'deprecate_instead_of_drop');
+      assert.equal(esc.proposedPatch.requiresHumanApproval, true);
+      assert.equal(esc.proposedPatch.verificationProof.isolated, true);
+      assert.equal(esc.proposedPatch.verificationProof.passed, true, 'only sandbox-verified candidates are proposed');
+    }
+    assert.equal((await listEscalations('?status=pending_review')).escalations.length, 2);
+    assert.deepEqual((await listEscalations('?status=resolved')).escalations, []);
+    assertContractError('escalations with an unknown status filter', await requestJson(studio.url, 'GET', '/api/pipeline/escalations?status=bogus'));
+
+    assertContractError('resolve without escalationId', await resolve({ decision: 'approve' }));
+    assertContractError('resolve with an unknown decision', await resolve({ escalationId: escF.id, decision: 'maybe' }));
+    assertContractError('resolve an unknown escalation', await resolve({ escalationId: 'esc-missing', decision: 'approve' }));
+    assertContractError('resolve with non-string notes', await resolve({ escalationId: escF.id, decision: 'approve', notes: 5 }));
+
+    // Approve: the proven candidate is applied, the breaker reset and the task unblocked — streamed as plan_change.
+    await settle();
+    const mark = alpha.events.length;
+    const approved = await resolve({ escalationId: escF.id, decision: 'approve', notes: 'Deprecate, never drop' });
+    assert.equal(approved.status, 200, `approve → HTTP ${approved.status}: ${JSON.stringify(approved.body)}`);
+    assert.equal(approved.body.ok, true);
+    assert.equal(approved.body.unblockedTaskId, 'task-f');
+    assert.equal(typeof approved.body.message, 'string');
+    await waitForEvent(alpha, 'plan_change', mark);
+
+    assert.equal(readPlanTask(fullDir, 'task-f').status, 'pending', 'approval unblocks the task for re-dispatch');
+    const email = JSON.parse(fs.readFileSync(dbPath, 'utf8')).tables[0].columns.find((col) => col.name === 'email');
+    assert.deepEqual({ nullable: email.nullable, deprecated: email.deprecated }, { nullable: true, deprecated: true }, 'the column is deprecated, never dropped');
+    const taskF = (await getOk(studio.url, '/api/pipeline/tasks')).milestones.flatMap((m) => m.tasks).find((t) => t.id === 'task-f');
+    assert.equal(taskF.circuitBreaker.consecutiveFailures, 0, 'approval resets the circuit breaker');
+
+    const [resolvedF] = (await listEscalations('?status=resolved')).escalations;
+    assert.equal(resolvedF.id, escF.id);
+    assert.equal(resolvedF.status, 'resolved');
+    assert.equal(resolvedF.resolutionNotes, 'Deprecate, never drop');
+    assert.equal(resolvedF.resolution.proposalApplied, true);
+    assertContractError('resolving the same escalation twice', await resolve({ escalationId: escF.id, decision: 'approve' }));
+
+    // escH was proven against the contract before escF changed it: approval must refuse instead of applying blindly.
+    const stale = await resolve({ escalationId: escH.id, decision: 'approve' });
+    assertContractError('approving a stale proposal', stale);
+    assert.match(stale.body.error, /changed after proposal/);
+    assert.equal((await listEscalations('?status=pending_review')).escalations[0]?.id, escH.id, 'a refused approval leaves the escalation pending');
+    assert.equal(readPlanTask(fullDir, 'task-h').status, 'blocked');
+
+    const rejected = await resolve({ escalationId: escH.id, decision: 'reject' });
+    assert.equal(rejected.status, 200, `reject → HTTP ${rejected.status}: ${JSON.stringify(rejected.body)}`);
+    assert.equal(rejected.body.unblockedTaskId, null);
+    assert.equal(readPlanTask(fullDir, 'task-h').status, 'blocked', 'rejecting a proposal keeps the task blocked');
+    const closed = (await listEscalations('?status=resolved')).escalations;
+    assert.equal(closed.length, 2, '"resolved" lists every closed escalation');
+    assert.equal(closed.find((e) => e.id === escH.id).status, 'dismissed');
+
+    const wrongMethod = await requestJson(studio.url, 'GET', '/api/pipeline/escalations/resolve');
+    assert.equal(wrongMethod.status, 405, 'GET on the resolve route is a method error, not a 404');
+    console.log('✔ Escalations list sandbox-verified proposals; approve applies + unblocks, stale proofs are refused, reject dismisses');
+  }
+
+  // 21. Sparse, non-git project: missing contracts/telemetry/benchmarks degrade gracefully
   {
     const sparseDir = createFixture('nativ-studio-sparse-', { full: false });
     const sparse = await startStudioServer({ port: 0, cwd: sparseDir, connections: { dev: null, prod: null } });
@@ -819,6 +1140,14 @@ try {
     assert.equal(pipeline.telemetry.totalTasksTracked, 0);
     assert.equal(pipeline.telemetry.circuitBreakerTrips, 0);
     assert.equal(typeof pipeline.telemetry.passRate, 'number');
+    assert.equal(pipeline.telemetry.actualSpendUsd, 0);
+    assert.equal(pipeline.telemetry.cacheReadTokens, 0);
+    assert.equal(pipeline.telemetry.cacheHitRate, 0);
+
+    const detailed = await getOk(sparse.url, '/api/pipeline/telemetry/detailed');
+    assert.deepEqual(detailed.taskBreakdowns, [], 'no telemetry and no runs → no breakdowns');
+    assert.equal(detailed.summary.actual.spendUsd, 0);
+    assert.deepEqual((await getOk(sparse.url, '/api/pipeline/escalations')).escalations, []);
 
     const { report } = await getOk(sparse.url, '/api/pipeline/benchmarks');
     assert.equal(report, null, 'no benchmark_report.json → report: null');

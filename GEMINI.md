@@ -65,7 +65,7 @@ Whenever you start a session or the user asks to resolve an escalation:
 1. **Check Escalations:** Inspect [`.ai/escalation.json`](file:///.ai/escalation.json) for items with `"status": "pending_review"`.
 2. **Diagnose & Design Adjustment:**
    - Review the reported issue, affected contracts, and the blocked task.
-   - Present the recommended architectural modification clearly to the user (e.g., adding a table column, adjusting an endpoint route or response).
+   - Present the diagnosis and recommended adjustment using the **Human-Centric UX Communication Protocol** (no raw stack dumps, explain the user-facing symptom, cause, impact, and clear options).
    - 🛑 **CRITICAL STOPPING POINT:** Wait for user confirmation before modifying contracts.
 3. **Patch Specifications & Unblock:**
    - Update the approved contracts (`db_schema.json`, `api_contracts.json`, or `ui_specs.md`).
@@ -90,3 +90,59 @@ Database passwords, connection strings, and `.env*` contents must **never** ente
 - **Structure-only contracts:** `.ai/db_schema.json` may contain table names, column types, nullability, defaults, keys, and indexes — never hostnames with credentials, connection URLs, sample rows, or data.
 - **Syncing a live schema into the contract** (`nativ db sync --yes` or Export Contract in the studio) is a Phase 2 contract change: 🛑 present the `nativ db sync` dry-run diff to the user and wait for explicit approval first.
 - **Destructive changes:** Any `[DROPPED]` table or `[DESTRUCTIVE]` alteration reported by `nativ db diff` must be called out to the user as high severity. Plan migrations so sub-agents apply them only to local/staging databases, never directly to production.
+
+---
+
+## 6. Human-Centric UX Communication Protocol (Zero-Jargon Standard)
+
+The Human is the **Product Owner and Chief Decision Maker**, NOT an IDE compiler or error-log debugger. When communicating problems, trade-offs, escalations, or design choices, you must speak in terms of **User Experience**, **Product Behavior**, and **Plain-English Cause & Effect**.
+
+### The 4-Part UX Conversation Anatomy
+Whenever discussing a problem or requesting a decision, structure your message as follows:
+
+1. **User Experience Symptom (What does the human or end-user experience?):**
+   Describe the observable symptom in plain everyday terms without technical jargon.
+   *Example:* "When a user clicks the 'Add Worktree' button, the page freezes and doesn't confirm whether it succeeded."
+   *(Never say: "Spawned child process exited with EPIPE during git worktree add.")*
+
+2. **Root Cause in Plain English (Why is this happening?):**
+   Explain the mechanism using simple cause-and-effect or everyday analogies.
+   *Example:* "The application is trying to save files into a folder that doesn't have permission to write new files."
+   *(Never say: "EACCES permission denied syscall mkdir /var/data/worktrees.")*
+
+3. **User Impact & Blast Radius (What is affected?):**
+   Clarify who or what is affected, and explicitly reassure what data remains completely safe.
+   *Example:* "Existing tasks and worktrees are completely safe. Only new worktree creations are currently paused."
+
+4. **Actionable Options & UX Trade-Offs (The Decision Request):**
+   Present 2 or 3 distinct choices with their real-world trade-offs (experience, speed, simplicity, stability). Prefix the best approach with `(Recommended)`.
+   Always end with a simple, direct question asking for the human's preference:
+   - `Option A (Recommended):` Automatically create the folder with the correct permissions during startup.
+   - `Option B:` Add a setup wizard in the settings tab letting the user choose their own storage folder.
+   *Question:* "Which approach would you like to take?"
+
+### Jargon Translation Table (Mandatory Conversion)
+
+| Technical Jargon / Error Code | Plain Human UX Translation |
+| :--- | :--- |
+| **Foreign key constraint violation / 23503** | "The app tried to link a record to an item that doesn't exist yet." |
+| **CORS preflight / Access-Control header missing** | "The browser blocked the web page from talking to the server for safety reasons." |
+| **401 Unauthorized / JWT token expired** | "The user's security pass expired, but the app didn't ask them to log back in." |
+| **AST / Transpilation / Syntax error** | "The automated builder found an unexpected character or typo in a script file." |
+| **TS2339: Property does not exist on type** | "The screen is trying to display a piece of information that wasn't included in the data." |
+| **Circuit breaker tripped (3 failed attempts)** | "The builder tried 3 different ways to fix this screen, but paused so it wouldn't create side effects." |
+| **Schema drift / Contract mismatch** | "The real database has different tables or columns than what was mapped out in the design plan." |
+| **Concurrency lock / Mutex contention** | "Two automated processes tried to update the exact same file at the exact same millisecond." |
+
+### Progressive Disclosure for Technical Telemetry
+- Never dump raw stack traces, terminal dumps, or 50-line compiler errors into the main conversation body.
+- If raw technical output is useful for archival or auditing purposes, tuck it neatly inside a collapsible block:
+  ```markdown
+  <details>
+  <summary>Technical Details (Logs & Error Trace)</summary>
+
+  ```
+  ...raw logs here...
+  ```
+  </details>
+  ```

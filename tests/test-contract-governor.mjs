@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawn, execFile } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -87,6 +87,17 @@ function createProjectFixture() {
             verificationCommand: '',
             notes: '',
           },
+          ...['task-03', 'task-04', 'task-05'].map((id) => ({
+            id,
+            title: `Parallel ${id}`,
+            description: 'Concurrent failure accounting',
+            assignedSubagent: 'backend',
+            dependencies: [],
+            targetFiles: [],
+            status: 'in_progress',
+            verificationCommand: '',
+            notes: '',
+          })),
         ],
       },
     ],
@@ -344,6 +355,103 @@ try {
   const v4 = JSON.parse(pRes4.stdout);
   assert.equal(v4.ruleId, 'TASK_PATCH_BUDGET_EXCEEDED');
   console.log('✔ Patch budget cap correctly halts scope creep.');
+
+  // Test 9: Parallel failures are all counted and escalate once, with unique ids
+  console.log('9. Testing concurrent failures across agents (ledger + escalation locking)...');
+  const readJson = (file) => JSON.parse(fs.readFileSync(path.join(dir, '.ai', file), 'utf8'));
+  const escalationsBefore = readJson('escalation.json').escalations.length;
+  const drop = (taskId) =>
+    cli(['task', 'propose-patch', taskId, dir, '--target', 'db_schema', '--op', 'DROP', '--path', 'users.columns.email', '--reason', `parallel ${taskId}`, '--json']);
+  // Six agents fail at the same moment: three on each task. Unlocked writes lose counts and ids collide.
+  const parallel = await Promise.all([...Array(3)].flatMap(() => [drop('task-03'), drop('task-04')]));
+  assert.ok(parallel.every((r) => r.code === 1), 'every destructive proposal is rejected');
+  const ledger = readJson('.governor_ledger.json');
+  assert.equal(ledger['task-03'].consecutiveFailures, 3, 'no concurrent failure may be lost from the ledger');
+  assert.equal(ledger['task-04'].consecutiveFailures, 3, 'no concurrent failure may be lost from the ledger');
+  const allEscalations = readJson('escalation.json').escalations;
+  const tripped = allEscalations.filter((e) => e.taskId === 'task-03' || e.taskId === 'task-04');
+  assert.equal(allEscalations.length, escalationsBefore + 2, 'each task escalates exactly once, and neither write is lost');
+  assert.deepEqual(tripped.map((e) => e.taskId).sort(), ['task-03', 'task-04']);
+  const ids = allEscalations.map((e) => e.id);
+  assert.equal(new Set(ids).size, ids.length, `escalation ids must be unique: ${ids.join(', ')}`);
+  const plan9 = readJson('master_plan.json');
+  for (const id of ['task-03', 'task-04']) {
+    assert.equal(plan9.milestones[0].tasks.find((t) => t.id === id).status, 'blocked');
+  }
+
+  // A fourth failure after the trip is counted but does not file another escalation.
+  const again = await drop('task-03');
+  assert.equal(JSON.parse(again.stdout).circuitBreaker.consecutiveFailures, 4);
+  assert.equal(readJson('escalation.json').escalations.length, escalationsBefore + 2, 'a tripped breaker does not re-escalate on every failure');
+  console.log('✔ Six concurrent failures were all counted; each task escalated once with a unique id.');
+
+  // Test 10: Manual escalations keep sequential ids that never collide
+  console.log('10. Testing manual escalation ids...');
+  const esc1 = await cli(['task', 'escalate', 'task-05', dir, '--type', 'schema_flaw', '--details', 'first gap']);
+  const esc2 = await cli(['task', 'escalate', 'task-05', dir, '--type', 'schema_flaw', '--details', 'second gap']);
+  assert.equal(esc1.code, 0, esc1.stderr);
+  assert.equal(esc2.code, 0, esc2.stderr);
+  const manual = readJson('escalation.json').escalations.filter((e) => e.taskId === 'task-05');
+  assert.deepEqual(manual.map((e) => e.id), ['esc-01', 'esc-02'], 'manual escalations are numbered esc-01, esc-02, ...');
+  const allIds = readJson('escalation.json').escalations.map((e) => e.id);
+  assert.equal(new Set(allIds).size, allIds.length, 'manual and circuit-breaker ids never collide');
+  console.log('✔ Manual escalations are numbered sequentially without colliding with breaker ids.');
+
+  // Test 11: Test-integrity invariant through the real CLI
+  console.log('11. Testing the test-integrity guard (delete/weaken existing test suites)...');
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-integrity-'));
+  tempDirs.push(repo);
+  const git = (args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  fs.mkdirSync(path.join(repo, '.ai'));
+  fs.mkdirSync(path.join(repo, 'tests'));
+  const taskDef = (id) => ({ id, title: id, description: 'integrity', assignedSubagent: 'backend', dependencies: [], targetFiles: [], status: 'pending', verificationCommand: '', notes: '' });
+  fs.writeFileSync(
+    path.join(repo, '.ai', 'master_plan.json'),
+    JSON.stringify({ version: '1', projectName: 'integrity', lastUpdated: '', overallStatus: 'in_progress', activeMilestoneId: 'm1', milestones: [{ id: 'm1', name: 'm', status: 'in_progress', tasks: [taskDef('t-ok'), taskDef('t-weaken')] }] }, null, 2),
+  );
+  fs.writeFileSync(path.join(repo, 'tests', 'a.test.mjs'), "import assert from 'node:assert';\ntest('one', () => { assert.equal(1, 1); assert.ok(true); });\ntest('two', () => { assert.ok(1); });\n");
+  fs.writeFileSync(path.join(repo, 'tests', 'b.test.mjs'), "import assert from 'node:assert';\nassert.ok(true);\n");
+  fs.writeFileSync(path.join(repo, 'src.js'), 'export const x = 1;\n');
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'integrity', scripts: { test: 'node tests/a.test.mjs && node tests/b.test.mjs' } }, null, 2));
+  fs.writeFileSync(path.join(repo, '.gitignore'), '.ai/\n');
+  git(['init', '-q']);
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '.']);
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init']);
+  const repoCli = (args) => cli([...args.slice(0, 2), args[2], repo, ...args.slice(3)]);
+  const readRepo = (file) => JSON.parse(fs.readFileSync(path.join(repo, '.ai', file), 'utf8'));
+
+  // A legitimate change completes, and the baseline pinned at start is cleared afterwards.
+  assert.equal((await repoCli(['task', 'start', 't-ok'])).code, 0);
+  assert.ok(readRepo('.governor_ledger.json')['t-ok'].baselineRef, 'task start pins a baseline commit');
+  fs.writeFileSync(path.join(repo, 'src.js'), 'export const x = 2;\n');
+  const okComplete = await repoCli(['task', 'complete', 't-ok']);
+  assert.equal(okComplete.code, 0, okComplete.stdout + okComplete.stderr);
+  assert.equal(readRepo('.governor_ledger.json')['t-ok'].baselineRef, undefined, 'completion clears the baseline');
+
+  // Weakening committed after start is still caught: the baseline, not HEAD, is the reference.
+  assert.equal((await repoCli(['task', 'start', 't-weaken'])).code, 0);
+  fs.writeFileSync(path.join(repo, 'tests', 'a.test.mjs'), "import assert from 'node:assert';\ntest('one', () => { assert.ok(true); });\ntest.skip('two', () => {});\n");
+  fs.rmSync(path.join(repo, 'tests', 'b.test.mjs'));
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'integrity', scripts: { test: 'node tests/a.test.mjs' } }, null, 2));
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '-A']);
+  git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'weaken']);
+
+  const rejected = await repoCli(['task', 'complete', 't-weaken', '--no-verify']);
+  assert.equal(rejected.code, 1, 'a headless --no-verify must not bypass the guard');
+  const output = rejected.stdout + rejected.stderr;
+  for (const rule of ['TEST_ASSERTIONS_REMOVED', 'TEST_CASES_REMOVED', 'TESTS_SKIPPED', 'TEST_SUITE_DELETED', 'TEST_SCRIPT_WEAKENED']) {
+    assert.ok(output.includes(rule), `expected ${rule} in:\n${output}`);
+  }
+  await repoCli(['task', 'complete', 't-weaken']);
+  const third = await repoCli(['task', 'complete', 't-weaken']);
+  assert.match(third.stdout + third.stderr, /CIRCUIT BREAKER TRIPPED/, 'three violations trip the breaker');
+  const blockedTask = readRepo('master_plan.json').milestones[0].tasks.find((t) => t.id === 't-weaken');
+  assert.equal(blockedTask.status, 'blocked');
+  const [restore] = readRepo('escalation.json').escalations;
+  assert.equal(restore.proposedPatch.kind, 'restore_tests', 'the trip proposes restoring the suite');
+  assert.equal(restore.proposedPatch.verificationProof.passed, true, 'every file to restore exists at the baseline');
+  assert.deepEqual([...restore.proposedPatch.files].sort(), ['package.json', 'tests/a.test.mjs', 'tests/b.test.mjs']);
+  console.log('✔ Deleted, weakened and skipped tests are refused, trip the breaker, and propose a verified restore.');
 
   console.log('\n🎉 ALL CONTRACT GOVERNOR INVARIANT TESTS PASSED!');
 } finally {

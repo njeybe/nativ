@@ -56,6 +56,10 @@ export function renderStudioHtml(options: StudioUiOptions = {}): string {
   --run-line: #6366f1;
   --warn: #f59e0b;
   --warn-bg: #fffbeb;
+  /* Self-healing proposals (ui_specs.md §1: Status Proposal / Amber). */
+  --proposal: #d97706;
+  --proposal-bg: #fef3c7;
+  --proposal-line: color-mix(in srgb, var(--proposal) 35%, #fff);
   --primary-active: #3730a3;
   --term-bg: #0f172a;
   --term-text: #f8fafc;
@@ -76,22 +80,42 @@ body { min-height: 100vh; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+.container { max-width: 1440px; margin: 0 auto; padding: 24px 32px; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .muted { color: var(--muted); }
 .text-danger { color: var(--danger); }
 .icon { flex: none; display: block; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow); }
 
-/* App bar */
-.appbar { position: sticky; top: 0; z-index: 20; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.appbar-inner { max-width: 1440px; margin: 0 auto; padding: 12px 24px 0; }
-.appbar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* App shell: fixed 240px vertical sidebar + fluid main column (ui_specs.md §2) */
+:root { --sidebar-w: 240px; }
+.app-sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 30; width: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
+.app-main { margin-left: var(--sidebar-w); min-width: 0; min-height: 100vh; }
+.brand { display: flex; flex-direction: column; gap: 8px; padding: 18px 16px 14px; border-bottom: 1px solid var(--border); }
+.brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
 .version { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--border); border-radius: var(--r-control); padding: 0 6px; white-space: nowrap; }
-.brand-project { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brand-project::before { content: "\00B7"; margin-right: 10px; color: var(--chip-border); }
+.brand-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 8px; font-size: 12.5px; color: var(--muted); background: var(--chip); border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: flex-start; }
+.sidebar-nav { flex: 1 1 auto; overflow-y: auto; padding: 8px 10px; }
+.nav-group { margin: 12px 0 4px; padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sidebar-foot { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }
+.sidebar-foot .foot-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.sidebar-foot .foot-root { font-family: var(--mono); font-size: 11.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.sidebar-foot .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.branch-badge { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; padding: 0 7px; font-family: var(--mono); font-size: 11px; color: var(--text); background: var(--chip); border: 1px solid var(--chip-border); border-radius: var(--r-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-live { display: inline-flex; align-items: center; gap: 6px; }
+.sb-live .live-dot { width: 7px; height: 7px; }
+.sb-live[data-state="live"] .live-dot { background: var(--success); animation: sb-pulse 2s ease-in-out infinite; }
+.sb-live[data-state="connecting"] .live-dot { background: var(--active); animation: blink 1.2s ease-in-out infinite; }
+.sb-live[data-state="offline"] .live-dot { background: var(--danger); }
+@keyframes sb-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent); } 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 0%, transparent); } }
+
+/* Top app bar (glass, sticky) */
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 10px 32px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.crumb { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.crumb-root { color: var(--muted); white-space: nowrap; }
+.crumb-sep { color: var(--chip-border); }
+.crumb-view { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .appbar-actions { display: flex; align-items: center; gap: 8px; }
 .live { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; font-size: 12.5px; font-weight: 500; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-control); white-space: nowrap; }
 .live[data-state="live"] { color: var(--text); }
@@ -104,10 +128,10 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 @keyframes blink { 50% { opacity: .35; } }
 .live-tag { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 
-/* Primary navigation: pill tabs with live counters */
-.nav { display: flex; gap: 4px; margin-top: 10px; padding-bottom: 10px; overflow-x: auto; scrollbar-width: none; }
-.nav::-webkit-scrollbar { display: none; }
-.nav-tab { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-control); background: none; color: var(--muted); font-size: 13.5px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+/* Primary navigation: vertical sidebar items with live counters */
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-tab { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: none; color: var(--muted); font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.nav-tab .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nav-tab:hover { color: var(--text); background: var(--chip); }
 .nav-tab[aria-selected="true"] { color: var(--primary); background: var(--primary-tint); border-color: var(--primary-line); }
 .count { display: inline-block; min-width: 20px; padding: 0 6px; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; color: var(--text); background: var(--chip); border: 1px solid var(--border); border-radius: var(--r-control); font-variant-numeric: tabular-nums; }
@@ -267,7 +291,7 @@ button.badge-media:hover { background: var(--primary-tint); }
 /* Live runner console drawer */
 body.has-console { padding-bottom: min(58vh, 520px); }
 body.has-console-min { padding-bottom: 56px; }
-#runner-console-drawer { position: fixed; inset: auto 0 0 0; z-index: 60; display: flex; flex-direction: column; max-height: min(58vh, 520px); background: var(--term-bg); color: var(--term-text); border-top: 1px solid var(--chip-border); box-shadow: var(--shadow-float); animation: rc-slide-up .28s cubic-bezier(.2, .8, .2, 1); }
+#runner-console-drawer { position: fixed; inset: auto 0 0 var(--sidebar-w); z-index: 60; display: flex; flex-direction: column; max-height: min(58vh, 520px); background: var(--term-bg); color: var(--term-text); border-top: 1px solid var(--chip-border); box-shadow: var(--shadow-float); animation: rc-slide-up .28s cubic-bezier(.2, .8, .2, 1); }
 #runner-console-drawer[hidden] { display: none; }
 #runner-console-drawer.is-min .rc-body, #runner-console-drawer.is-min .rc-foot { display: none; }
 @keyframes rc-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -298,6 +322,58 @@ body.has-console-min { padding-bottom: 56px; }
 .rc-bold { font-weight: 700; }
 .rc-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 7px 14px; font-size: 11.5px; color: var(--term-muted); border-top: 1px solid var(--term-line); }
 .rc-foot strong { font-family: var(--mono); font-weight: 600; color: var(--term-text); }
+#runner-console-drawer.is-min .rc-tabs { display: none; }
+.rc-tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--term-line); }
+.rc-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; font: 500 12px/1 var(--font); color: var(--term-muted); background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.rc-tab:hover { color: var(--term-text); }
+.rc-tab[aria-selected="true"] { color: var(--term-text); border-bottom-color: var(--primary); }
+.rc-tab:focus-visible { outline: 2px solid var(--term-text); outline-offset: -2px; }
+.rc-tab .rc-count { min-width: 18px; padding: 0 5px; font-family: var(--mono); font-size: 10.5px; line-height: 16px; text-align: center; color: var(--term-text); background: color-mix(in srgb, var(--term-muted) 22%, transparent); border-radius: var(--r-control); }
+.rc-diff { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; overflow: hidden; }
+#runner-console-drawer.is-min .rc-diff { display: none; }
+.rc-diff-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; font-size: 11.5px; color: var(--term-muted); border-bottom: 1px solid var(--term-line); }
+.rc-diff-bar code { color: var(--term-text); font-family: var(--mono); }
+.rc-diff-bar .rc-btn { margin-left: auto; }
+.rc-files { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 8px 14px 0; list-style: none; }
+.rc-files li { padding: 1px 7px; font-family: var(--mono); font-size: 11px; color: var(--term-text); border: 1px solid var(--term-line); border-radius: var(--r-control); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-diff-body { flex: 1 1 auto; margin: 0; padding: 10px 14px; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.5; white-space: pre; }
+.rc-diff-body:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+/* Console tab 3: self-healing proposal review (dark drawer surface). */
+.rc-tab .rc-count.is-proposal { color: #fff; background: var(--proposal); }
+.rc-heal { flex: 1 1 auto; min-height: 120px; overflow: auto; padding: 12px 14px 14px; font-size: 13px; line-height: 1.5; }
+#runner-console-drawer.is-min .rc-heal { display: none; }
+.rc-heal:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.heal-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.heal-head h3 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--term-text); }
+.heal-tag { font: 500 11px/18px var(--mono); padding: 0 7px; color: var(--term-text); border: 1px solid var(--term-line); border-radius: var(--r-control); }
+.heal-verdict { display: inline-flex; align-items: center; gap: 5px; font: 600 11.5px/20px var(--font); padding: 0 8px; border-radius: var(--r-control); }
+.heal-verdict.pass { color: var(--run); background: color-mix(in srgb, var(--run) 16%, transparent); border: 1px solid color-mix(in srgb, var(--run) 45%, transparent); }
+.heal-verdict.fail { color: color-mix(in srgb, var(--danger) 55%, #fff); background: color-mix(in srgb, var(--danger) 18%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); }
+.heal-diag { margin: 0 0 10px; color: var(--term-muted); overflow-wrap: anywhere; }
+.heal-diag strong { color: var(--term-text); font-weight: 600; }
+.heal-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+.heal-section h4 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--term-muted); }
+.heal-patch { margin: 0; padding: 8px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; background: rgb(148 163 184 / 0.08); border: 1px solid var(--term-line); border-radius: var(--r-control); }
+.heal-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.heal-checks li { display: flex; gap: 7px; align-items: flex-start; color: var(--term-muted); font-size: 12.5px; }
+.heal-checks li b { color: var(--term-text); font-family: var(--mono); font-weight: 500; }
+.heal-checks .ok { color: var(--run); }
+.heal-checks .bad { color: color-mix(in srgb, var(--danger) 55%, #fff); }
+/* Pinned to the drawer's bottom edge so the decision never needs a scroll. */
+.heal-actions { position: sticky; bottom: -14px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 12px -14px -14px; padding: 10px 14px; background: var(--term-bg); border-top: 1px solid var(--term-line); }
+.rc-btn.approve { color: #fff; background: var(--success); border-color: var(--success); }
+.rc-btn.approve:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 88%, #000); }
+.rc-btn.reject { color: color-mix(in srgb, var(--danger) 55%, #fff); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.rc-btn.reject:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.heal-result { margin: 0 0 10px; padding: 8px 10px; color: var(--run); border: 1px solid color-mix(in srgb, var(--run) 45%, transparent); border-radius: var(--r-control); }
+.heal-result.is-error { color: color-mix(in srgb, var(--danger) 55%, #fff); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.heal-skel { height: 12px; margin: 8px 0; border-radius: 4px; background: var(--term-line); animation: blink 1.4s ease-in-out infinite; }
+@media (max-width: 768px) { .heal-grid { grid-template-columns: 1fr; } }
+.df-add { display: block; color: var(--run); background: color-mix(in srgb, var(--run) 12%, transparent); }
+.df-del { display: block; color: color-mix(in srgb, var(--danger) 55%, #fff); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.df-hunk { display: block; color: var(--run-line); }
+.df-file { display: block; margin-top: 8px; font-weight: 700; color: var(--term-text); }
+.df-meta { display: block; color: var(--term-muted); }
 @media (max-width: 760px) {
   .rc-steps { order: 3; margin-left: 0; width: 100%; }
   .rc-title { max-width: 100%; }
@@ -505,14 +581,87 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 .record-form-grid .input { width: 100%; }
 .record-form-grid textarea.input { min-height: 64px; font-family: var(--mono); font-size: 12px; }
 
+/* Intelligent dispatch modal */
+.dispatch-task { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; margin-bottom: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); }
+.dispatch-task-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dispatch-task h3 { margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.45; }
+.dispatch-task .cmd { flex: none; white-space: normal; overflow-wrap: anywhere; }
+textarea.cmd-preview { min-height: 92px; font-family: var(--mono); font-size: 12px; background: var(--bg); }
+.field-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+.switches { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; flex: none; width: 32px; height: 18px; margin-top: 1px; background: var(--chip-border); border-radius: 999px; transition: background .15s; }
+.switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--surface); border-radius: 50%; box-shadow: var(--shadow); transition: transform .15s; }
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track::after { transform: translateX(14px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--primary); outline-offset: 2px; }
+.switch input:disabled + .switch-track { opacity: .45; }
+/* Dual-mode dispatch: engine cards + thinking budget chips (radio groups, keyboard-native). */
+.choice-group { margin: 0 0 16px; padding: 0; border: none; min-width: 0; }
+.choice-group > legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.engine-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.engine-option { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-control); cursor: pointer; transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); }
+.engine-option:hover { border-color: var(--chip-border); }
+.engine-option input, .budget-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.engine-option .icon { flex: none; margin-top: 2px; color: var(--muted); }
+.engine-option b { display: block; font-size: 13.5px; font-weight: 600; }
+.engine-option span span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.engine-option:has(input:checked) { border-color: var(--primary); background: var(--primary-tint); box-shadow: inset 0 0 0 1px var(--primary); }
+.engine-option:has(input:checked) .icon { color: var(--primary); }
+.engine-option:has(input:focus-visible), .budget-chip:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+.budget-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.budget-chip { position: relative; display: inline-flex; align-items: center; min-height: 32px; padding: 0 11px; font-size: 13px; background: var(--chip); border: 1px solid var(--chip-border); border-radius: var(--r-control); cursor: pointer; transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); }
+.budget-chip small { margin-left: 5px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.budget-chip:has(input:checked) { color: var(--primary); background: var(--primary-tint); border-color: var(--primary); }
+.budget-chip:has(input:checked) small { color: var(--primary); }
+@media (max-width: 768px) { .engine-options { grid-template-columns: 1fr; } }
+/* Grounded spend KPI (ui_specs.md View 1, card 3). */
+.cache-pill { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 1px; padding: 5px 9px; font-size: 12.5px; line-height: 1.4; color: var(--success); background: var(--success-bg); border: 1px solid var(--success-line); border-radius: var(--r-control); font-variant-numeric: tabular-nums; }
+.cache-pill .label { white-space: nowrap; }
+.cache-pill b { font-weight: 650; }
+/* The savings line wraps under the rate instead of being clipped in a narrow card. */
+.cache-pill .save { flex-basis: 100%; color: var(--muted); }
+.tel-chips { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tel-chips li { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 5px 8px; background: var(--chip); border: 1px solid var(--chip-border); border-radius: var(--r-control); }
+.tel-chips span { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tel-chips b { font-family: var(--mono); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi-note { margin: 0; font-size: 13px; color: var(--muted); }
+.kpi-note .btn { margin-left: 6px; }
+.dot-proposal { background: var(--proposal); }
+/* Self-healing proposals on the kanban and in the sidebar. */
+.badge-proposal { color: var(--proposal); background: var(--proposal-bg); border-color: var(--proposal-line); }
+.nav-tab .count.count-proposal { color: var(--proposal); background: var(--proposal-bg); border-color: var(--proposal-line); }
+.tcard.has-proposal { border-color: var(--proposal-line); box-shadow: inset 3px 0 0 var(--proposal), var(--shadow); }
+.proposal-banner { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 11px; font: 600 13px/1.4 var(--font); text-align: left; color: var(--proposal); background: var(--proposal-bg); border: 1px solid var(--proposal-line); border-radius: var(--r-control); cursor: pointer; transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); }
+.proposal-banner:hover { border-color: var(--proposal); }
+.proposal-banner:active { transform: scale(0.98); }
+.proposal-banner:focus-visible { outline: 2px solid var(--proposal); outline-offset: 2px; }
+.proposal-banner .icon { flex: none; }
+.switch input:disabled ~ .switch-text { opacity: .55; }
+.switch-text { display: flex; flex-direction: column; font-size: 13.5px; }
+.switch-text b { font-weight: 600; }
+.switch-text span { font-size: 12.5px; color: var(--muted); }
+kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--chip-border); border-radius: 4px; }
+.btn.primary kbd { color: #fff; background: transparent; border-color: color-mix(in srgb, #fff 45%, transparent); }
+
 /* Responsive */
 @media (max-width: 1180px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
+  #runner-console-drawer { inset: auto 0 0 0; }
+  .app-sidebar { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  .brand { flex-direction: row; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-bottom: none; }
+  .sidebar-nav { padding: 0 12px 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+  .sidebar-nav .nav-group, .sidebar-foot { display: none; }
+  .sidebar-nav, .nav { display: flex; flex-direction: row; gap: 4px; }
+  .nav-tab { width: auto; }
+  .app-main { margin-left: 0; }
+  .topbar { padding: 10px 16px; }
   .container { padding: 16px; }
-  .appbar-inner { padding: 10px 16px 0; }
   .panes { grid-template-columns: 1fr; }
   .summary-banner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { grid-template-columns: 1fr; }
@@ -531,7 +680,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 }
 @media (max-width: 640px) {
   .kpi-grid, .kanban { grid-template-columns: 1fr; }
-  .brand-project, .live-tag { display: none; }
+  .brand-project, .live-tag, .crumb-root, .crumb-sep { display: none; }
   .panel-actions, .panel-actions input.input, .panel-actions select.input { width: 100%; max-width: none; }
   .param-grid { grid-template-columns: 1fr; }
   .param-grid .span-2 { grid-column: auto; }
@@ -544,27 +693,44 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 <body>
 <div class="toast-host" id="toasts" role="status" aria-live="polite"></div>
 
-<header class="appbar">
-  <div class="appbar-inner">
-    <div class="appbar-row">
-      <div class="brand">
-        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="6" fill="#4f46e5"/><path d="M8 16.5v-9l8 9v-9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="brand-name">Nativ Studio</span>
-        <span class="version">v${version}</span>
-        <span class="brand-project" id="project-name"${projectHidden}>${projectName}</span>
-      </div>
-      <div class="appbar-actions">
-        <span class="live" id="live" data-state="connecting" role="status" aria-live="polite"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="live-label">Connecting</span><span class="live-tag">SSE</span></span>
-        <button class="btn" id="btn-refresh-all" type="button"><svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/><path d="M13.5 2.5v3h-3"/></svg>Refresh</button>
-      </div>
+<aside class="app-sidebar" aria-label="Studio navigation">
+  <div class="brand">
+    <div class="brand-row">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="6" fill="#4f46e5"/><path d="M8 16.5v-9l8 9v-9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="brand-name">Nativ Studio</span>
+      <span class="version">v${version}</span>
     </div>
-    <nav class="nav" role="tablist" aria-label="Studio views">
-      <button class="nav-tab" role="tab" id="nav-overview" data-view="overview" aria-controls="panel-overview" aria-selected="true">Overview &amp; Status <span class="count" id="ncount-overview">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-tasks" data-view="tasks" aria-controls="panel-tasks" aria-selected="false" tabindex="-1">Live Tasks <span class="count" id="ncount-tasks">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-worktrees" data-view="worktrees" aria-controls="panel-worktrees" aria-selected="false" tabindex="-1">Agent Worktrees <span class="count" id="ncount-worktrees">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-benchmarks" data-view="benchmarks" aria-controls="panel-benchmarks" aria-selected="false" tabindex="-1">Benchmarks <span class="count" id="ncount-benchmarks">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-database" data-view="database" aria-controls="panel-database" aria-selected="false" tabindex="-1">Database <span class="count" id="ncount-database">&#8211;</span></button>
-    </nav>
+    <span class="brand-project" id="project-name" title="Repository"${projectHidden}>${projectName}</span>
+  </div>
+  <div class="sidebar-nav" role="tablist" aria-orientation="vertical" aria-label="Studio views">
+    <div class="nav-group" aria-hidden="true">Pipeline</div>
+    <div class="nav" role="none">
+      <button class="nav-tab" role="tab" id="nav-overview" data-view="overview" aria-controls="panel-overview" aria-selected="true"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span class="nav-label">Overview &amp; Status</span><span class="count" id="ncount-overview">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-tasks" data-view="tasks" aria-controls="panel-tasks" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg><span class="nav-label">Live Tasks</span><span class="count count-proposal" id="ncount-proposals" hidden>0</span><span class="count" id="ncount-tasks">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-worktrees" data-view="worktrees" aria-controls="panel-worktrees" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/></svg><span class="nav-label">Agent Worktrees</span><span class="count" id="ncount-worktrees">&#8211;</span></button>
+    </div>
+    <div class="nav-group" aria-hidden="true">System &amp; Data</div>
+    <div class="nav" role="none">
+      <button class="nav-tab" role="tab" id="nav-benchmarks" data-view="benchmarks" aria-controls="panel-benchmarks" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2.5 11a5.5 5.5 0 1 1 11 0"/><path d="M8 11l2.8-3.3"/></svg><span class="nav-label">Benchmarks</span><span class="count" id="ncount-benchmarks">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-database" data-view="database" aria-controls="panel-database" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><ellipse cx="8" cy="3.5" rx="5" ry="1.8"/><path d="M3 3.5v9c0 1 2.2 1.8 5 1.8s5-.8 5-1.8v-9M3 8c0 1 2.2 1.8 5 1.8S13 9 13 8"/></svg><span class="nav-label">Database</span><span class="count" id="ncount-database">&#8211;</span></button>
+    </div>
+  </div>
+  <div class="sidebar-foot">
+    <span class="foot-label">Workspace Root</span>
+    <span class="foot-root" id="sb-root" title="">&#8211;</span>
+    <div class="foot-row">
+      <span class="branch-badge" id="sb-branch" title="Active git branch"><svg class="icon" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/></svg><span id="sb-branch-name">&#8211;</span></span>
+      <span class="sb-live" id="sb-live" data-state="connecting"><span class="live-dot" aria-hidden="true"></span><span id="sb-live-label">Connecting</span></span>
+    </div>
+  </div>
+</aside>
+
+<div class="app-main">
+<header class="topbar">
+  <div class="crumb"><span class="crumb-root">Mission Control</span><span class="crumb-sep" aria-hidden="true">/</span><span class="crumb-view" id="crumb-view">Overview &amp; Status</span></div>
+  <div class="appbar-actions">
+    <span class="live" id="live" data-state="connecting" role="status" aria-live="polite"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="live-label">Connecting</span><span class="live-tag">SSE</span></span>
+    <button class="btn" id="btn-refresh-all" type="button"><svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/><path d="M13.5 2.5v3h-3"/></svg>Refresh</button>
   </div>
 </header>
 
@@ -606,6 +772,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     <div id="view" role="tabpanel" tabindex="-1"></div>
   </section>
 </main>
+</div>
 
 <section id="runner-console-drawer" aria-labelledby="rc-task" hidden>
   <header class="rc-head">
@@ -620,10 +787,26 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       <button class="rc-btn" type="button" id="rc-close" aria-label="Close the runner console">Close</button>
     </div>
   </header>
+  <div class="rc-tabs" role="tablist" aria-label="Console views">
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-logs" data-rc-tab="logs" aria-controls="rc-body" aria-selected="true"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/></svg>Live Logs</button>
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-diff" data-rc-tab="diff" aria-controls="rc-diff" aria-selected="false" tabindex="-1"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 2.5v6M2 5.5h6M8.5 12.5h5.5"/></svg>Worktree Changes <span class="rc-count" id="rc-diff-count">&#8211;</span></button>
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-heal" data-rc-tab="heal" aria-controls="rc-heal" aria-selected="false" tabindex="-1" hidden><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><path d="M5.6 8.1l1.7 1.7 3.2-3.3"/></svg>Self-Healing Proposal <span class="rc-count is-proposal" id="rc-heal-count">1</span></button>
+  </div>
   <pre class="rc-body" id="rc-body" role="log" aria-live="polite" aria-label="Runner output" tabindex="0"></pre>
+  <div class="rc-diff" id="rc-diff" role="tabpanel" aria-labelledby="rc-tab-diff" hidden>
+    <div class="rc-diff-bar">
+      <span id="rc-diff-summary">Uncommitted changes in the task worktree</span>
+      <button class="rc-btn" type="button" id="rc-diff-refresh" aria-label="Reload the worktree diff">Reload Diff</button>
+    </div>
+    <ul class="rc-files" id="rc-diff-files" aria-label="Changed files"></ul>
+    <pre class="rc-diff-body" id="rc-diff-body" aria-label="Unified diff" tabindex="0"></pre>
+  </div>
+  <div class="rc-heal" id="rc-heal" role="tabpanel" aria-labelledby="rc-tab-heal" tabindex="0" hidden></div>
   <footer class="rc-foot">
     <span>Elapsed <strong id="rc-elapsed">00:00</strong></span>
     <span>Output <strong id="rc-bytes">0 B</strong></span>
+    <span id="rc-spend-wrap" hidden>Spend <strong id="rc-spend">$0.0000</strong></span>
+    <span id="rc-cache-wrap" hidden>Cache hit <strong id="rc-cache">0%</strong></span>
     <span>Gatekeeper <strong id="rc-gate">Idle</strong></span>
     <span id="rc-exit"></span>
   </footer>
@@ -641,6 +824,50 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     <div class="modal-foot">
       <button class="btn" value="cancel" type="submit">Cancel</button>
       <button class="btn danger-solid" type="button" id="btn-confirm-block">Block Task</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dispatch-dialog" aria-labelledby="dispatch-title" aria-describedby="dispatch-lead">
+  <form class="modal" method="dialog" id="dispatch-form">
+    <h2 id="dispatch-title">Dispatch Task</h2>
+    <p class="lead" id="dispatch-lead">Hands the task to an autonomous Claude runner. Output, token spend and gatekeeper results stream into the console drawer.</p>
+    <div class="dispatch-task">
+      <div class="dispatch-task-head"><code class="tcard-id" id="dispatch-task-id">task</code><span class="badge badge-agent" id="dispatch-agent">agent</span></div>
+      <h3 id="dispatch-task-title"></h3>
+      <ul class="file-list" id="dispatch-files" aria-label="Target files"></ul>
+      <code class="cmd" id="dispatch-verify"></code>
+    </div>
+    <fieldset class="choice-group">
+      <legend>Engine</legend>
+      <div class="engine-options">
+        <label class="engine-option"><input type="radio" name="dispatch-engine" id="dispatch-engine-native" value="native" checked><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z"/></svg><span><b>Native Engine</b><span>Direct API, Prompt Caching &amp; Fast Streaming. Token spend is reported live.</span></span></label>
+        <label class="engine-option"><input type="radio" name="dispatch-engine" id="dispatch-engine-cli" value="cli"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5L6.5 8l-2 1.5M8.5 10h3"/></svg><span><b>CLI Terminal Pairing</b><span>Interactive Claude Code in a terminal shell, driven by the command below.</span></span></label>
+      </div>
+    </fieldset>
+    <fieldset class="choice-group">
+      <legend>Thinking Budget</legend>
+      <div class="budget-chips">
+        <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-none" value="0" checked>None<small>Fast / Deterministic</small></label>
+        <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-standard" value="2048">Standard<small>2,048 tokens</small></label>
+        <label class="budget-chip"><input type="radio" name="dispatch-budget" id="dispatch-budget-deep" value="4096">Deep<small>4,096 tokens</small></label>
+      </div>
+      <p class="field-hint" id="dispatch-budget-hint" aria-live="polite"></p>
+    </fieldset>
+    <div class="field" id="dispatch-command-field" hidden>
+      <label for="dispatch-command">Autonomous command</label>
+      <textarea class="input cmd-preview" id="dispatch-command" rows="4" spellcheck="false"></textarea>
+      <p class="field-hint" id="dispatch-command-hint">Leave unchanged to use the server's default runner (Claude Code unless <code>NATIV_RUNNER_COMMAND</code> is set). In a custom command, <code>{taskId}</code>, <code>{taskTitle}</code> and <code>{worktreeDir}</code> are filled in on launch.</p>
+    </div>
+    <div class="switches" role="group" aria-label="Run options">
+      <label class="switch"><input type="checkbox" id="dispatch-worktree" checked><span class="switch-track" aria-hidden="true"></span><span class="switch-text"><b>Isolated Worktree</b><span>Run on branch agent/task-&lt;id&gt; in .worktrees/, away from your working copy.</span></span></label>
+      <label class="switch"><input type="checkbox" id="dispatch-verify-gate" checked><span class="switch-track" aria-hidden="true"></span><span class="switch-text"><b>Auto-verify Gatekeeper</b><span>Run the test command when the agent exits.</span></span></label>
+      <label class="switch"><input type="checkbox" id="dispatch-merge"><span class="switch-track" aria-hidden="true"></span><span class="switch-text"><b>Auto-merge on Pass</b><span>Merge the worktree branch into main once verification passes.</span></span></label>
+    </div>
+    <p class="field-error" id="dispatch-error" aria-live="polite"></p>
+    <div class="modal-foot">
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn primary" type="button" id="btn-launch-agent" aria-keyshortcuts="Control+Enter"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z"/></svg>Launch Autonomous Runner <kbd>Ctrl+Enter</kbd></button>
     </div>
   </form>
 </dialog>
@@ -819,6 +1046,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
   var ICON = {
     check: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>',
     x: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+    shield: '<svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><path d="M5.6 8.1l1.7 1.7 3.2-3.3"/></svg>',
     play: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z"/></svg>',
     alert: '<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>',
     branch: '<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.2 7.4"/></svg>',
@@ -860,7 +1088,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
         if (!res.ok || body.ok === false) {
           var message = typeof body.error === 'string' ? body.error : (body.error && body.error.message) || body.message;
           var err = new Error(message || ('Request failed (' + res.status + ')'));
-          err.code = body.error && body.error.code;
+          err.code = (body.error && body.error.code) || body.code;
           err.status = res.status;
           throw err;
         }
@@ -966,15 +1194,22 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 
   // ─── Mission Control: pipeline state ───────────────────────────────────────
   var VIEWS = ['overview', 'tasks', 'worktrees', 'benchmarks', 'database'];
-  var VIEW_DEPS = { overview: ['status', 'tasks'], tasks: ['tasks', 'runs'], worktrees: ['worktrees', 'tasks'], benchmarks: ['benchmarks'] };
+  var VIEW_DEPS = {
+    overview: ['status', 'tasks', 'telemetry', 'escalations'],
+    tasks: ['tasks', 'runs', 'escalations'],
+    worktrees: ['worktrees', 'tasks'],
+    benchmarks: ['benchmarks']
+  };
   var PIPE_PATHS = {
     status: '/api/pipeline/status',
     tasks: '/api/pipeline/tasks',
     worktrees: '/api/pipeline/worktrees',
     benchmarks: '/api/pipeline/benchmarks',
-    runs: '/api/pipeline/tasks/runs'
+    runs: '/api/pipeline/tasks/runs',
+    telemetry: '/api/pipeline/telemetry/detailed',
+    escalations: '/api/pipeline/escalations?status=pending_review'
   };
-  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs'];
+  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs', 'telemetry', 'escalations'];
   /** Circuit-breaker budget from the task execution loop. */
   var MAX_ATTEMPTS = 3;
   var REDUCED_MOTION = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
@@ -986,6 +1221,10 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     worktrees: [],
     runs: [],
     report: null,
+    /** GET /api/pipeline/telemetry/detailed: { summary, taskBreakdowns }. */
+    telemetry: null,
+    /** Pending escalations, newest first; each may carry a self-healing proposedPatch. */
+    escalations: [],
     loaded: {},
     errors: {},
     busy: {},
@@ -1063,11 +1302,45 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       }
     } else if (part === 'worktrees') {
       pipe.worktrees = Array.isArray(body.worktrees) ? body.worktrees : [];
+      setWorkspaceFooter();
     } else if (part === 'runs') {
       pipe.runs = Array.isArray(body.runs) ? body.runs : [];
     } else if (part === 'benchmarks') {
       pipe.report = body.report || null;
+    } else if (part === 'telemetry') {
+      pipe.telemetry = { summary: body.summary || {}, taskBreakdowns: Array.isArray(body.taskBreakdowns) ? body.taskBreakdowns : [] };
+    } else if (part === 'escalations') {
+      pipe.escalations = Array.isArray(body.escalations) ? body.escalations : [];
+      syncHealTab();
     }
+  }
+
+  /** Newest pending escalation for a task (the list arrives newest first). */
+  function escalationFor(taskId) {
+    var found = null;
+    (pipe.escalations || []).some(function (e) { if (e.taskId === taskId && e.status === 'pending_review') { found = e; return true; } return false; });
+    return found;
+  }
+  function proposalCount() {
+    return (pipe.escalations || []).filter(function (e) { return e.status === 'pending_review' && e.proposedPatch; }).length;
+  }
+
+  /** Sidebar footer: the main (non-agent) worktree is the workspace root and carries the active branch. */
+  function setWorkspaceFooter() {
+    var main = null;
+    pipe.worktrees.some(function (w) { if (!w.isAgentWorktree) { main = w; return true; } return false; });
+    var root = main ? String(main.path || '') : '';
+    $('sb-root').textContent = root || '–';
+    $('sb-root').title = root;
+    $('sb-branch-name').textContent = main ? (main.branch || 'detached') : '–';
+  }
+
+  /** 1234 → "1.2k": keeps the sidebar throughput indicator inside its badge. */
+  function compactNum(n) {
+    if (!isFinite(n)) return '–';
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(n));
   }
 
   function setCount(view, text, title) {
@@ -1082,10 +1355,15 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var tasksOk = pipe.loaded.tasks && !(pipe.errors.tasks && !pipe.milestones.length);
     var active = allTasks().filter(function (t) { return t.status === 'in_progress'; }).length;
     setCount('tasks', tasksOk ? String(active) : '–', 'Tasks in progress');
+    var proposals = proposalCount();
+    var pBadge = $('ncount-proposals');
+    pBadge.hidden = !proposals;
+    pBadge.textContent = String(proposals);
+    pBadge.title = proposals + ' self-healing proposal' + (proposals === 1 ? '' : 's') + ' awaiting review';
     var agents = pipe.worktrees.filter(function (w) { return w.isAgentWorktree; }).length;
     setCount('worktrees', pipe.loaded.worktrees && !pipe.errors.worktrees ? String(agents) : '–', 'Agent worktrees');
     var s = pipe.report && pipe.report.summary;
-    setCount('benchmarks', s ? clampPct(s.score) + '%' : '–', 'Benchmark score');
+    setCount('benchmarks', s ? compactNum(Number(s.averageThroughputOpsPerSec) || 0) : '–', s ? 'Average throughput (ops/sec) · score ' + clampPct(s.score) + '%' : 'Benchmark throughput');
     var dbReady = state.dbStarted && !state.loading;
     setCount('database', dbReady ? String((state.schema.devTables || []).length + (state.schema.prodTables || []).length) : '–', 'Tables and collections');
   }
@@ -1254,23 +1532,61 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       '<div class="stack" role="img" aria-label="' + esc(summary) + '">' + segs + '</div>' +
       '<ul class="legend">' + rows.map(function (r) {
         return '<li><span class="dot dot-' + r[0] + '" aria-hidden="true"></span>' + r[1] + '<b>' + num(r[2] || 0) + '</b></li>';
-      }).join('') + '</ul>');
+      }).join('') +
+      '<li title="Self-healing proposals awaiting review"><span class="dot dot-proposal" aria-hidden="true"></span>Proposals<b>' +
+        (pipe.loaded.escalations ? num(proposalCount()) : '–') + '</b></li>' +
+      '</ul>');
   }
 
-  function kv(label, valueHtml) { return '<div><dt>' + label + '</dt><dd>' + valueHtml + '</dd></div>'; }
+  /** Grounded spend is small per task: show four decimals below a dollar (ui_specs.md: $0.3184). */
+  function usdSpend(n) {
+    if (n == null || isNaN(n)) return '–';
+    n = Number(n);
+    return '$' + (n >= 1 ? n.toFixed(2) : n.toFixed(4));
+  }
+
+  function telChip(label, value, title) {
+    return '<li title="' + esc(title) + '"><span>' + label + '</span><b>' + value + '</b></li>';
+  }
 
   function kpiTelemetry(st) {
     var tel = st.telemetry || {};
     var rate = passRatePct(tel.passRate);
-    var trips = Number(tel.circuitBreakerTrips) || 0;
-    return kpiCard('Telemetry &amp; Costs', '',
-      '<div class="kpi-value">' + usd(tel.estimatedCostUsd) + '<span class="kpi-of">est. cost</span></div>' +
-      '<dl class="kv">' +
-        kv('Estimated tokens', num(tel.totalTokens)) +
-        kv('Test pass rate', rate == null ? '–' : rate + '%') +
-        kv('Total tasks run', num(tel.totalTasksTracked)) +
-        kv('Safety stops (retries)', '<span class="' + (trips ? 'text-danger' : '') + '">' + num(trips) + '</span>') +
-      '</dl>');
+    var summary = pipe.telemetry && pipe.telemetry.summary;
+    var actual = (summary && summary.actual) || null;
+    var spend = Number(tel.actualSpendUsd) || 0;
+    var hasUsage = spend > 0 || !!(actual && actual.turns);
+    var hitPct = Math.round((Number(tel.cacheHitRate) || 0) * 1000) / 10;
+    var badge = hasUsage ? '<span class="badge badge-success" title="Spend reported by the Claude API">Grounded</span>' : '<span class="badge badge-neutral">Estimate</span>';
+
+    var pill;
+    if (!hasUsage) {
+      pill = '<p class="kpi-note">No native runs yet. Estimated cost so far: ' + usd(tel.estimatedCostUsd) + '. Dispatch with the Native Engine to report exact spend.</p>';
+    } else {
+      // Priced server-side from the same per-model table that prices actual spend.
+      var saved = actual && Number(actual.cacheSavingsUsd) > 0 ? Number(actual.cacheSavingsUsd) : null;
+      pill = '<span class="cache-pill" title="Share of prompt tokens served from the prompt cache"><span class="label">Cache Hit Rate</span><b>' + hitPct + '%</b>' +
+        (saved ? '<span class="save">Saved ~' + usdSpend(saved) + ' via Ephemeral Caching</span>' : '') + '</span>';
+    }
+
+    // Token breakdown comes from the detailed audit; the status call alone carries only cache counters.
+    var chips;
+    if (pipe.errors.telemetry && !summary) {
+      chips = '<p class="kpi-note">Token breakdown unavailable. <button class="btn small" type="button" data-action="retry" data-key="telemetry">Retry</button></p>';
+    } else {
+      var loading = !pipe.loaded.telemetry;
+      var fresh = actual ? (Number(actual.inputTokens) || 0) + (Number(actual.cacheCreationTokens) || 0) : null;
+      var out = actual ? compactNum(Number(actual.outputTokens) || 0) + ' / ' + compactNum(Number(actual.thinkingTokens) || 0) : null;
+      chips = '<ul class="tel-chips">' +
+        telChip('Cached Input', compactNum(Number(tel.cacheReadTokens) || 0), 'Prompt tokens read from the cache') +
+        telChip('Fresh Input', loading || fresh == null ? '–' : compactNum(fresh), 'Uncached prompt tokens plus cache writes') +
+        telChip('Output / Thinking', loading || out == null ? '–' : out, 'Output tokens, of which spent on reasoning') +
+        telChip('Gatekeeper Pass', rate == null ? '–' : rate + '%', 'Verification pass rate across completed tasks') +
+        '</ul>';
+    }
+
+    return kpiCard('Financial &amp; Cache Telemetry', badge,
+      '<div class="kpi-value">' + usdSpend(spend) + '<span class="kpi-of">actual spend</span></div>' + pill + chips);
   }
 
   function kpiContracts(st) {
@@ -1427,9 +1743,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
   /** Primary dispatch affordance; disabled (with the blocking dependency named) until the task is ready. */
   function dispatchBtn(t) {
     var unmet = unmetDeps(t);
-    if (!unmet.length) return actionBtn('task-dispatch', t.id, 'Dispatch Claude', 'primary');
+    if (!unmet.length) return actionBtn('task-dispatch', t.id, 'Dispatch', 'primary');
     var why = 'Waiting on ' + unmet.join(', ');
-    return '<button class="btn small primary" type="button" disabled title="' + esc(why) + '" aria-label="' + esc('Dispatch Claude for ' + t.id + ' is unavailable: ' + why) + '">Dispatch Claude</button>';
+    return '<button class="btn small primary" type="button" disabled title="' + esc(why) + '" aria-label="' + esc('Dispatch for ' + t.id + ' is unavailable: ' + why) + '">Dispatch</button>';
   }
 
   function taskActions(t) {
@@ -1439,7 +1755,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (isRunActive(run)) return actionBtn('run-console', t.id, 'Live Logs', '') + actionBtn('run-abort', t.id, 'Abort', 'danger');
     var console_ = run ? actionBtn('run-console', t.id, 'Live Logs', '') : '';
     if (t.status === 'pending') return console_ + actionBtn('task-start', t.id, 'Start', '') + dispatchBtn(t);
-    if (t.status === 'in_progress') return console_ + actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary');
+    if (t.status === 'in_progress') return console_ + actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary') + dispatchBtn(t);
     if (t.status === 'blocked') return console_ + actionBtn('task-start', t.id, 'Retry', '') + dispatchBtn(t);
     return console_ + '<span class="done-label">' + ICON.check + 'Done</span>';
   }
@@ -1455,14 +1771,21 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       blocked = '<div class="tcard-blocked">' + (attempts != null ? '<span class="attempts">Attempts: ' + attempts + '/' + attemptLimit(t) + '</span>' : '') +
         (t.notes ? '<p>' + esc(t.notes) + '</p>' : '') + '</div>';
     }
-    return '<article class="tcard is-' + esc(t.status) + (isRunActive(run) ? ' is-running' : '') + (updated ? ' is-updated' : '') + '" role="listitem" data-flip="' + esc(t.id) + '">' +
+    var escalation = escalationFor(t.id);
+    var banner = '';
+    if (escalation) {
+      banner = '<button class="proposal-banner" type="button" data-action="heal-review" data-key="' + esc(t.id) + '">' + ICON.shield +
+        (escalation.proposedPatch ? 'Proposal Ready &#8212; Click to Review &amp; Apply' : 'Escalated &#8212; Review &amp; Decide') + '</button>';
+    }
+    return '<article class="tcard is-' + esc(t.status) + (isRunActive(run) ? ' is-running' : '') + (updated ? ' is-updated' : '') +
+      (escalation && escalation.proposedPatch ? ' has-proposal' : '') + '" role="listitem" data-flip="' + esc(t.id) + '">' +
       '<header class="tcard-head"><code class="tcard-id">' + (t.status === 'completed' ? '<span class="tcard-check">' + ICON.check + '</span>' : '') + esc(t.id) + '</code>' +
       (run ? runPill(run) : '') +
       '<span class="badge badge-agent">' + esc(t.assignedSubagent || 'unassigned') + '</span></header>' +
       '<h3 class="tcard-title">' + esc(t.title) + '</h3>' +
       (files.length ? '<ul class="file-list" aria-label="Target files">' + files.map(function (f) { return '<li class="file" title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
       (t.status === 'pending' && unmet.length ? '<p class="tcard-note">Waiting on ' + unmet.map(function (d) { return '<code>' + esc(d) + '</code>'; }).join(', ') + '</p>' : '') +
-      blocked +
+      blocked + banner +
       '<footer class="tcard-foot"><code class="cmd" title="' + esc(t.verificationCommand || '') + '">' +
       (t.verificationCommand ? '<span class="cmd-label">Test command: </span>' + esc(t.verificationCommand) : 'no test command') + '</code>' +
       '<div class="tcard-actions">' + taskActions(t) + '</div></footer></article>';
@@ -1489,14 +1812,16 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
   }
 
   // ─── Autonomous dispatch: POST /tasks/dispatch and /tasks/abort ────────────
-  function runDispatch(taskId) {
+  function runDispatch(taskId, customOptions) {
     var key = 'task:' + taskId;
     if (pipe.busy[key]) return;
     pipe.busy[key] = 'dispatch';
     repaint('tasks');
-    postJson('/api/pipeline/tasks/dispatch', { taskId: taskId }).then(function (body) {
+    var payload = Object.assign({ taskId: taskId }, customOptions || {});
+    postJson('/api/pipeline/tasks/dispatch', payload).then(function (body) {
       upsertRun(body && body.run);
-      toast('Dispatched Claude for ' + taskId, 'ok');
+      var engine = body && body.run && body.run.engine === 'native' ? 'native engine' : 'CLI runner';
+      toast('Dispatched ' + taskId + ' to the ' + engine, 'ok');
       openConsole(taskId, true);
     }, function (e) {
       toast('Could not dispatch ' + taskId + ': ' + e.message);
@@ -1530,11 +1855,109 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     }, function () { runAbort(taskId); });
   }
 
+  // ─── Intelligent dispatch modal (#dispatch-dialog) ─────────────────────────
+  var pendingDispatch = null;
+
+  /** Mirrors buildDefaultClaudeCommand() in agent-supervisor.ts so the preview matches what the server runs. */
+  function defaultClaudeCommand(t) {
+    var prompt = [
+      'Execute task ' + t.id + ' (' + t.title + ').',
+      t.description ? 'Description: ' + t.description + '.' : '',
+      t.verificationCommand ? 'Verify your work using: ' + t.verificationCommand + '.' : '',
+      'Start by running: nativ task start ' + t.id + '. When finished and verified, run: nativ task complete ' + t.id + '.',
+      'If blocked, follow the Human-Centric Communication Protocol in CLAUDE.md: explain the user experience symptom, root cause in plain English, and clear options without technical jargon.'
+    ].filter(Boolean).join(' ');
+    return 'claude -p "' + prompt.replace(/"/g, '\\"') + '" --output-format stream-json --verbose --dangerously-skip-permissions';
+  }
+
+  function syncDispatchSwitches() {
+    var isolated = $('dispatch-worktree').checked;
+    var merge = $('dispatch-merge');
+    merge.disabled = !isolated || !$('dispatch-verify-gate').checked;
+    if (merge.disabled) merge.checked = false;
+  }
+
+  function checkedValue(name) {
+    var el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : '';
+  }
+
+  /**
+   * Current Claude models reject a fixed thinking budget, so the native engine maps it onto an
+   * effort level (same buckets as thinkingBudgetToEffort in agent-supervisor.ts). Say so here
+   * rather than implying an exact token cap.
+   */
+  function budgetHint(engine, budget) {
+    if (engine === 'cli') {
+      return budget ? 'Passed to Claude Code as MAX_THINKING_TOKENS=' + budget + '.' : 'Claude Code chooses its own thinking budget.';
+    }
+    if (!budget) return 'Runs at low effort, the fastest setting (Claude Opus 5.5 cannot switch thinking off entirely).';
+    var effort = budget <= 2048 ? 'medium' : budget <= 8192 ? 'high' : budget <= 32768 ? 'xhigh' : 'max';
+    return 'Runs at ' + effort + ' effort: the native engine maps token budgets onto effort levels.';
+  }
+
+  function syncDispatchEngine() {
+    var engine = checkedValue('dispatch-engine') || 'native';
+    $('dispatch-command-field').hidden = engine !== 'cli';
+    $('dispatch-budget-hint').textContent = budgetHint(engine, Number(checkedValue('dispatch-budget')) || 0);
+  }
+
+  function openDispatchDialog(taskId) {
+    var t = taskById(taskId);
+    if (!t) { runDispatch(taskId); return; }
+    var files = t.targetFiles || [];
+    pendingDispatch = { taskId: t.id, preview: defaultClaudeCommand(t) };
+    $('dispatch-task-id').textContent = t.id;
+    $('dispatch-agent').textContent = t.assignedSubagent || 'unassigned';
+    $('dispatch-task-title').textContent = t.title || '';
+    $('dispatch-files').innerHTML = files.map(function (f) { return '<li class="file" title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('');
+    $('dispatch-files').hidden = !files.length;
+    $('dispatch-verify').innerHTML = t.verificationCommand ? '<span class="cmd-label">Test command: </span>' + esc(t.verificationCommand) : 'no test command';
+    $('dispatch-command').value = pendingDispatch.preview;
+    $('dispatch-engine-native').checked = true;
+    $('dispatch-budget-none').checked = true;
+    syncDispatchEngine();
+    $('dispatch-worktree').checked = true;
+    $('dispatch-verify-gate').checked = !!t.verificationCommand;
+    $('dispatch-verify-gate').disabled = !t.verificationCommand;
+    $('dispatch-merge').checked = false;
+    $('dispatch-error').textContent = '';
+    syncDispatchSwitches();
+    openDialog($('dispatch-dialog'));
+    $('btn-launch-agent').focus();
+  }
+
+  function launchDispatch() {
+    if (!pendingDispatch) return;
+    var engine = checkedValue('dispatch-engine') || 'native';
+    var budget = Number(checkedValue('dispatch-budget')) || 0;
+    var command = $('dispatch-command').value.trim();
+    if (engine === 'cli' && !command) {
+      $('dispatch-error').textContent = 'Enter a runner command, or reopen the dialog to restore the generated one.';
+      $('dispatch-command').focus();
+      return;
+    }
+    var opts = {
+      runnerEngine: engine,
+      useWorktree: $('dispatch-worktree').checked,
+      verify: $('dispatch-verify-gate').checked,
+      autoMerge: $('dispatch-merge').checked
+    };
+    // Always sent: 0 ("None") asks for the least thinking, which differs from leaving the model default.
+    opts.thinkingBudget = budget;
+    // An untouched preview is the server's own default, which may be overridden by NATIV_RUNNER_COMMAND.
+    if (engine === 'cli' && command !== pendingDispatch.preview) opts.runnerCommand = command;
+    var id = pendingDispatch.taskId;
+    pendingDispatch = null;
+    $('dispatch-dialog').close();
+    runDispatch(id, opts);
+  }
+
   // ─── Live runner console drawer ────────────────────────────────────────────
   var RC_STEPS = ['Worktree', 'Claude', 'Verify', 'Merge'];
   var RC_STAGE = { spawning_worktree: 0, running: 1, verifying: 2, merging: 3 };
   var RC_MAX_NODES = 3000;
-  var rc = { taskId: null, autoscroll: true, minimized: false, stage: 0, ticker: null, backfilled: false };
+  var rc = { taskId: null, autoscroll: true, minimized: false, stage: 0, ticker: null, backfilled: false, tab: 'logs', diffSeq: 0, diffTimer: null, heal: null };
 
   /** Minimal SGR parser: escapes the chunk, then maps the colors agents actually emit. */
   var ANSI_CLASS = {
@@ -1575,6 +1998,8 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (RC_STAGE[status] != null) rc.stage = stage;
     return RC_STEPS.map(function (label, i) {
       var cls = 'rc-step';
+      // Never dispatched (e.g. opened from a proposal banner): no phase is active.
+      if (!status) return '<li class="' + cls + '">' + esc(label) + '</li>';
       if (status === 'completed') cls += ' is-done';
       else if (settled && failed) cls += i < stage ? ' is-done' : (i === stage ? ' is-failed' : '');
       else if (i < stage) cls += ' is-done';
@@ -1596,6 +2021,14 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (run && run.verification) gate = run.verification.success ? 'Passed' : 'Failed';
     else if (run && run.status === 'verifying') gate = 'Running';
     $('rc-gate').textContent = gate;
+    // Native runs report grounded usage; cli runs have none to show.
+    var usage = run && run.usage;
+    $('rc-spend-wrap').hidden = !usage;
+    $('rc-cache-wrap').hidden = !usage;
+    if (usage) {
+      $('rc-spend').textContent = usdSpend(usage.costUsd);
+      $('rc-cache').textContent = Math.round((Number(usage.cacheHitRate) || 0) * 100) + '%';
+    }
     var exit = '';
     if (run && !isRunActive(run)) {
       exit = RUN_LABEL[run.status] || run.status;
@@ -1639,14 +2072,194 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     });
   }
 
-  function openConsole(taskId, quiet) {
+  // ─── Console tab 2: worktree git diff (GET /api/pipeline/worktrees/diff) ───
+  function diffToHtml(diff) {
+    return String(diff).split('\n').map(function (line) {
+      var cls = '';
+      if (/^(diff --git|\+\+\+ |--- )/.test(line)) cls = /^diff --git/.test(line) ? 'df-file' : 'df-meta';
+      else if (/^@@/.test(line)) cls = 'df-hunk';
+      else if (/^\+/.test(line)) cls = 'df-add';
+      else if (/^-/.test(line)) cls = 'df-del';
+      else if (/^(index |new file mode|deleted file mode|similarity |rename |Binary files)/.test(line)) cls = 'df-meta';
+      return cls ? '<span class="' + cls + '">' + esc(line) + '</span>' : esc(line) + '\n';
+    }).join('');
+  }
+
+  function setDiffState(summary, files, bodyHtml, count) {
+    $('rc-diff-summary').innerHTML = summary;
+    $('rc-diff-files').innerHTML = (files || []).map(function (f) { return '<li title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('');
+    $('rc-diff-files').hidden = !(files && files.length);
+    $('rc-diff-body').innerHTML = bodyHtml;
+    $('rc-diff-count').textContent = count == null ? '–' : String(count);
+  }
+
+  function loadConsoleDiff(taskId) {
+    var seq = ++rc.diffSeq;
+    $('rc-diff-refresh').disabled = true;
+    if (!$('rc-diff-body').textContent) setDiffState('Loading worktree changes…', [], '<span class="rc-empty">Reading git status…</span>', null);
+    return api('/api/pipeline/worktrees/diff?taskId=' + encodeURIComponent(taskId)).then(function (body) {
+      if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
+      var files = Array.isArray(body.filesChanged) ? body.filesChanged : [];
+      var summary = '<code>' + esc(body.branch || '') + '</code> · ' + (body.hasChanges ? files.length + ' uncommitted file' + (files.length === 1 ? '' : 's') : 'working tree clean');
+      setDiffState(summary, files, body.diff ? diffToHtml(body.diff) : '<span class="rc-empty">No uncommitted changes in this worktree yet.</span>', files.length);
+    }, function (e) {
+      if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
+      var missing = e.code === 'WORKTREE_NOT_FOUND';
+      setDiffState(missing ? 'No isolated worktree' : 'Could not load the diff',
+        [], '<span class="rc-empty">' + esc(missing ? 'This task has no agent worktree. Dispatch it with Isolated Worktree on, or run nativ worktree create ' + taskId + '.' : e.message) + '</span>', null);
+    }).then(function () {
+      if (seq === rc.diffSeq) $('rc-diff-refresh').disabled = false;
+    });
+  }
+
+  /** Throttled refresh (at most every 2s) while an agent streams output or git state changes. */
+  function queueConsoleDiff() {
+    if (!rc.taskId || rc.tab !== 'diff' || rc.minimized || rc.diffTimer) return;
+    var id = rc.taskId;
+    rc.diffTimer = setTimeout(function () {
+      rc.diffTimer = null;
+      if (rc.taskId === id && rc.tab === 'diff') loadConsoleDiff(id);
+    }, 2000);
+  }
+
+  function setConsoleTab(tab, focus) {
+    if (tab === 'heal' && $('rc-tab-heal').hidden) tab = 'logs';
+    rc.tab = tab;
+    ['logs', 'diff', 'heal'].forEach(function (name) {
+      var btn = $('rc-tab-' + name);
+      var on = name === tab;
+      btn.setAttribute('aria-selected', String(on));
+      btn.setAttribute('tabindex', on ? '0' : '-1');
+    });
+    $('rc-body').hidden = tab !== 'logs';
+    $('rc-diff').hidden = tab !== 'diff';
+    $('rc-heal').hidden = tab !== 'heal';
+    $('rc-autoscroll').hidden = tab !== 'logs';
+    $('rc-clear').hidden = tab !== 'logs';
+    if (tab === 'diff' && rc.taskId) loadConsoleDiff(rc.taskId);
+    if (tab === 'heal') renderHeal();
+    if (focus) $('rc-tab-' + tab).focus();
+  }
+
+  /** Console tabs in DOM order, skipping the proposal tab while it is hidden. */
+  function visibleConsoleTabs() {
+    return ['logs', 'diff', 'heal'].filter(function (name) { return !$('rc-tab-' + name).hidden; });
+  }
+
+  // ─── Console tab 3: self-healing proposal review (/api/pipeline/escalations) ─
+  /** Shows the tab only while the console's task has a pending escalation; keeps the panel in sync. */
+  function syncHealTab() {
+    var escalation = rc.taskId ? escalationFor(rc.taskId) : null;
+    // Keep the tab while a just-finished resolution is still on screen.
+    var show = !!escalation || !!(rc.heal && rc.heal.result && rc.heal.taskId === rc.taskId);
+    $('rc-tab-heal').hidden = !show;
+    $('rc-heal-count').hidden = !(escalation && escalation.proposedPatch);
+    if (!show && rc.tab === 'heal') setConsoleTab('logs');
+    else if (rc.tab === 'heal') renderHeal();
+  }
+
+  function patchLine(sign, p) {
+    if (!p) return '';
+    var value = p.value === undefined ? '' : ' ' + JSON.stringify(p.value);
+    return '<span class="' + (sign === '-' ? 'df-del' : 'df-add') + '">' + sign + ' ' + esc(p.operation + ' ' + p.path + value) + '</span>';
+  }
+
+  function healBody(escalation) {
+    var p = escalation.proposedPatch;
+    var diag = '<p class="heal-diag"><strong>' + esc(escalation.summary || 'Escalated') + '</strong>' +
+      (escalation.details ? '<br>' + esc(escalation.details) : '') + '</p>';
+    if (!p) {
+      return '<div class="heal-head"><h3>No automatic fix could be proven</h3><span class="heal-tag">' + esc(escalation.id) + '</span></div>' + diag +
+        '<p class="heal-diag">' + esc(escalation.recommendedAction || 'Review the affected contracts, then unblock the task or dismiss the escalation.') + '</p>' +
+        '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="reject">Dismiss</button>' +
+        '<button class="rc-btn approve" type="button" data-heal="approve">Approve &amp; Unblock Task</button></div>';
+    }
+    var proof = p.verificationProof || {};
+    var verdict = proof.passed
+      ? '<span class="heal-verdict pass">' + ICON.check + 'PASSED in sandbox</span>'
+      : '<span class="heal-verdict fail">' + ICON.x + 'NOT VERIFIED</span>';
+    var patch = p.kind === 'restore_tests'
+      ? (p.files || []).map(function (f) { return '<span class="df-add">+ restore ' + esc(f) + '</span>'; }).join('') +
+        (p.commands || []).map(function (c) { return '<span class="df-meta">$ ' + esc(c) + '</span>'; }).join('')
+      : patchLine('-', p.original) + patchLine('+', p.candidate);
+    var checks = (proof.checks || []).map(function (c) {
+      return '<li><span class="' + (c.passed ? 'ok' : 'bad') + '">' + (c.passed ? ICON.check : ICON.x) + '</span><span><b>' + esc(c.name) + '</b> ' + esc(c.detail) + '</span></li>';
+    }).join('');
+    return '<div class="heal-head"><h3>' + esc(humanize(p.strategy || 'proposal')) + '</h3><span class="heal-tag">' + esc(p.proposalId || escalation.id) + '</span>' + verdict + '</div>' +
+      diag + '<p class="heal-diag">' + esc(p.rationale || '') + '</p>' +
+      '<div class="heal-grid">' +
+        '<section class="heal-section"><h4>' + (p.kind === 'restore_tests' ? 'Restoration plan' : 'Rejected change &#8594; proposed change') + '</h4><pre class="heal-patch">' + patch + '</pre></section>' +
+        '<section class="heal-section"><h4>Isolated verification</h4><ul class="heal-checks">' + (checks || '<li>No checks recorded.</li>') + '</ul></section>' +
+      '</div>' +
+      '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="reject">Reject Proposal</button>' +
+      '<button class="rc-btn approve" type="button" data-heal="approve"' + (proof.passed ? '' : ' disabled title="Only sandbox-verified proposals can be applied"') + '>Approve &amp; Apply Patch</button></div>';
+  }
+
+  function renderHeal() {
+    var panel = $('rc-heal');
+    var heal = rc.heal && rc.heal.taskId === rc.taskId ? rc.heal : null;
+    var result = heal && heal.result ? '<p class="heal-result' + (heal.result.ok ? '' : ' is-error') + '" role="status">' + esc(heal.result.message) + '</p>' : '';
+    if (!pipe.loaded.escalations) { panel.innerHTML = '<div class="heal-skel"></div><div class="heal-skel"></div><div class="heal-skel" style="width:60%"></div>'; return; }
+    if (pipe.errors.escalations && !pipe.escalations.length) {
+      panel.innerHTML = '<p class="heal-result is-error">Could not load escalations: ' + esc(pipe.errors.escalations) + '</p>' +
+        '<div class="heal-actions"><button class="rc-btn" type="button" data-heal="retry">Retry</button></div>';
+      return;
+    }
+    var escalation = escalationFor(rc.taskId);
+    if (!escalation) {
+      panel.innerHTML = result || '<p class="heal-diag">No pending proposal for this task. When the circuit breaker trips on a third failed attempt, a sandbox-verified fix appears here for review.</p>';
+      return;
+    }
+    panel.innerHTML = result + healBody(escalation);
+    if (heal && heal.busy) panel.querySelectorAll('[data-heal]').forEach(function (b) { b.disabled = true; });
+  }
+
+  /** One click resolves: approve applies the proposal and unblocks the task, reject dismisses it. */
+  function resolveEscalation(decision) {
+    var escalation = rc.taskId ? escalationFor(rc.taskId) : null;
+    if (!escalation || (rc.heal && rc.heal.busy)) return;
+    var taskId = rc.taskId;
+    rc.heal = { taskId: taskId, busy: true, result: null };
+    renderHeal();
+    var btn = $('rc-heal').querySelector('[data-heal="' + decision + '"]');
+    if (btn) btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (decision === 'approve' ? 'Applying…' : 'Rejecting…');
+    postJson('/api/pipeline/escalations/resolve', { escalationId: escalation.id, decision: decision }).then(function (body) {
+      rc.heal = { taskId: taskId, busy: false, result: { ok: true, message: body.message || 'Escalation resolved.' } };
+      toast(body.message || 'Escalation resolved', 'ok');
+    }, function (e) {
+      rc.heal = { taskId: taskId, busy: false, result: { ok: false, message: e.message } };
+      toast('Could not ' + decision + ' ' + escalation.id + ': ' + e.message);
+    }).then(function () {
+      renderHeal();
+      return fetchPipeline(['escalations', 'status', 'tasks', 'telemetry']);
+    });
+  }
+
+  /** Per-turn usage from the native engine: fold the running total into the run record. */
+  function onRunnerUsage(event) {
+    if (!event || !event.taskId || !event.total) return;
+    var run = runFor(event.taskId);
+    if (run && (!event.runId || run.runId === event.runId)) run.usage = event.total;
+    if (rc.taskId === event.taskId) syncConsole();
+  }
+
+  function openConsole(taskId, quiet, tab) {
     var drawer = $('runner-console-drawer');
     if (rc.taskId !== taskId) {
       rc.taskId = taskId;
       rc.backfilled = false;
       rc.stage = 0;
-      $('rc-body').innerHTML = '<span class="rc-empty">Loading runner output…</span>';
-      loadConsoleLogs(taskId);
+      rc.diffSeq++;
+      rc.heal = null;
+      setDiffState('Uncommitted changes in the task worktree', [], '', null);
+      // The run list includes restored history, so no run means no log to fetch (the server would 400).
+      if (runFor(taskId)) {
+        $('rc-body').innerHTML = '<span class="rc-empty">Loading runner output…</span>';
+        loadConsoleLogs(taskId);
+      } else {
+        $('rc-body').innerHTML = '<span class="rc-empty">No runner has been dispatched for this task yet.</span>';
+        rc.backfilled = true;
+      }
     }
     rc.minimized = false;
     drawer.hidden = false;
@@ -1656,14 +2269,18 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     document.body.classList.add('has-console');
     document.body.classList.remove('has-console-min');
     syncConsole();
+    syncHealTab();
     rcTick();
-    if (!quiet) $('rc-body').focus();
+    setConsoleTab(tab || rc.tab);
+    if (!quiet) (rc.tab === 'diff' ? $('rc-diff-body') : rc.tab === 'heal' ? $('rc-heal') : $('rc-body')).focus();
   }
 
   function closeConsole() {
     rc.taskId = null;
     clearInterval(rc.ticker);
     rc.ticker = null;
+    clearTimeout(rc.diffTimer);
+    rc.diffTimer = null;
     $('runner-console-drawer').hidden = true;
     document.body.classList.remove('has-console', 'has-console-min');
   }
@@ -1677,6 +2294,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var btn = $('rc-minimize');
     btn.textContent = rc.minimized ? 'Expand' : 'Minimize';
     btn.setAttribute('aria-expanded', String(!rc.minimized));
+    if (!rc.minimized && rc.tab === 'diff' && rc.taskId) loadConsoleDiff(rc.taskId);
   }
 
   function onRunnerStatus(run) {
@@ -1685,10 +2303,15 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (rc.taskId === run.taskId) {
       syncConsole();
       if (isRunActive(run)) rcTick();
+      queueConsoleDiff();
     }
     repaint('tasks');
     if (!RUN_ACTIVE[run.status]) {
-      toast((RUN_LABEL[run.status] || run.status) + ': ' + run.taskId, run.status === 'completed' ? 'ok' : 'err');
+      var statusMsg = (RUN_LABEL[run.status] || run.status) + ': ' + run.taskId;
+      if (run.error && run.status !== 'completed') {
+        statusMsg += ' (' + run.error + ')';
+      }
+      toast(statusMsg, run.status === 'completed' ? 'ok' : 'err');
       // The agent may have moved the task through "nativ task complete" while it ran.
       queueRefresh(['status', 'tasks', 'worktrees', 'runs']);
     }
@@ -1703,6 +2326,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (empty) $('rc-body').innerHTML = '';
     appendConsole(ansiToHtml(entry.chunk, entry.stream === 'stderr' ? 'rc-fg-warn' : ''));
     $('rc-bytes').textContent = formatBytes((run && run.logBytes) || 0);
+    queueConsoleDiff();
   }
 
   var pendingBlock = null;
@@ -1747,7 +2371,8 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (w.isAgentWorktree && w.taskId) {
       actions = busy
         ? '<button class="btn small" type="button" disabled><span class="spinner" aria-hidden="true"></span>' + (busy === 'merge' ? 'Merging…' : 'Deleting…') + '</button>'
-        : '<button class="btn small primary" type="button" data-action="wt-merge" data-key="' + esc(w.taskId) + '"' + (canMerge ? '' : ' disabled title="' + esc(blockedWhy) + '"') + '>Merge to Main</button>' +
+        : '<button class="btn small" type="button" data-action="wt-diff" data-key="' + esc(w.taskId) + '" aria-label="' + esc('Inspect diff for ' + w.taskId) + '">Inspect Diff</button>' +
+          '<button class="btn small primary" type="button" data-action="wt-merge" data-key="' + esc(w.taskId) + '"' + (canMerge ? '' : ' disabled title="' + esc(blockedWhy) + '"') + '>Merge to Main</button>' +
           '<button class="btn small danger" type="button" data-action="wt-remove" data-key="' + esc(w.taskId) + '">Delete Workspace</button>';
     }
     return '<tr><td data-label="Branch"><code>' + esc(w.branch) + '</code></td>' +
@@ -1921,9 +2546,10 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
   var LIVE_TEXT = { connecting: 'Connecting', live: 'Live', offline: 'Offline' };
   // Keys are SSE event names on the wire; values are the pipeline slices each one invalidates.
   var EVENT_PARTS = {
-    'plan_change': ['status', 'tasks', 'worktrees'],
+    // .ai/escalation.json writes (circuit-breaker trips, resolutions) arrive as plan changes.
+    'plan_change': ['status', 'tasks', 'worktrees', 'escalations'],
     // The server also reports .ai/benchmark_report.json writes (e.g. a CLI "nativ bench") as telemetry changes.
-    'telemetry_change': ['status', 'benchmarks'],
+    'telemetry_change': ['status', 'benchmarks', 'telemetry'],
     'benchmark_change': ['benchmarks'],
     'worktree_change': ['worktrees']
   };
@@ -1933,6 +2559,10 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     el.setAttribute('data-state', mode);
     $('live-label').textContent = LIVE_TEXT[mode];
     el.title = detail || (mode === 'live' ? 'Receiving real-time updates from /api/events' : '');
+    var sb = $('sb-live');
+    sb.setAttribute('data-state', mode);
+    sb.title = el.title;
+    $('sb-live-label').textContent = mode === 'live' ? 'Live Stream' : LIVE_TEXT[mode];
   }
 
   function flashLive() {
@@ -1961,6 +2591,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (!parts) return;
     flashLive();
     queueRefresh(parts);
+    if (parts.indexOf('worktrees') !== -1) queueConsoleDiff();
   }
 
   function connectEvents() {
@@ -2004,6 +2635,12 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     es.addEventListener('runner_log', function (e) {
       live.lastBeat = Date.now();
       onRunnerLog(parseEventData(e));
+    });
+    // Native engine: one event per API turn with the delta and the run's running total.
+    es.addEventListener('runner_token_usage', function (e) {
+      live.lastBeat = Date.now();
+      flashLive();
+      onRunnerUsage(parseEventData(e));
     });
   }
 
@@ -3162,6 +3799,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       tab.setAttribute('aria-selected', String(active));
       tab.setAttribute('tabindex', active ? '0' : '-1');
       $('panel-' + v).hidden = !active;
+      if (active) $('crumb-view').textContent = tab.querySelector('.nav-label').textContent;
     });
     if (location.hash !== '#' + view && window.history && history.replaceState) history.replaceState(null, '', '#' + view);
     if (view === 'database') {
@@ -3181,8 +3819,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     t.addEventListener('click', function () { setView(t.getAttribute('data-view')); });
     t.addEventListener('keydown', function (e) {
       var i = VIEWS.indexOf(ui.view), n = VIEWS.length, next = null;
-      if (e.key === 'ArrowRight') next = VIEWS[(i + 1) % n];
-      else if (e.key === 'ArrowLeft') next = VIEWS[(i + n - 1) % n];
+      // Vertical sidebar: Up/Down; Left/Right still work when the narrow layout lays the tabs out in a row.
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = VIEWS[(i + 1) % n];
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = VIEWS[(i + n - 1) % n];
       else if (e.key === 'Home') next = VIEWS[0];
       else if (e.key === 'End') next = VIEWS[n - 1];
       if (next) { e.preventDefault(); setView(next, true); }
@@ -3214,9 +3853,11 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (action === 'task-start') runTaskAction('start', key);
     else if (action === 'task-complete') runTaskAction('complete', key);
     else if (action === 'task-block') openBlockDialog(key);
-    else if (action === 'task-dispatch') runDispatch(key);
+    else if (action === 'task-dispatch') openDispatchDialog(key);
     else if (action === 'run-console') openConsole(key);
     else if (action === 'run-abort') confirmAbort(key);
+    else if (action === 'wt-diff') openConsole(key, false, 'diff');
+    else if (action === 'heal-review') openConsole(key, false, 'heal');
     else if (action === 'wt-merge') confirmWorktree('merge', key);
     else if (action === 'wt-remove') confirmWorktree('remove', key);
     else if (action === 'bench-run') runBenchmark();
@@ -3253,6 +3894,36 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     $('rc-body').innerHTML = '<span class="rc-empty">Console cleared. New output will stream in here.</span>';
   });
   $('rc-abort').addEventListener('click', function () { if (rc.taskId) confirmAbort(rc.taskId); });
+  document.querySelectorAll('.rc-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () { setConsoleTab(btn.getAttribute('data-rc-tab')); });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      var tabs = visibleConsoleTabs();
+      var i = tabs.indexOf(rc.tab);
+      setConsoleTab(tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
+    });
+  });
+  $('rc-diff-refresh').addEventListener('click', function () { if (rc.taskId) loadConsoleDiff(rc.taskId); });
+  $('rc-heal').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-heal]');
+    if (!btn || btn.disabled) return;
+    var what = btn.getAttribute('data-heal');
+    if (what === 'retry') { pipe.loaded.escalations = false; renderHeal(); fetchPipeline(['escalations']); }
+    else resolveEscalation(what);
+  });
+
+  // ─── Events: dispatch modal ────────────────────────────────────────────────
+  document.querySelectorAll('input[name="dispatch-engine"], input[name="dispatch-budget"]').forEach(function (input) {
+    input.addEventListener('change', syncDispatchEngine);
+  });
+  $('dispatch-worktree').addEventListener('change', syncDispatchSwitches);
+  $('dispatch-verify-gate').addEventListener('change', syncDispatchSwitches);
+  $('btn-launch-agent').addEventListener('click', launchDispatch);
+  $('dispatch-dialog').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); launchDispatch(); }
+  });
+  $('dispatch-dialog').addEventListener('close', function () { pendingDispatch = null; });
   $('rc-minimize').addEventListener('click', toggleConsoleMinimized);
   $('rc-close').addEventListener('click', closeConsole);
   $('runner-console-drawer').addEventListener('keydown', function (e) {
