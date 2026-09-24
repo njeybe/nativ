@@ -76,22 +76,42 @@ body { min-height: 100vh; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+.container { max-width: 1440px; margin: 0 auto; padding: 24px 32px; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .muted { color: var(--muted); }
 .text-danger { color: var(--danger); }
 .icon { flex: none; display: block; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow); }
 
-/* App bar */
-.appbar { position: sticky; top: 0; z-index: 20; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.appbar-inner { max-width: 1440px; margin: 0 auto; padding: 12px 24px 0; }
-.appbar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* App shell: fixed 240px vertical sidebar + fluid main column (ui_specs.md §2) */
+:root { --sidebar-w: 240px; }
+.app-sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 30; width: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
+.app-main { margin-left: var(--sidebar-w); min-width: 0; min-height: 100vh; }
+.brand { display: flex; flex-direction: column; gap: 8px; padding: 18px 16px 14px; border-bottom: 1px solid var(--border); }
+.brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
 .version { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--border); border-radius: var(--r-control); padding: 0 6px; white-space: nowrap; }
-.brand-project { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brand-project::before { content: "\00B7"; margin-right: 10px; color: var(--chip-border); }
+.brand-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 8px; font-size: 12.5px; color: var(--muted); background: var(--chip); border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: flex-start; }
+.sidebar-nav { flex: 1 1 auto; overflow-y: auto; padding: 8px 10px; }
+.nav-group { margin: 12px 0 4px; padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sidebar-foot { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }
+.sidebar-foot .foot-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.sidebar-foot .foot-root { font-family: var(--mono); font-size: 11.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.sidebar-foot .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.branch-badge { display: inline-flex; align-items: center; gap: 5px; max-width: 150px; padding: 0 7px; font-family: var(--mono); font-size: 11px; color: var(--text); background: var(--chip); border: 1px solid var(--chip-border); border-radius: var(--r-control); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-live { display: inline-flex; align-items: center; gap: 6px; }
+.sb-live .live-dot { width: 7px; height: 7px; }
+.sb-live[data-state="live"] .live-dot { background: var(--success); animation: sb-pulse 2s ease-in-out infinite; }
+.sb-live[data-state="connecting"] .live-dot { background: var(--active); animation: blink 1.2s ease-in-out infinite; }
+.sb-live[data-state="offline"] .live-dot { background: var(--danger); }
+@keyframes sb-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent); } 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 0%, transparent); } }
+
+/* Top app bar (glass, sticky) */
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 10px 32px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.crumb { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.crumb-root { color: var(--muted); white-space: nowrap; }
+.crumb-sep { color: var(--chip-border); }
+.crumb-view { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .appbar-actions { display: flex; align-items: center; gap: 8px; }
 .live { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; font-size: 12.5px; font-weight: 500; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-control); white-space: nowrap; }
 .live[data-state="live"] { color: var(--text); }
@@ -104,10 +124,10 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 @keyframes blink { 50% { opacity: .35; } }
 .live-tag { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 
-/* Primary navigation: pill tabs with live counters */
-.nav { display: flex; gap: 4px; margin-top: 10px; padding-bottom: 10px; overflow-x: auto; scrollbar-width: none; }
-.nav::-webkit-scrollbar { display: none; }
-.nav-tab { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--r-control); background: none; color: var(--muted); font-size: 13.5px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+/* Primary navigation: vertical sidebar items with live counters */
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-tab { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: none; color: var(--muted); font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.nav-tab .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nav-tab:hover { color: var(--text); background: var(--chip); }
 .nav-tab[aria-selected="true"] { color: var(--primary); background: var(--primary-tint); border-color: var(--primary-line); }
 .count { display: inline-block; min-width: 20px; padding: 0 6px; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; color: var(--text); background: var(--chip); border: 1px solid var(--border); border-radius: var(--r-control); font-variant-numeric: tabular-nums; }
@@ -267,7 +287,7 @@ button.badge-media:hover { background: var(--primary-tint); }
 /* Live runner console drawer */
 body.has-console { padding-bottom: min(58vh, 520px); }
 body.has-console-min { padding-bottom: 56px; }
-#runner-console-drawer { position: fixed; inset: auto 0 0 0; z-index: 60; display: flex; flex-direction: column; max-height: min(58vh, 520px); background: var(--term-bg); color: var(--term-text); border-top: 1px solid var(--chip-border); box-shadow: var(--shadow-float); animation: rc-slide-up .28s cubic-bezier(.2, .8, .2, 1); }
+#runner-console-drawer { position: fixed; inset: auto 0 0 var(--sidebar-w); z-index: 60; display: flex; flex-direction: column; max-height: min(58vh, 520px); background: var(--term-bg); color: var(--term-text); border-top: 1px solid var(--chip-border); box-shadow: var(--shadow-float); animation: rc-slide-up .28s cubic-bezier(.2, .8, .2, 1); }
 #runner-console-drawer[hidden] { display: none; }
 #runner-console-drawer.is-min .rc-body, #runner-console-drawer.is-min .rc-foot { display: none; }
 @keyframes rc-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -298,6 +318,27 @@ body.has-console-min { padding-bottom: 56px; }
 .rc-bold { font-weight: 700; }
 .rc-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 7px 14px; font-size: 11.5px; color: var(--term-muted); border-top: 1px solid var(--term-line); }
 .rc-foot strong { font-family: var(--mono); font-weight: 600; color: var(--term-text); }
+#runner-console-drawer.is-min .rc-tabs { display: none; }
+.rc-tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--term-line); }
+.rc-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; font: 500 12px/1 var(--font); color: var(--term-muted); background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.rc-tab:hover { color: var(--term-text); }
+.rc-tab[aria-selected="true"] { color: var(--term-text); border-bottom-color: var(--primary); }
+.rc-tab:focus-visible { outline: 2px solid var(--term-text); outline-offset: -2px; }
+.rc-tab .rc-count { min-width: 18px; padding: 0 5px; font-family: var(--mono); font-size: 10.5px; line-height: 16px; text-align: center; color: var(--term-text); background: color-mix(in srgb, var(--term-muted) 22%, transparent); border-radius: var(--r-control); }
+.rc-diff { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; overflow: hidden; }
+#runner-console-drawer.is-min .rc-diff { display: none; }
+.rc-diff-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; font-size: 11.5px; color: var(--term-muted); border-bottom: 1px solid var(--term-line); }
+.rc-diff-bar code { color: var(--term-text); font-family: var(--mono); }
+.rc-diff-bar .rc-btn { margin-left: auto; }
+.rc-files { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 8px 14px 0; list-style: none; }
+.rc-files li { padding: 1px 7px; font-family: var(--mono); font-size: 11px; color: var(--term-text); border: 1px solid var(--term-line); border-radius: var(--r-control); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-diff-body { flex: 1 1 auto; margin: 0; padding: 10px 14px; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.5; white-space: pre; }
+.rc-diff-body:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.df-add { display: block; color: var(--run); background: color-mix(in srgb, var(--run) 12%, transparent); }
+.df-del { display: block; color: color-mix(in srgb, var(--danger) 55%, #fff); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.df-hunk { display: block; color: var(--run-line); }
+.df-file { display: block; margin-top: 8px; font-weight: 700; color: var(--term-text); }
+.df-meta { display: block; color: var(--term-muted); }
 @media (max-width: 760px) {
   .rc-steps { order: 3; margin-left: 0; width: 100%; }
   .rc-title { max-width: 100%; }
@@ -505,14 +546,46 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 .record-form-grid .input { width: 100%; }
 .record-form-grid textarea.input { min-height: 64px; font-family: var(--mono); font-size: 12px; }
 
+/* Intelligent dispatch modal */
+.dispatch-task { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; margin-bottom: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); }
+.dispatch-task-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dispatch-task h3 { margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.45; }
+.dispatch-task .cmd { flex: none; white-space: normal; overflow-wrap: anywhere; }
+textarea.cmd-preview { min-height: 92px; font-family: var(--mono); font-size: 12px; background: var(--bg); }
+.field-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+.switches { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; flex: none; width: 32px; height: 18px; margin-top: 1px; background: var(--chip-border); border-radius: 999px; transition: background .15s; }
+.switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--surface); border-radius: 50%; box-shadow: var(--shadow); transition: transform .15s; }
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track::after { transform: translateX(14px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--primary); outline-offset: 2px; }
+.switch input:disabled + .switch-track { opacity: .45; }
+.switch input:disabled ~ .switch-text { opacity: .55; }
+.switch-text { display: flex; flex-direction: column; font-size: 13.5px; }
+.switch-text b { font-weight: 600; }
+.switch-text span { font-size: 12.5px; color: var(--muted); }
+kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--chip-border); border-radius: 4px; }
+.btn.primary kbd { color: #fff; background: transparent; border-color: color-mix(in srgb, #fff 45%, transparent); }
+
 /* Responsive */
 @media (max-width: 1180px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
+  #runner-console-drawer { inset: auto 0 0 0; }
+  .app-sidebar { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  .brand { flex-direction: row; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-bottom: none; }
+  .sidebar-nav { padding: 0 12px 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+  .sidebar-nav .nav-group, .sidebar-foot { display: none; }
+  .sidebar-nav, .nav { display: flex; flex-direction: row; gap: 4px; }
+  .nav-tab { width: auto; }
+  .app-main { margin-left: 0; }
+  .topbar { padding: 10px 16px; }
   .container { padding: 16px; }
-  .appbar-inner { padding: 10px 16px 0; }
   .panes { grid-template-columns: 1fr; }
   .summary-banner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { grid-template-columns: 1fr; }
@@ -531,7 +604,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 }
 @media (max-width: 640px) {
   .kpi-grid, .kanban { grid-template-columns: 1fr; }
-  .brand-project, .live-tag { display: none; }
+  .brand-project, .live-tag, .crumb-root, .crumb-sep { display: none; }
   .panel-actions, .panel-actions input.input, .panel-actions select.input { width: 100%; max-width: none; }
   .param-grid { grid-template-columns: 1fr; }
   .param-grid .span-2 { grid-column: auto; }
@@ -544,27 +617,44 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
 <body>
 <div class="toast-host" id="toasts" role="status" aria-live="polite"></div>
 
-<header class="appbar">
-  <div class="appbar-inner">
-    <div class="appbar-row">
-      <div class="brand">
-        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="6" fill="#4f46e5"/><path d="M8 16.5v-9l8 9v-9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="brand-name">Nativ Studio</span>
-        <span class="version">v${version}</span>
-        <span class="brand-project" id="project-name"${projectHidden}>${projectName}</span>
-      </div>
-      <div class="appbar-actions">
-        <span class="live" id="live" data-state="connecting" role="status" aria-live="polite"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="live-label">Connecting</span><span class="live-tag">SSE</span></span>
-        <button class="btn" id="btn-refresh-all" type="button"><svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/><path d="M13.5 2.5v3h-3"/></svg>Refresh</button>
-      </div>
+<aside class="app-sidebar" aria-label="Studio navigation">
+  <div class="brand">
+    <div class="brand-row">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="6" fill="#4f46e5"/><path d="M8 16.5v-9l8 9v-9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="brand-name">Nativ Studio</span>
+      <span class="version">v${version}</span>
     </div>
-    <nav class="nav" role="tablist" aria-label="Studio views">
-      <button class="nav-tab" role="tab" id="nav-overview" data-view="overview" aria-controls="panel-overview" aria-selected="true">Overview &amp; Status <span class="count" id="ncount-overview">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-tasks" data-view="tasks" aria-controls="panel-tasks" aria-selected="false" tabindex="-1">Live Tasks <span class="count" id="ncount-tasks">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-worktrees" data-view="worktrees" aria-controls="panel-worktrees" aria-selected="false" tabindex="-1">Agent Worktrees <span class="count" id="ncount-worktrees">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-benchmarks" data-view="benchmarks" aria-controls="panel-benchmarks" aria-selected="false" tabindex="-1">Benchmarks <span class="count" id="ncount-benchmarks">&#8211;</span></button>
-      <button class="nav-tab" role="tab" id="nav-database" data-view="database" aria-controls="panel-database" aria-selected="false" tabindex="-1">Database <span class="count" id="ncount-database">&#8211;</span></button>
-    </nav>
+    <span class="brand-project" id="project-name" title="Repository"${projectHidden}>${projectName}</span>
+  </div>
+  <div class="sidebar-nav" role="tablist" aria-orientation="vertical" aria-label="Studio views">
+    <div class="nav-group" aria-hidden="true">Pipeline</div>
+    <div class="nav" role="none">
+      <button class="nav-tab" role="tab" id="nav-overview" data-view="overview" aria-controls="panel-overview" aria-selected="true"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span class="nav-label">Overview &amp; Status</span><span class="count" id="ncount-overview">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-tasks" data-view="tasks" aria-controls="panel-tasks" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg><span class="nav-label">Live Tasks</span><span class="count" id="ncount-tasks">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-worktrees" data-view="worktrees" aria-controls="panel-worktrees" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/></svg><span class="nav-label">Agent Worktrees</span><span class="count" id="ncount-worktrees">&#8211;</span></button>
+    </div>
+    <div class="nav-group" aria-hidden="true">System &amp; Data</div>
+    <div class="nav" role="none">
+      <button class="nav-tab" role="tab" id="nav-benchmarks" data-view="benchmarks" aria-controls="panel-benchmarks" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2.5 11a5.5 5.5 0 1 1 11 0"/><path d="M8 11l2.8-3.3"/></svg><span class="nav-label">Benchmarks</span><span class="count" id="ncount-benchmarks">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-database" data-view="database" aria-controls="panel-database" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><ellipse cx="8" cy="3.5" rx="5" ry="1.8"/><path d="M3 3.5v9c0 1 2.2 1.8 5 1.8s5-.8 5-1.8v-9M3 8c0 1 2.2 1.8 5 1.8S13 9 13 8"/></svg><span class="nav-label">Database</span><span class="count" id="ncount-database">&#8211;</span></button>
+    </div>
+  </div>
+  <div class="sidebar-foot">
+    <span class="foot-label">Workspace Root</span>
+    <span class="foot-root" id="sb-root" title="">&#8211;</span>
+    <div class="foot-row">
+      <span class="branch-badge" id="sb-branch" title="Active git branch"><svg class="icon" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/></svg><span id="sb-branch-name">&#8211;</span></span>
+      <span class="sb-live" id="sb-live" data-state="connecting"><span class="live-dot" aria-hidden="true"></span><span id="sb-live-label">Connecting</span></span>
+    </div>
+  </div>
+</aside>
+
+<div class="app-main">
+<header class="topbar">
+  <div class="crumb"><span class="crumb-root">Mission Control</span><span class="crumb-sep" aria-hidden="true">/</span><span class="crumb-view" id="crumb-view">Overview &amp; Status</span></div>
+  <div class="appbar-actions">
+    <span class="live" id="live" data-state="connecting" role="status" aria-live="polite"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="live-label">Connecting</span><span class="live-tag">SSE</span></span>
+    <button class="btn" id="btn-refresh-all" type="button"><svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/><path d="M13.5 2.5v3h-3"/></svg>Refresh</button>
   </div>
 </header>
 
@@ -606,6 +696,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     <div id="view" role="tabpanel" tabindex="-1"></div>
   </section>
 </main>
+</div>
 
 <section id="runner-console-drawer" aria-labelledby="rc-task" hidden>
   <header class="rc-head">
@@ -620,7 +711,19 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       <button class="rc-btn" type="button" id="rc-close" aria-label="Close the runner console">Close</button>
     </div>
   </header>
+  <div class="rc-tabs" role="tablist" aria-label="Console views">
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-logs" data-rc-tab="logs" aria-controls="rc-body" aria-selected="true"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/></svg>Live Logs</button>
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-diff" data-rc-tab="diff" aria-controls="rc-diff" aria-selected="false" tabindex="-1"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 2.5v6M2 5.5h6M8.5 12.5h5.5"/></svg>Worktree Changes <span class="rc-count" id="rc-diff-count">&#8211;</span></button>
+  </div>
   <pre class="rc-body" id="rc-body" role="log" aria-live="polite" aria-label="Runner output" tabindex="0"></pre>
+  <div class="rc-diff" id="rc-diff" role="tabpanel" aria-labelledby="rc-tab-diff" hidden>
+    <div class="rc-diff-bar">
+      <span id="rc-diff-summary">Uncommitted changes in the task worktree</span>
+      <button class="rc-btn" type="button" id="rc-diff-refresh" aria-label="Reload the worktree diff">Reload Diff</button>
+    </div>
+    <ul class="rc-files" id="rc-diff-files" aria-label="Changed files"></ul>
+    <pre class="rc-diff-body" id="rc-diff-body" aria-label="Unified diff" tabindex="0"></pre>
+  </div>
   <footer class="rc-foot">
     <span>Elapsed <strong id="rc-elapsed">00:00</strong></span>
     <span>Output <strong id="rc-bytes">0 B</strong></span>
@@ -641,6 +744,34 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     <div class="modal-foot">
       <button class="btn" value="cancel" type="submit">Cancel</button>
       <button class="btn danger-solid" type="button" id="btn-confirm-block">Block Task</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dispatch-dialog" aria-labelledby="dispatch-title" aria-describedby="dispatch-lead">
+  <form class="modal" method="dialog" id="dispatch-form">
+    <h2 id="dispatch-title">Dispatch Claude</h2>
+    <p class="lead" id="dispatch-lead">Hands the task to a headless Claude Code agent. Progress streams into the console drawer.</p>
+    <div class="dispatch-task">
+      <div class="dispatch-task-head"><code class="tcard-id" id="dispatch-task-id">task</code><span class="badge badge-agent" id="dispatch-agent">agent</span></div>
+      <h3 id="dispatch-task-title"></h3>
+      <ul class="file-list" id="dispatch-files" aria-label="Target files"></ul>
+      <code class="cmd" id="dispatch-verify"></code>
+    </div>
+    <div class="field">
+      <label for="dispatch-command">Autonomous command</label>
+      <textarea class="input cmd-preview" id="dispatch-command" rows="4" spellcheck="false"></textarea>
+      <p class="field-hint" id="dispatch-command-hint">Leave unchanged to use the server's default runner (Claude Code unless <code>NATIV_RUNNER_COMMAND</code> is set). In a custom command, <code>{taskId}</code>, <code>{taskTitle}</code> and <code>{worktreeDir}</code> are filled in on launch.</p>
+    </div>
+    <div class="switches" role="group" aria-label="Run options">
+      <label class="switch"><input type="checkbox" id="dispatch-worktree" checked><span class="switch-track" aria-hidden="true"></span><span class="switch-text"><b>Isolated Worktree</b><span>Run on branch agent/task-&lt;id&gt; in .worktrees/, away from your working copy.</span></span></label>
+      <label class="switch"><input type="checkbox" id="dispatch-verify-gate" checked><span class="switch-track" aria-hidden="true"></span><span class="switch-text"><b>Auto-verify Gatekeeper</b><span>Run the test command when the agent exits.</span></span></label>
+      <label class="switch"><input type="checkbox" id="dispatch-merge"><span class="switch-track" aria-hidden="true"></span><span class="switch-text"><b>Auto-merge on Pass</b><span>Merge the worktree branch into main once verification passes.</span></span></label>
+    </div>
+    <p class="field-error" id="dispatch-error" aria-live="polite"></p>
+    <div class="modal-foot">
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn primary" type="button" id="btn-launch-agent" aria-keyshortcuts="Control+Enter"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z"/></svg>Launch Agent <kbd>Ctrl+Enter</kbd></button>
     </div>
   </form>
 </dialog>
@@ -860,7 +991,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
         if (!res.ok || body.ok === false) {
           var message = typeof body.error === 'string' ? body.error : (body.error && body.error.message) || body.message;
           var err = new Error(message || ('Request failed (' + res.status + ')'));
-          err.code = body.error && body.error.code;
+          err.code = (body.error && body.error.code) || body.code;
           err.status = res.status;
           throw err;
         }
@@ -1063,11 +1194,30 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       }
     } else if (part === 'worktrees') {
       pipe.worktrees = Array.isArray(body.worktrees) ? body.worktrees : [];
+      setWorkspaceFooter();
     } else if (part === 'runs') {
       pipe.runs = Array.isArray(body.runs) ? body.runs : [];
     } else if (part === 'benchmarks') {
       pipe.report = body.report || null;
     }
+  }
+
+  /** Sidebar footer: the main (non-agent) worktree is the workspace root and carries the active branch. */
+  function setWorkspaceFooter() {
+    var main = null;
+    pipe.worktrees.some(function (w) { if (!w.isAgentWorktree) { main = w; return true; } return false; });
+    var root = main ? String(main.path || '') : '';
+    $('sb-root').textContent = root || '–';
+    $('sb-root').title = root;
+    $('sb-branch-name').textContent = main ? (main.branch || 'detached') : '–';
+  }
+
+  /** 1234 → "1.2k": keeps the sidebar throughput indicator inside its badge. */
+  function compactNum(n) {
+    if (!isFinite(n)) return '–';
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(n));
   }
 
   function setCount(view, text, title) {
@@ -1085,7 +1235,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var agents = pipe.worktrees.filter(function (w) { return w.isAgentWorktree; }).length;
     setCount('worktrees', pipe.loaded.worktrees && !pipe.errors.worktrees ? String(agents) : '–', 'Agent worktrees');
     var s = pipe.report && pipe.report.summary;
-    setCount('benchmarks', s ? clampPct(s.score) + '%' : '–', 'Benchmark score');
+    setCount('benchmarks', s ? compactNum(Number(s.averageThroughputOpsPerSec) || 0) : '–', s ? 'Average throughput (ops/sec) · score ' + clampPct(s.score) + '%' : 'Benchmark throughput');
     var dbReady = state.dbStarted && !state.loading;
     setCount('database', dbReady ? String((state.schema.devTables || []).length + (state.schema.prodTables || []).length) : '–', 'Tables and collections');
   }
@@ -1531,11 +1681,75 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     }, function () { runAbort(taskId); });
   }
 
+  // ─── Intelligent dispatch modal (#dispatch-dialog) ─────────────────────────
+  var pendingDispatch = null;
+
+  /** Mirrors buildDefaultClaudeCommand() in agent-supervisor.ts so the preview matches what the server runs. */
+  function defaultClaudeCommand(t) {
+    var prompt = [
+      'Execute task ' + t.id + ' (' + t.title + ').',
+      t.description ? 'Description: ' + t.description + '.' : '',
+      t.verificationCommand ? 'Verify your work using: ' + t.verificationCommand + '.' : '',
+      'Start by running: nativ task start ' + t.id + '. When finished and verified, run: nativ task complete ' + t.id + '.'
+    ].filter(Boolean).join(' ');
+    return 'claude -p "' + prompt.replace(/"/g, '\\"') + '" --dangerously-skip-permissions';
+  }
+
+  function syncDispatchSwitches() {
+    var isolated = $('dispatch-worktree').checked;
+    var merge = $('dispatch-merge');
+    merge.disabled = !isolated || !$('dispatch-verify-gate').checked;
+    if (merge.disabled) merge.checked = false;
+  }
+
+  function openDispatchDialog(taskId) {
+    var t = taskById(taskId);
+    if (!t) { runDispatch(taskId); return; }
+    var files = t.targetFiles || [];
+    pendingDispatch = { taskId: t.id, preview: defaultClaudeCommand(t) };
+    $('dispatch-task-id').textContent = t.id;
+    $('dispatch-agent').textContent = t.assignedSubagent || 'unassigned';
+    $('dispatch-task-title').textContent = t.title || '';
+    $('dispatch-files').innerHTML = files.map(function (f) { return '<li class="file" title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('');
+    $('dispatch-files').hidden = !files.length;
+    $('dispatch-verify').innerHTML = t.verificationCommand ? '<span class="cmd-label">Test command: </span>' + esc(t.verificationCommand) : 'no test command';
+    $('dispatch-command').value = pendingDispatch.preview;
+    $('dispatch-worktree').checked = true;
+    $('dispatch-verify-gate').checked = !!t.verificationCommand;
+    $('dispatch-verify-gate').disabled = !t.verificationCommand;
+    $('dispatch-merge').checked = false;
+    $('dispatch-error').textContent = '';
+    syncDispatchSwitches();
+    openDialog($('dispatch-dialog'));
+    $('btn-launch-agent').focus();
+  }
+
+  function launchDispatch() {
+    if (!pendingDispatch) return;
+    var command = $('dispatch-command').value.trim();
+    if (!command) {
+      $('dispatch-error').textContent = 'Enter a runner command, or reopen the dialog to restore the generated one.';
+      $('dispatch-command').focus();
+      return;
+    }
+    var opts = {
+      useWorktree: $('dispatch-worktree').checked,
+      verify: $('dispatch-verify-gate').checked,
+      autoMerge: $('dispatch-merge').checked
+    };
+    // An untouched preview is the server's own default, which may be overridden by NATIV_RUNNER_COMMAND.
+    if (command !== pendingDispatch.preview) opts.runnerCommand = command;
+    var id = pendingDispatch.taskId;
+    pendingDispatch = null;
+    $('dispatch-dialog').close();
+    runDispatch(id, opts);
+  }
+
   // ─── Live runner console drawer ────────────────────────────────────────────
   var RC_STEPS = ['Worktree', 'Claude', 'Verify', 'Merge'];
   var RC_STAGE = { spawning_worktree: 0, running: 1, verifying: 2, merging: 3 };
   var RC_MAX_NODES = 3000;
-  var rc = { taskId: null, autoscroll: true, minimized: false, stage: 0, ticker: null, backfilled: false };
+  var rc = { taskId: null, autoscroll: true, minimized: false, stage: 0, ticker: null, backfilled: false, tab: 'logs', diffSeq: 0, diffTimer: null };
 
   /** Minimal SGR parser: escapes the chunk, then maps the colors agents actually emit. */
   var ANSI_CLASS = {
@@ -1640,13 +1854,81 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     });
   }
 
-  function openConsole(taskId, quiet) {
+  // ─── Console tab 2: worktree git diff (GET /api/pipeline/worktrees/diff) ───
+  function diffToHtml(diff) {
+    return String(diff).split('\n').map(function (line) {
+      var cls = '';
+      if (/^(diff --git|\+\+\+ |--- )/.test(line)) cls = /^diff --git/.test(line) ? 'df-file' : 'df-meta';
+      else if (/^@@/.test(line)) cls = 'df-hunk';
+      else if (/^\+/.test(line)) cls = 'df-add';
+      else if (/^-/.test(line)) cls = 'df-del';
+      else if (/^(index |new file mode|deleted file mode|similarity |rename |Binary files)/.test(line)) cls = 'df-meta';
+      return cls ? '<span class="' + cls + '">' + esc(line) + '</span>' : esc(line) + '\n';
+    }).join('');
+  }
+
+  function setDiffState(summary, files, bodyHtml, count) {
+    $('rc-diff-summary').innerHTML = summary;
+    $('rc-diff-files').innerHTML = (files || []).map(function (f) { return '<li title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('');
+    $('rc-diff-files').hidden = !(files && files.length);
+    $('rc-diff-body').innerHTML = bodyHtml;
+    $('rc-diff-count').textContent = count == null ? '–' : String(count);
+  }
+
+  function loadConsoleDiff(taskId) {
+    var seq = ++rc.diffSeq;
+    $('rc-diff-refresh').disabled = true;
+    if (!$('rc-diff-body').textContent) setDiffState('Loading worktree changes…', [], '<span class="rc-empty">Reading git status…</span>', null);
+    return api('/api/pipeline/worktrees/diff?taskId=' + encodeURIComponent(taskId)).then(function (body) {
+      if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
+      var files = Array.isArray(body.filesChanged) ? body.filesChanged : [];
+      var summary = '<code>' + esc(body.branch || '') + '</code> · ' + (body.hasChanges ? files.length + ' uncommitted file' + (files.length === 1 ? '' : 's') : 'working tree clean');
+      setDiffState(summary, files, body.diff ? diffToHtml(body.diff) : '<span class="rc-empty">No uncommitted changes in this worktree yet.</span>', files.length);
+    }, function (e) {
+      if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
+      var missing = e.code === 'WORKTREE_NOT_FOUND';
+      setDiffState(missing ? 'No isolated worktree' : 'Could not load the diff',
+        [], '<span class="rc-empty">' + esc(missing ? 'This task has no agent worktree. Dispatch it with Isolated Worktree on, or run nativ worktree create ' + taskId + '.' : e.message) + '</span>', null);
+    }).then(function () {
+      if (seq === rc.diffSeq) $('rc-diff-refresh').disabled = false;
+    });
+  }
+
+  /** Throttled refresh (at most every 2s) while an agent streams output or git state changes. */
+  function queueConsoleDiff() {
+    if (!rc.taskId || rc.tab !== 'diff' || rc.minimized || rc.diffTimer) return;
+    var id = rc.taskId;
+    rc.diffTimer = setTimeout(function () {
+      rc.diffTimer = null;
+      if (rc.taskId === id && rc.tab === 'diff') loadConsoleDiff(id);
+    }, 2000);
+  }
+
+  function setConsoleTab(tab, focus) {
+    rc.tab = tab;
+    ['logs', 'diff'].forEach(function (name) {
+      var btn = $('rc-tab-' + name);
+      var on = name === tab;
+      btn.setAttribute('aria-selected', String(on));
+      btn.setAttribute('tabindex', on ? '0' : '-1');
+    });
+    $('rc-body').hidden = tab !== 'logs';
+    $('rc-diff').hidden = tab !== 'diff';
+    $('rc-autoscroll').hidden = tab !== 'logs';
+    $('rc-clear').hidden = tab !== 'logs';
+    if (tab === 'diff' && rc.taskId) loadConsoleDiff(rc.taskId);
+    if (focus) $('rc-tab-' + tab).focus();
+  }
+
+  function openConsole(taskId, quiet, tab) {
     var drawer = $('runner-console-drawer');
     if (rc.taskId !== taskId) {
       rc.taskId = taskId;
       rc.backfilled = false;
       rc.stage = 0;
+      rc.diffSeq++;
       $('rc-body').innerHTML = '<span class="rc-empty">Loading runner output…</span>';
+      setDiffState('Uncommitted changes in the task worktree', [], '', null);
       loadConsoleLogs(taskId);
     }
     rc.minimized = false;
@@ -1658,13 +1940,16 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     document.body.classList.remove('has-console-min');
     syncConsole();
     rcTick();
-    if (!quiet) $('rc-body').focus();
+    setConsoleTab(tab || rc.tab);
+    if (!quiet) (rc.tab === 'diff' ? $('rc-diff-body') : $('rc-body')).focus();
   }
 
   function closeConsole() {
     rc.taskId = null;
     clearInterval(rc.ticker);
     rc.ticker = null;
+    clearTimeout(rc.diffTimer);
+    rc.diffTimer = null;
     $('runner-console-drawer').hidden = true;
     document.body.classList.remove('has-console', 'has-console-min');
   }
@@ -1678,6 +1963,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     var btn = $('rc-minimize');
     btn.textContent = rc.minimized ? 'Expand' : 'Minimize';
     btn.setAttribute('aria-expanded', String(!rc.minimized));
+    if (!rc.minimized && rc.tab === 'diff' && rc.taskId) loadConsoleDiff(rc.taskId);
   }
 
   function onRunnerStatus(run) {
@@ -1686,6 +1972,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (rc.taskId === run.taskId) {
       syncConsole();
       if (isRunActive(run)) rcTick();
+      queueConsoleDiff();
     }
     repaint('tasks');
     if (!RUN_ACTIVE[run.status]) {
@@ -1708,6 +1995,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (empty) $('rc-body').innerHTML = '';
     appendConsole(ansiToHtml(entry.chunk, entry.stream === 'stderr' ? 'rc-fg-warn' : ''));
     $('rc-bytes').textContent = formatBytes((run && run.logBytes) || 0);
+    queueConsoleDiff();
   }
 
   var pendingBlock = null;
@@ -1752,7 +2040,8 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (w.isAgentWorktree && w.taskId) {
       actions = busy
         ? '<button class="btn small" type="button" disabled><span class="spinner" aria-hidden="true"></span>' + (busy === 'merge' ? 'Merging…' : 'Deleting…') + '</button>'
-        : '<button class="btn small primary" type="button" data-action="wt-merge" data-key="' + esc(w.taskId) + '"' + (canMerge ? '' : ' disabled title="' + esc(blockedWhy) + '"') + '>Merge to Main</button>' +
+        : '<button class="btn small" type="button" data-action="wt-diff" data-key="' + esc(w.taskId) + '" aria-label="' + esc('Inspect diff for ' + w.taskId) + '">Inspect Diff</button>' +
+          '<button class="btn small primary" type="button" data-action="wt-merge" data-key="' + esc(w.taskId) + '"' + (canMerge ? '' : ' disabled title="' + esc(blockedWhy) + '"') + '>Merge to Main</button>' +
           '<button class="btn small danger" type="button" data-action="wt-remove" data-key="' + esc(w.taskId) + '">Delete Workspace</button>';
     }
     return '<tr><td data-label="Branch"><code>' + esc(w.branch) + '</code></td>' +
@@ -1938,6 +2227,10 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     el.setAttribute('data-state', mode);
     $('live-label').textContent = LIVE_TEXT[mode];
     el.title = detail || (mode === 'live' ? 'Receiving real-time updates from /api/events' : '');
+    var sb = $('sb-live');
+    sb.setAttribute('data-state', mode);
+    sb.title = el.title;
+    $('sb-live-label').textContent = mode === 'live' ? 'Live Stream' : LIVE_TEXT[mode];
   }
 
   function flashLive() {
@@ -1966,6 +2259,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (!parts) return;
     flashLive();
     queueRefresh(parts);
+    if (parts.indexOf('worktrees') !== -1) queueConsoleDiff();
   }
 
   function connectEvents() {
@@ -3167,6 +3461,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
       tab.setAttribute('aria-selected', String(active));
       tab.setAttribute('tabindex', active ? '0' : '-1');
       $('panel-' + v).hidden = !active;
+      if (active) $('crumb-view').textContent = tab.querySelector('.nav-label').textContent;
     });
     if (location.hash !== '#' + view && window.history && history.replaceState) history.replaceState(null, '', '#' + view);
     if (view === 'database') {
@@ -3186,8 +3481,9 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     t.addEventListener('click', function () { setView(t.getAttribute('data-view')); });
     t.addEventListener('keydown', function (e) {
       var i = VIEWS.indexOf(ui.view), n = VIEWS.length, next = null;
-      if (e.key === 'ArrowRight') next = VIEWS[(i + 1) % n];
-      else if (e.key === 'ArrowLeft') next = VIEWS[(i + n - 1) % n];
+      // Vertical sidebar: Up/Down; Left/Right still work when the narrow layout lays the tabs out in a row.
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = VIEWS[(i + 1) % n];
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = VIEWS[(i + n - 1) % n];
       else if (e.key === 'Home') next = VIEWS[0];
       else if (e.key === 'End') next = VIEWS[n - 1];
       if (next) { e.preventDefault(); setView(next, true); }
@@ -3219,9 +3515,10 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (action === 'task-start') runTaskAction('start', key);
     else if (action === 'task-complete') runTaskAction('complete', key);
     else if (action === 'task-block') openBlockDialog(key);
-    else if (action === 'task-dispatch') runDispatch(key);
+    else if (action === 'task-dispatch') openDispatchDialog(key);
     else if (action === 'run-console') openConsole(key);
     else if (action === 'run-abort') confirmAbort(key);
+    else if (action === 'wt-diff') openConsole(key, false, 'diff');
     else if (action === 'wt-merge') confirmWorktree('merge', key);
     else if (action === 'wt-remove') confirmWorktree('remove', key);
     else if (action === 'bench-run') runBenchmark();
@@ -3258,6 +3555,24 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     $('rc-body').innerHTML = '<span class="rc-empty">Console cleared. New output will stream in here.</span>';
   });
   $('rc-abort').addEventListener('click', function () { if (rc.taskId) confirmAbort(rc.taskId); });
+  document.querySelectorAll('.rc-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () { setConsoleTab(btn.getAttribute('data-rc-tab')); });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      setConsoleTab(rc.tab === 'logs' ? 'diff' : 'logs', true);
+    });
+  });
+  $('rc-diff-refresh').addEventListener('click', function () { if (rc.taskId) loadConsoleDiff(rc.taskId); });
+
+  // ─── Events: dispatch modal ────────────────────────────────────────────────
+  $('dispatch-worktree').addEventListener('change', syncDispatchSwitches);
+  $('dispatch-verify-gate').addEventListener('change', syncDispatchSwitches);
+  $('btn-launch-agent').addEventListener('click', launchDispatch);
+  $('dispatch-dialog').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); launchDispatch(); }
+  });
+  $('dispatch-dialog').addEventListener('close', function () { pendingDispatch = null; });
   $('rc-minimize').addEventListener('click', toggleConsoleMinimized);
   $('rc-close').addEventListener('click', closeConsole);
   $('runner-console-drawer').addEventListener('keydown', function (e) {

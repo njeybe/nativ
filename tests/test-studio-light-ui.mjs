@@ -84,6 +84,9 @@ try {
   const resolve = createResolver(rules);
   const decls = rules.flatMap((r) => r.decls.map((d) => ({ ...d, selectors: r.selectors, resolved: norm(resolve(d.value)) })));
   const cssNorm = norm(css);
+  const scripts = extractBlocks(html, 'script').filter((b) => !/\bsrc\s*=/i.test(b.attrs));
+  const classic = scripts.filter((b) => !/type\s*=\s*["']?module/i.test(b.attrs));
+  const code = scripts.map((b) => b.body).join('\n');
 
   // 1. Document shell & header
   {
@@ -187,10 +190,68 @@ try {
     console.log('✔ Five navigation tabs with Overview KPIs, Kanban columns, Worktree table and Benchmark views');
   }
 
+  // 4b. Vertical sidebar architecture (ui_specs.md §2)
+  {
+    const ruleFor = (selector) => rules.filter((r) => r.selectors.includes(selector));
+    const declOf = (selector, prop) => ruleFor(selector).flatMap((r) => r.decls).filter((d) => d.prop === prop).map((d) => norm(resolve(d.value)));
+
+    assert.match(html, /<aside\b[^>]*class=["'][^"']*\bapp-sidebar\b/i, 'sidebar must be an <aside class="app-sidebar"> landmark');
+    assert.ok(declOf('.app-sidebar', 'width').includes('240px'), '.app-sidebar must be 240px wide');
+    assert.ok(declOf('.app-sidebar', 'position').includes('fixed'), '.app-sidebar must be pinned (position: fixed)');
+    assert.ok(declOf('.app-sidebar', 'height').includes('100vh'), '.app-sidebar must span the full viewport height');
+    assert.ok(declOf('.app-sidebar', 'border-right').includes('1pxsolid#e2e8f0'), '.app-sidebar needs a 1px solid #e2e8f0 right border');
+    assert.ok(declOf('.app-sidebar', 'background').some((v) => v === '#ffffff' || v === '#fff'), 'sidebar surface must be pure white');
+    assert.ok(declOf('.app-main', 'margin-left').includes('240px'), '.app-main must offset the 240px sidebar');
+    assert.ok(
+      declOf('#runner-console-drawer', 'inset').some((v) => v.endsWith('240px')),
+      'console drawer must dock beside the sidebar, not underneath it',
+    );
+
+    const sidebar = /<aside\b[^>]*app-sidebar[\s\S]*?<\/aside>/i.exec(html)[0];
+    assert.match(sidebar, /role=["']tablist["'][^>]*aria-orientation=["']vertical["']/, 'sidebar nav must be a vertical tablist');
+    const sidebarText = decodeEntities(sidebar).toLowerCase();
+    for (const label of ['pipeline', 'system & data', 'workspace root', 'nativ studio']) {
+      assert.ok(sidebarText.includes(label), `sidebar missing "${label}"`);
+    }
+    const tabs = [...sidebar.matchAll(/<button\b[^>]*class=["']nav-tab["'][\s\S]*?<\/button>/g)].map((m) => m[0]);
+    assert.equal(tabs.length, 5, 'sidebar must hold the five primary views');
+    for (const tab of tabs) {
+      assert.match(tab, /<svg\b/, 'every sidebar item needs an inline SVG icon');
+      assert.match(tab, /class=["']count["']/, 'every sidebar item needs a count badge');
+    }
+    for (const id of ['sb-root', 'sb-branch', 'sb-live']) assert.match(sidebar, new RegExp(`id=["']${id}["']`), `sidebar footer missing #${id}`);
+    assert.match(html, /<header\b[^>]*class=["']topbar["']/, 'main column needs a top app bar');
+    assert.match(html, /id=["']crumb-view["']/, 'top bar must show the current view title');
+    assert.match(code, /ArrowDown/, 'vertical tablist must support ArrowDown/ArrowUp');
+    console.log('✔ 240px fixed sidebar with grouped SVG nav items, workspace footer, top bar and offset drawer');
+  }
+
+  // 4c. Intelligent dispatch modal and worktree diff viewer (ui_specs.md §3–4)
+  {
+    const dialog = /<dialog\b[^>]*id=["']dispatch-dialog["'][\s\S]*?<\/dialog>/i.exec(html);
+    assert.ok(dialog, '#dispatch-dialog must be rendered');
+    const dlg = decodeEntities(dialog[0]);
+    for (const label of ['Isolated Worktree', 'Auto-verify Gatekeeper', 'Auto-merge on Pass', 'Cancel', 'Launch Agent', 'Ctrl+Enter']) {
+      assert.ok(dlg.includes(label), `dispatch modal missing "${label}"`);
+    }
+    const checkbox = (id) => new RegExp(`<input[^>]*type=["']checkbox["'][^>]*id=["']${id}["'][^>]*>`).exec(dlg)?.[0] ?? '';
+    assert.match(checkbox('dispatch-worktree'), /\bchecked\b/, 'Isolated Worktree defaults on');
+    assert.match(checkbox('dispatch-verify-gate'), /\bchecked\b/, 'Auto-verify Gatekeeper defaults on');
+    assert.ok(checkbox('dispatch-merge') && !/\bchecked\b/.test(checkbox('dispatch-merge')), 'Auto-merge on Pass defaults off');
+    assert.match(code, /--dangerously-skip-permissions/, 'dispatch modal must preview the headless claude command');
+    assert.match(code, /ctrlKey/, 'Ctrl+Enter must launch the agent');
+    assert.match(code, /['"]\/api\/pipeline\/tasks\/dispatch['"]/, 'dispatch modal must POST /api/pipeline/tasks/dispatch');
+    for (const field of ['useWorktree', 'verify', 'autoMerge']) assert.match(code, new RegExp(`\\b${field}\\s*:`), `dispatch payload must send ${field}`);
+
+    const drawer = decodeEntities(/<section\b[^>]*id=["']runner-console-drawer["'][\s\S]*?<\/section>/i.exec(html)[0]);
+    assert.ok(drawer.includes('Live Logs') && drawer.includes('Worktree Changes'), 'console drawer needs Live Logs and Worktree Changes tabs');
+    assert.match(drawer, /role=["']tablist["']/, 'console drawer tabs must be a tablist');
+    assert.match(code, /['"]\/api\/pipeline\/worktrees\/diff\?taskId=['"]/, 'diff viewer must call GET /api/pipeline/worktrees/diff');
+    assert.ok(searchable.includes('inspect diff'), 'worktree table needs an "Inspect Diff" action');
+    console.log('✔ Dispatch modal (preview, switches, Ctrl+Enter) and Worktree Changes diff tab are wired');
+  }
+
   // 5. Client script: valid JS, SSE listener and pipeline endpoint wiring
-  const scripts = extractBlocks(html, 'script').filter((b) => !/\bsrc\s*=/i.test(b.attrs));
-  const classic = scripts.filter((b) => !/type\s*=\s*["']?module/i.test(b.attrs));
-  const code = scripts.map((b) => b.body).join('\n');
   {
     assert.ok(classic.length > 0, 'dashboard must ship an inline client script');
     classic.forEach((block, i) => {
