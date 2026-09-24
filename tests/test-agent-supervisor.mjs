@@ -83,6 +83,9 @@ function createFixture() {
           task('task-cli-flags'),
           task('task-merge', { verificationCommand: 'node --version' }),
           task('task-merge-conflict', { verificationCommand: 'node --version' }),
+          task('task-idle'),
+          task('task-chatty'),
+          task('task-stream'),
         ],
       },
     ],
@@ -150,6 +153,40 @@ function createFixture() {
       "execSync('git commit -qam \"root edit\"', { cwd: root });",
       "fs.writeFileSync('README.md', '# Agent edit\\n');",
       "process.stdout.write('agent: edited README\\n');",
+    ].join('\n'),
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(mocks, 'chatty.mjs'),
+    [
+      'let n = 0;',
+      'const timer = setInterval(() => {',
+      "  process.stdout.write(`agent: step ${++n}\\n`);",
+      '  if (n === 10) { clearInterval(timer); process.exit(0); }',
+      '}, 250);',
+    ].join('\n'),
+    'utf8',
+  );
+  // Claude Code `--output-format stream-json` stand-in; the final event arrives in two chunks without a newline.
+  const events = [
+    { type: 'system', subtype: 'init', model: 'claude-opus-5-5', tools: ['Bash', 'Edit', 'Read'], session_id: 's1' },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'Reading the task first.' }, { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test', description: 'Run tests' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: '12 passing\nall green' }] } },
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't2', name: 'Edit', input: { file_path: 'src/app.ts' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't2', content: [{ type: 'text', text: 'old_string not found' }], is_error: true }] } },
+  ];
+  const result = JSON.stringify({
+    type: 'result', subtype: 'success', is_error: false, num_turns: 3, duration_ms: 4200, total_cost_usd: 0.1234,
+    usage: { input_tokens: 1200, output_tokens: 800, cache_creation_input_tokens: 5000, cache_read_input_tokens: 40000 },
+  });
+  fs.writeFileSync(
+    path.join(mocks, 'claude-stream.mjs'),
+    [
+      `for (const e of ${JSON.stringify(events)}) process.stdout.write(JSON.stringify(e) + '\\n');`,
+      "process.stdout.write('plain warning line\\n');",
+      `const result = ${JSON.stringify(result)};`,
+      'process.stdout.write(result.slice(0, 40));',
+      'setTimeout(() => process.stdout.write(result.slice(40)), 150);',
     ].join('\n'),
     'utf8',
   );
@@ -288,9 +325,12 @@ const {
   SupervisorError,
   isActiveStatus,
   DEFAULT_TIMEOUT_SECONDS,
+  DEFAULT_IDLE_TIMEOUT_SECONDS,
   DEFAULT_NATIVE_ALLOWED_COMMANDS,
   buildDefaultClaudeCommand,
   checkNativeBashCommand,
+  formatClaudeStreamLine,
+  usesClaudeStreamJson,
   resolveNativeThinking,
   supportsServerFallback,
   thinkingBudgetToEffort,
@@ -558,7 +598,8 @@ try {
   }
   assert.equal(stillAlive, false, `Shutdown must reap in-flight process tree (pid ${livePid})`);
   await expectError(shutdownSup.dispatch({ taskId: 'task-echo', useWorktree: false }), 'SHUTTING_DOWN');
-  assert.equal(DEFAULT_TIMEOUT_SECONDS, 600, 'Default timeout must match the API contract default');
+  assert.equal(DEFAULT_TIMEOUT_SECONDS, 3600, 'Default hard cap is one hour: real agent runs outlast ten minutes');
+  assert.equal(DEFAULT_IDLE_TIMEOUT_SECONDS, 900, 'A run silent for 15 minutes is treated as hung');
   console.log('✔ Shutdown reaped live runners and refused further dispatches.');
 
   // ── 13. Native engine: thinking resolution and command policy (pure) ──────
@@ -814,6 +855,8 @@ try {
   console.log('18. Testing CLI dispatch passes --model and MAX_THINKING_TOKENS...');
   const cliCommand = buildDefaultClaudeCommand({ id: 'task-x', title: 'X', description: '', verificationCommand: '' }, 'claude-opus-5-5');
   assert.match(cliCommand, /--model claude-opus-5-5/);
+  assert.match(cliCommand, /--output-format stream-json --verbose/, 'the default runner streams events instead of printing only at exit');
+  assert.ok(usesClaudeStreamJson(cliCommand));
   assert.match(cliCommand, /--dangerously-skip-permissions$/);
   const cliSup = new AgentSupervisor({ cwd: dir });
   const cliDone = waitForStatus(cliSup, 'task-cli-flags', 'completed');
@@ -894,6 +937,60 @@ try {
   assert.ok(fs.existsSync(path.join(dir, '.worktrees', 'task-task-merge-conflict', '.ai')), 'contracts are re-mounted into the kept worktree');
   mergeSup.shutdown();
   console.log('✔ A conflicting merge was aborted with the worktree, branch and agent edits preserved.');
+
+  // ── 22. Inactivity watchdog ───────────────────────────────────────────────
+  console.log('22. Testing the inactivity watchdog...');
+  const idleSup = new AgentSupervisor({ cwd: dir, killGraceMs: 200, idleTimeoutSeconds: 1 });
+  const idleFailed = waitForStatus(idleSup, 'task-idle', 'failed', 20_000);
+  await idleSup.dispatch({ taskId: 'task-idle', runnerCommand: mockCommand(dir, 'hang.mjs'), useWorktree: false, timeoutSeconds: 60 });
+  const idleRun = await idleFailed;
+  assert.equal(idleRun.timedOut, true);
+  assert.match(idleRun.error, /no output for 1s/, 'a silent runner is stopped long before the hard cap');
+  const chattyDone = waitForStatus(idleSup, 'task-chatty', ['completed', 'failed'], 20_000);
+  await idleSup.dispatch({ taskId: 'task-chatty', runnerCommand: mockCommand(dir, 'chatty.mjs'), useWorktree: false, timeoutSeconds: 60 });
+  const chattyRun = await chattyDone;
+  assert.equal(chattyRun.status, 'completed', `a runner that keeps talking must outlive the idle window: ${chattyRun.error}`);
+  idleSup.shutdown();
+  console.log('✔ A silent runner was stopped by the watchdog; a busy one ran past the idle window.');
+
+  // ── 23. Claude Code stream-json becomes readable logs and grounded usage ──
+  console.log('23. Testing Claude Code stream-json parsing...');
+  assert.equal(formatClaudeStreamLine('not json at all').text, 'not json at all\n', 'non-JSON output passes through');
+  assert.equal(formatClaudeStreamLine('{"type":"stream_event"}').text, null, 'unknown event types are dropped quietly');
+  assert.equal(formatClaudeStreamLine('   ').text, null);
+  assert.ok(usesClaudeStreamJson('claude -p "x" --output-format=stream-json --verbose'));
+  assert.ok(!usesClaudeStreamJson('claude -p "x" --output-format json'));
+
+  const streamSup = new AgentSupervisor({ cwd: dir });
+  const streamUsage = [];
+  streamSup.on('runner_token_usage', (event) => streamUsage.push(event));
+  const streamDone = waitForStatus(streamSup, 'task-stream', ['completed', 'failed']);
+  await streamSup.dispatch({ taskId: 'task-stream', runnerCommand: `${mockCommand(dir, 'claude-stream.mjs')} --output-format stream-json`, useWorktree: false, timeoutSeconds: 30 });
+  const streamRun = await streamDone;
+  assert.equal(streamRun.status, 'completed', streamRun.error);
+  const streamLog = streamSup.getLogs('task-stream', 50).log;
+  for (const line of [
+    '[claude] session started · model claude-opus-5-5 · 3 tools',
+    'Reading the task first.',
+    '[claude] Bash: npm test',
+    '[claude]   12 passing',
+    '[claude] Edit: src/app.ts',
+    '[claude]   error: old_string not found',
+    'plain warning line',
+    '[claude] finished · 3 turns · $0.1234 · 4s',
+  ]) {
+    assert.ok(streamLog.includes(line), `stream log missing "${line}":\n${streamLog}`);
+  }
+  assert.ok(!streamLog.includes('{"type"'), 'raw JSON events never reach the log');
+  assert.equal(streamRun.usage.costUsd, 0.1234, 'the reported total cost is used as-is');
+  assert.equal(streamRun.usage.model, 'claude-opus-5-5', 'the model comes from the init event');
+  assert.deepEqual(
+    [streamRun.usage.turns, streamRun.usage.inputTokens, streamRun.usage.outputTokens, streamRun.usage.cacheCreationTokens, streamRun.usage.cacheReadTokens],
+    [3, 1200, 800, 5000, 40000],
+  );
+  assert.equal(streamUsage.length, 1, 'cli runs report usage once, from the result event');
+  streamSup.shutdown();
+  console.log('✔ stream-json events became readable log lines and grounded usage for the cli run.');
 
   console.log('\n🎉 ALL AGENT SUPERVISOR TESTS PASSED!');
 } finally {

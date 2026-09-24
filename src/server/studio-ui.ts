@@ -1889,7 +1889,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       'Start by running: nativ task start ' + t.id + '. When finished and verified, run: nativ task complete ' + t.id + '.',
       'If blocked, follow the Human-Centric Communication Protocol in CLAUDE.md: explain the user experience symptom, root cause in plain English, and clear options without technical jargon.'
     ].filter(Boolean).join(' ');
-    return 'claude -p "' + prompt.replace(/"/g, '\\"') + '" --dangerously-skip-permissions';
+    return 'claude -p "' + prompt.replace(/"/g, '\\"') + '" --output-format stream-json --verbose --dangerously-skip-permissions';
   }
 
   function syncDispatchSwitches() {

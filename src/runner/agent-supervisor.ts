@@ -170,6 +170,11 @@ export interface AgentSupervisorOptions {
   maxLogBufferBytes?: number;
   /** Grace period between SIGTERM and the forced kill during abort/timeout. */
   killGraceMs?: number;
+  /**
+   * Inactivity watchdog: terminate a run that emits no output for this many seconds. Defaults to
+   * `NATIV_RUNNER_IDLE_TIMEOUT`, then `DEFAULT_IDLE_TIMEOUT_SECONDS`; 0 disables it.
+   */
+  idleTimeoutSeconds?: number;
   /** How many finished runs to keep in memory. */
   maxHistory?: number;
   /** Engine used when a dispatch omits `runnerEngine`. Defaults to `NATIV_RUNNER_ENGINE`, then `cli`. */
@@ -199,7 +204,10 @@ export class SupervisorError extends Error {
 }
 
 export const DEFAULT_RUNNER_COMMAND = 'claude';
-export const DEFAULT_TIMEOUT_SECONDS = 600;
+/** Hard cap per run. Real agent tasks routinely take tens of minutes; hung runs are caught by the idle watchdog. */
+export const DEFAULT_TIMEOUT_SECONDS = 3600;
+/** A run that produces no output (log lines, tool activity, API turns) for this long is treated as hung. */
+export const DEFAULT_IDLE_TIMEOUT_SECONDS = 900;
 export const DEFAULT_MAX_LOG_BUFFER_BYTES = 512 * 1024;
 export const DEFAULT_KILL_GRACE_MS = 5_000;
 export const DEFAULT_MAX_HISTORY = 50;
@@ -243,6 +251,15 @@ interface ActiveRun {
   native: NativeRunState | null;
   /** PID of the native bash tool's current command, if one is executing. */
   toolPid: number | null;
+  /** Epoch ms of the last output; drives the inactivity watchdog. */
+  lastActivity: number;
+  idleTimer: NodeJS.Timeout | null;
+  /** The runner prints Claude Code stream-json events, one JSON object per line. */
+  streamJson: boolean;
+  /** Incomplete trailing line of stream-json stdout. */
+  lineBuffer: string;
+  /** Model reported by the stream's init event (cli runs without an explicit model). */
+  streamModel: string | null;
 }
 
 /**
@@ -351,7 +368,117 @@ export function buildDefaultClaudeCommand(task: MasterPlanTask, model?: string |
 
   const escapedPrompt = parts.replace(/"/g, '\\"');
   const modelFlag = model ? ` --model ${model}` : '';
-  return `claude -p "${escapedPrompt}"${modelFlag} --dangerously-skip-permissions`;
+  // Plain `claude -p` prints nothing until it finishes; stream-json emits every message and tool call as it happens.
+  return `claude -p "${escapedPrompt}"${modelFlag} --output-format stream-json --verbose --dangerously-skip-permissions`;
+}
+
+/** True when a runner command asks Claude Code for its line-delimited JSON event stream. */
+export function usesClaudeStreamJson(command: string): boolean {
+  return /--output-format(?:=|\s+)stream-json\b/.test(command);
+}
+
+/** Final `result` event of a Claude Code stream: grounded usage for cli runs. */
+export interface ClaudeStreamResult {
+  isError: boolean;
+  turns: number;
+  costUsd: number | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+export interface ClaudeStreamLine {
+  /** Human-readable log text (newline-terminated), or null when the event is not worth showing. */
+  text: string | null;
+  model?: string;
+  result?: ClaudeStreamResult;
+}
+
+function firstLine(text: unknown, max = 200): string {
+  const line = String(text ?? '').split('\n').find((l) => l.trim()) ?? '';
+  return line.length > max ? `${line.slice(0, max)}...` : line.trim();
+}
+
+function describeToolInput(input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+  const i = input as Record<string, unknown>;
+  const pick = i.command ?? i.file_path ?? i.path ?? i.pattern ?? i.url ?? i.description;
+  return typeof pick === 'string' ? firstLine(pick, 160) : firstLine(JSON.stringify(input), 160);
+}
+
+const finiteCount = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
+
+/**
+ * Turns one line of `claude -p --output-format stream-json` into a log line. Anything that is not
+ * a recognised event (warnings, custom runners, future event types) passes through or is dropped,
+ * never thrown on.
+ */
+export function formatClaudeStreamLine(line: string): ClaudeStreamLine {
+  const trimmed = line.trim();
+  if (!trimmed) return { text: null };
+  let event: any;
+  try {
+    event = JSON.parse(trimmed);
+  } catch {
+    return { text: `${line}\n` };
+  }
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return { text: `${line}\n` };
+
+  switch (event.type) {
+    case 'system': {
+      if (event.subtype !== 'init') return { text: null };
+      const model = typeof event.model === 'string' ? event.model : undefined;
+      const tools = Array.isArray(event.tools) ? ` · ${event.tools.length} tools` : '';
+      return { text: `[claude] session started · model ${model ?? 'default'}${tools}\n`, model };
+    }
+    case 'assistant': {
+      const lines: string[] = [];
+      for (const block of Array.isArray(event.message?.content) ? event.message.content : []) {
+        if (block?.type === 'text' && String(block.text ?? '').trim()) lines.push(String(block.text).trim());
+        else if (block?.type === 'thinking' && String(block.thinking ?? '').trim()) lines.push(`[claude:thinking] ${firstLine(block.thinking, 300)}`);
+        else if (block?.type === 'tool_use') lines.push(`[claude] ${block.name}: ${describeToolInput(block.input)}`);
+      }
+      return { text: lines.length ? `${lines.join('\n')}\n` : null };
+    }
+    case 'user': {
+      const lines: string[] = [];
+      for (const block of Array.isArray(event.message?.content) ? event.message.content : []) {
+        if (block?.type !== 'tool_result') continue;
+        const body = typeof block.content === 'string'
+          ? block.content
+          : Array.isArray(block.content) ? block.content.map((c: any) => c?.text ?? '').join('\n') : '';
+        const summary = firstLine(body, 160);
+        if (block.is_error) lines.push(`[claude]   error: ${summary || 'tool failed'}`);
+        else if (summary) lines.push(`[claude]   ${summary}`);
+      }
+      return { text: lines.length ? `${lines.join('\n')}\n` : null };
+    }
+    case 'result': {
+      const usage = event.usage ?? {};
+      const cost = typeof event.total_cost_usd === 'number' && Number.isFinite(event.total_cost_usd) ? event.total_cost_usd : null;
+      const turns = finiteCount(event.num_turns);
+      const seconds = finiteCount(event.duration_ms) ? ` · ${Math.round(event.duration_ms / 1000)}s` : '';
+      const kind = event.subtype && event.subtype !== 'success' ? ` (${event.subtype})` : '';
+      const text =
+        `[claude] ${event.is_error ? 'finished with an error' : 'finished'}${kind}` +
+        (turns ? ` · ${turns} turns` : '') + (cost !== null ? ` · $${cost.toFixed(4)}` : '') + seconds + '\n';
+      return {
+        text,
+        result: {
+          isError: Boolean(event.is_error),
+          turns,
+          costUsd: cost,
+          inputTokens: finiteCount(usage.input_tokens),
+          outputTokens: finiteCount(usage.output_tokens),
+          cacheCreationTokens: finiteCount(usage.cache_creation_input_tokens),
+          cacheReadTokens: finiteCount(usage.cache_read_input_tokens),
+        },
+      };
+    }
+    default:
+      return { text: null };
+  }
 }
 
 // ─── Native engine: request shaping ─────────────────────────────────────────
@@ -725,6 +852,7 @@ export class AgentSupervisor extends EventEmitter {
   private readonly defaultTimeoutSeconds: number;
   private readonly maxLogBufferBytes: number;
   private readonly killGraceMs: number;
+  private readonly idleTimeoutMs: number;
   private readonly maxHistory: number;
   private readonly defaultEngine: RunnerEngine;
   private readonly defaultNativeModel: string;
@@ -746,6 +874,8 @@ export class AgentSupervisor extends EventEmitter {
     this.defaultTimeoutSeconds = options.defaultTimeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
     this.maxLogBufferBytes = options.maxLogBufferBytes ?? DEFAULT_MAX_LOG_BUFFER_BYTES;
     this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+    const idleSeconds = options.idleTimeoutSeconds ?? Number(process.env.NATIV_RUNNER_IDLE_TIMEOUT ?? DEFAULT_IDLE_TIMEOUT_SECONDS);
+    this.idleTimeoutMs = Number.isFinite(idleSeconds) && idleSeconds > 0 ? idleSeconds * 1000 : 0;
     this.maxHistory = options.maxHistory ?? DEFAULT_MAX_HISTORY;
     this.defaultEngine = normalizeEngine(
       options.defaultEngine ?? process.env.NATIV_RUNNER_ENGINE,
@@ -856,6 +986,11 @@ export class AgentSupervisor extends EventEmitter {
       settled: false,
       native,
       toolPid: null,
+      lastActivity: Date.now(),
+      idleTimer: null,
+      streamJson: !native && usesClaudeStreamJson(command),
+      lineBuffer: '',
+      streamModel: null,
     };
     this.active.set(taskId, run);
     this.resetLogFile(record);
@@ -1090,13 +1225,22 @@ export class AgentSupervisor extends EventEmitter {
     run.child = child;
     record.pid = child.pid ?? null;
 
-    child.stdout?.on('data', (chunk: Buffer) => this.appendLog(run, 'stdout', chunk.toString()));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (run.streamJson) this.consumeStreamJson(run, chunk.toString());
+      else this.appendLog(run, 'stdout', chunk.toString());
+    });
     child.stderr?.on('data', (chunk: Buffer) => this.appendLog(run, 'stderr', chunk.toString()));
     child.on('error', (err) => {
       record.error = err.message;
       this.appendLog(run, 'stderr', `\n[supervisor] spawn error: ${err.message}\n`);
     });
     child.on('close', (code, signal) => {
+      if (run.streamJson && run.lineBuffer) {
+        // The final event may arrive without a trailing newline.
+        const rest = run.lineBuffer;
+        run.lineBuffer = '';
+        this.handleStreamLine(run, rest);
+      }
       void this.handleExit(run, task, options, code, signal);
     });
 
@@ -1105,12 +1249,29 @@ export class AgentSupervisor extends EventEmitter {
 
     run.timer = setTimeout(() => this.handleTimeout(run), record.timeoutSeconds * 1000);
     run.timer.unref?.();
+    this.startIdleWatchdog(run);
   }
 
-  private handleTimeout(run: ActiveRun): void {
-    if (!this.active.has(run.record.taskId)) return;
+  /** Terminates runs that go silent: a hung agent is caught long before the hard cap. */
+  private startIdleWatchdog(run: ActiveRun): void {
+    if (!this.idleTimeoutMs) return;
+    run.lastActivity = Date.now();
+    const every = Math.max(100, Math.min(this.idleTimeoutMs / 4, 15_000));
+    run.idleTimer = setInterval(() => {
+      if (Date.now() - run.lastActivity >= this.idleTimeoutMs) this.handleTimeout(run, 'idle');
+    }, every);
+    run.idleTimer.unref?.();
+  }
+
+  private handleTimeout(run: ActiveRun, kind: 'budget' | 'idle' = 'budget'): void {
+    if (!this.active.has(run.record.taskId) || run.record.timedOut) return;
+    if (run.idleTimer) clearInterval(run.idleTimer);
+    run.idleTimer = null;
     run.record.timedOut = true;
-    run.record.error = `Runner exceeded the ${run.record.timeoutSeconds}s timeout budget`;
+    run.record.error =
+      kind === 'idle'
+        ? `Runner produced no output for ${Math.round(this.idleTimeoutMs / 1000)}s (inactivity watchdog)`
+        : `Runner exceeded the ${run.record.timeoutSeconds}s timeout budget`;
     this.appendLog(run, 'stderr', `\n[supervisor] ${run.record.error} — terminating process tree\n`);
     this.interruptNative(run);
 
@@ -1187,6 +1348,63 @@ export class AgentSupervisor extends EventEmitter {
     this.finalize(run, 'completed', {});
   }
 
+  // ─── Claude Code stream-json (cli engine) ──────────────────────────────────
+
+  private consumeStreamJson(run: ActiveRun, chunk: string): void {
+    run.lastActivity = Date.now();
+    run.lineBuffer += chunk;
+    let newline: number;
+    while ((newline = run.lineBuffer.indexOf('\n')) !== -1) {
+      const line = run.lineBuffer.slice(0, newline).replace(/\r$/, '');
+      run.lineBuffer = run.lineBuffer.slice(newline + 1);
+      this.handleStreamLine(run, line);
+    }
+    // A runaway line without newlines must not grow without bound; show it raw instead.
+    if (run.lineBuffer.length > this.maxLogBufferBytes) {
+      const raw = run.lineBuffer;
+      run.lineBuffer = '';
+      this.appendLog(run, 'stdout', `${raw}\n`);
+    }
+  }
+
+  private handleStreamLine(run: ActiveRun, line: string): void {
+    const parsed = formatClaudeStreamLine(line);
+    if (parsed.model) run.streamModel = parsed.model;
+    if (parsed.text) this.appendLog(run, 'stdout', parsed.text);
+    if (parsed.result) this.recordStreamUsage(run, parsed.result);
+  }
+
+  /** Claude Code reports the run's total cost and tokens once, in its final result event. */
+  private recordStreamUsage(run: ActiveRun, result: ClaudeStreamResult): void {
+    const { record } = run;
+    const model = record.model ?? run.streamModel ?? 'unknown';
+    const slice = {
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      cacheCreationTokens: result.cacheCreationTokens,
+      cacheReadTokens: result.cacheReadTokens,
+    };
+    const usage: ActualTokenUsage = {
+      model,
+      turns: result.turns || 1,
+      ...slice,
+      thinkingTokens: 0,
+      costUsd: result.costUsd ?? computeActualCostUsd(model, slice),
+    };
+    record.usage = usage;
+    const event: RunnerTokenUsageEvent = {
+      runId: record.runId,
+      taskId: record.taskId,
+      model,
+      turn: usage.turns,
+      delta: usage,
+      total: { ...usage, cacheHitRate: cacheHitRate(usage) },
+      at: new Date().toISOString(),
+    };
+    this.emit('runner_token_usage', event);
+    this.persist(record);
+  }
+
   // ─── Native engine ──────────────────────────────────────────────────────────
 
   private createAnthropicClient(): Anthropic {
@@ -1215,6 +1433,7 @@ export class AgentSupervisor extends EventEmitter {
     const native = run.native!;
     run.timer = setTimeout(() => this.handleTimeout(run), record.timeoutSeconds * 1000);
     run.timer.unref?.();
+    this.startIdleWatchdog(run);
 
     const { effort, budgetTokens } = native.thinking;
     this.appendLog(
@@ -1516,6 +1735,7 @@ export class AgentSupervisor extends EventEmitter {
   private appendLog(run: ActiveRun, stream: 'stdout' | 'stderr', chunk: string): void {
     if (!chunk) return;
     const { record } = run;
+    run.lastActivity = Date.now();
     record.logBytes += Buffer.byteLength(chunk, 'utf8');
 
     run.buffer += chunk;
@@ -1547,8 +1767,10 @@ export class AgentSupervisor extends EventEmitter {
   private clearTimers(run: ActiveRun): void {
     if (run.timer) clearTimeout(run.timer);
     if (run.killTimer) clearTimeout(run.killTimer);
+    if (run.idleTimer) clearInterval(run.idleTimer);
     run.timer = null;
     run.killTimer = null;
+    run.idleTimer = null;
   }
 
   private finalize(run: ActiveRun, status: RunnerStatus, patch: { error?: string | null }): void {
