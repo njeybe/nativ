@@ -11,6 +11,7 @@ import {
   safeUnlinkWorktreeNodeModules,
 } from '../core/root-resolver.js';
 import { CircuitBreaker } from '../governor/index.js';
+import { mergeAgentWorktree, WorktreeMergeError } from '../core/worktree-merge.js';
 
 function isGitRepo(targetDir: string): boolean {
   try {
@@ -232,6 +233,8 @@ export interface WorktreeMergeResult {
   taskId: string;
   branch: string;
   merged: boolean;
+  /** Uncommitted agent work was committed on the agent branch before merging. */
+  committedPendingWork?: boolean;
   message: string;
 }
 
@@ -304,45 +307,14 @@ export async function runWorktreeMerge(
       console.log(pc.cyan(`\n🔀 Merging worktree for Task [${taskId}]...`));
     }
 
-    // 1. Remove worktree directory safely (unlinking mounts first)
-    if (fs.existsSync(worktreeDir)) {
-      safeUnlinkWorktreeNodeModules(worktreeDir);
-      safeUnlinkWorktreeAiDirectory(worktreeDir);
-      try {
-        execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
-      } catch {}
-      try {
-        execSync('git worktree prune', { cwd: rootDir, stdio: 'ignore' });
-      } catch {}
-      if (fs.existsSync(worktreeDir)) {
-        try {
-          fs.rmSync(worktreeDir, { recursive: true, force: true });
-        } catch {}
-      }
-      if (!options.json) {
-        console.log(pc.dim(`  ✔ Removed worktree directory: ${worktreeDir}`));
-      }
-    }
-
-    // 2. Merge branch into current branch
-    execSync(`git merge "${branchName}" --no-edit`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
+    // Commits any uncommitted agent work, merges, and only then removes the worktree and branch.
+    const outcome = mergeAgentWorktree(rootDir, taskId);
     if (!options.json) {
+      if (outcome.committedPendingWork) {
+        console.log(pc.yellow(`  ✔ Committed uncommitted agent work on ${branchName} before merging (${outcome.pendingCommit?.slice(0, 7)})`));
+      }
       console.log(pc.green(`  ✔ Merged branch ${pc.bold(branchName)} into current branch`));
-    }
-
-    // 3. Delete branch
-    try {
-      execSync(`git branch -d "${branchName}"`, { cwd: rootDir, stdio: 'ignore' });
-      if (!options.json) {
-        console.log(pc.dim(`  ✔ Deleted branch ${branchName}`));
-      }
-    } catch {
-      // Branch might require force delete or already removed
-      try {
-        execSync(`git branch -D "${branchName}"`, { cwd: rootDir, stdio: 'ignore' });
-      } catch {
-        // ignore
-      }
+      console.log(outcome.cleanedUp ? pc.dim(`  ✔ Removed ${worktreeDir} and branch ${branchName}`) : pc.yellow(`  ⚠ ${outcome.message}`));
     }
 
     const result: WorktreeMergeResult = {
@@ -350,7 +322,8 @@ export async function runWorktreeMerge(
       taskId,
       branch: branchName,
       merged: true,
-      message: `Task [${taskId}] worktree cleanly merged`,
+      committedPendingWork: outcome.committedPendingWork,
+      message: outcome.cleanedUp ? `Task [${taskId}] worktree cleanly merged` : outcome.message,
     };
 
     if (options.json) {
@@ -362,8 +335,9 @@ export async function runWorktreeMerge(
     return result;
   } catch (err: any) {
     const msg = `Failed to merge worktree: ${err.message}`;
+    const workPreserved = err instanceof WorktreeMergeError ? err.workPreserved : undefined;
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: msg }, null, 2));
+      console.log(JSON.stringify({ success: false, error: msg, ...(workPreserved !== undefined ? { workPreserved } : {}) }, null, 2));
     } else {
       console.error(pc.red(`\n✖ ${msg}\n`));
     }

@@ -13,6 +13,7 @@ import {
   recordRunnerUsage,
   type ActualTokenUsage,
 } from '../core/telemetry.js';
+import { mergeAgentWorktree } from '../core/worktree-merge.js';
 import {
   resolveProjectRoot,
   linkWorktreeAiDirectory,
@@ -1176,7 +1177,7 @@ export class AgentSupervisor extends EventEmitter {
       record.status = 'merging';
       this.emitStatus(record);
       try {
-        this.mergeWorktree(record);
+        this.mergeWorktree(run);
       } catch (err: any) {
         this.finalize(run, 'failed', { error: `Merge failed: ${err.message}` });
         return;
@@ -1495,32 +1496,10 @@ export class AgentSupervisor extends EventEmitter {
     return result.success;
   }
 
-  /** Quiet counterpart to `nativ worktree merge`: no stdout noise inside a server. */
-  private mergeWorktree(record: RunnerRecord): void {
-    const branch = record.branch!;
-    if (fs.existsSync(record.worktreeDir)) {
-      safeUnlinkWorktreeNodeModules(record.worktreeDir);
-      safeUnlinkWorktreeAiDirectory(record.worktreeDir);
-      spawnSync('git', ['worktree', 'remove', record.worktreeDir, '--force'], {
-        cwd: this.rootDir,
-        encoding: 'utf8',
-        windowsHide: true,
-      });
-      try {
-        spawnSync('git', ['worktree', 'prune'], { cwd: this.rootDir, stdio: 'ignore', windowsHide: true });
-      } catch {}
-    }
-
-    const merge = spawnSync('git', ['merge', branch, '--no-edit'], {
-      cwd: this.rootDir,
-      encoding: 'utf8',
-      windowsHide: true,
-    });
-    if (merge.status !== 0) {
-      throw new Error(String(merge.stderr || merge.stdout || 'git merge failed').trim());
-    }
-
-    spawnSync('git', ['branch', '-d', branch], { cwd: this.rootDir, stdio: 'ignore', windowsHide: true });
+  /** Quiet counterpart to `nativ worktree merge`: same safe merge, no stdout noise inside a server. */
+  private mergeWorktree(run: ActiveRun): void {
+    const outcome = mergeAgentWorktree(this.rootDir, run.record.taskId);
+    this.appendLog(run, 'stdout', `\n[supervisor] ${outcome.message}\n`);
   }
 
   // ─── Log buffer ─────────────────────────────────────────────────────────────

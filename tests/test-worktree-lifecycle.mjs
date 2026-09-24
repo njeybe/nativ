@@ -67,6 +67,17 @@ function createGitFixture() {
             verificationCommand: '',
             notes: '',
           },
+          {
+            id: 'task-wt-3',
+            title: 'Completed Feature With Uncommitted Work',
+            description: 'Agent verified its work but never committed it',
+            assignedSubagent: 'backend',
+            dependencies: [],
+            targetFiles: [],
+            status: 'completed',
+            verificationCommand: '',
+            notes: '',
+          },
         ],
       },
     ],
@@ -181,6 +192,21 @@ try {
   assert.ok(!fs.existsSync(wt2Dir), 'Worktree directory should be cleaned up after merge');
   assert.ok(fs.existsSync(path.join(dir, 'feature.txt')), 'Feature file should be merged into base branch');
   console.log('✔ Completed task worktree cleanly merged and cleaned up.');
+
+  // Test 4b: Merge never discards work the agent left uncommitted
+  console.log('4b. Testing Merge Preserves Uncommitted Agent Work...');
+  await cli(['worktree', 'create', 'task-wt-3', dir, '--json']);
+  const wt3Dir = path.join(dir, '.worktrees', 'task-task-wt-3');
+  fs.writeFileSync(path.join(wt3Dir, 'uncommitted.txt'), 'kept\n', 'utf8');
+  const mergeDirty = await cli(['worktree', 'merge', 'task-wt-3', dir, '--json']);
+  assert.equal(mergeDirty.code, 0, `Merge failed: ${mergeDirty.stdout}${mergeDirty.stderr}`);
+  const dirtyData = JSON.parse(mergeDirty.stdout);
+  assert.equal(dirtyData.success, true);
+  assert.equal(dirtyData.committedPendingWork, true, 'uncommitted work must be committed on the agent branch first');
+  // core.autocrlf may rewrite line endings on checkout; compare content, not EOL style.
+  assert.equal(fs.readFileSync(path.join(dir, 'uncommitted.txt'), 'utf8').replace(/\r\n/g, '\n'), 'kept\n', 'uncommitted work must reach the base branch');
+  assert.ok(!fs.existsSync(wt3Dir), 'worktree is removed only after the merge succeeded');
+  console.log('✔ Uncommitted agent work was committed, merged and kept.');
 
   // Test 5: Worktree Removal / Cleanup (Discard without merging)
   console.log('5. Testing Worktree Removal / Abort without merging...');

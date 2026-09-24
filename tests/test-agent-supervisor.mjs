@@ -81,6 +81,8 @@ function createFixture() {
           task('task-native-truncated'),
           task('task-native-legacy'),
           task('task-cli-flags'),
+          task('task-merge', { verificationCommand: 'node --version' }),
+          task('task-merge-conflict', { verificationCommand: 'node --version' }),
         ],
       },
     ],
@@ -123,6 +125,32 @@ function createFixture() {
   fs.writeFileSync(
     path.join(mocks, 'env.mjs'),
     "process.stdout.write(`MAX_THINKING_TOKENS=${process.env.MAX_THINKING_TOKENS ?? 'unset'}\\n`);\n",
+    'utf8',
+  );
+  // An agent that finishes its work but never commits it.
+  fs.writeFileSync(
+    path.join(mocks, 'dirty.mjs'),
+    [
+      "import fs from 'node:fs';",
+      "fs.writeFileSync('agent-output.txt', 'verified agent work\\n');",
+      "fs.appendFileSync('README.md', 'agent edit\\n');",
+      "process.stdout.write('agent: done, nothing committed\\n');",
+    ].join('\n'),
+    'utf8',
+  );
+  // Someone commits a conflicting README change on the main checkout while the agent edits its own copy.
+  fs.writeFileSync(
+    path.join(mocks, 'conflict.mjs'),
+    [
+      "import fs from 'node:fs';",
+      "import path from 'node:path';",
+      "import { execSync } from 'node:child_process';",
+      'const root = process.env.NATIV_PROJECT_ROOT;',
+      "fs.writeFileSync(path.join(root, 'README.md'), '# Root edit\\n');",
+      "execSync('git commit -qam \"root edit\"', { cwd: root });",
+      "fs.writeFileSync('README.md', '# Agent edit\\n');",
+      "process.stdout.write('agent: edited README\\n');",
+    ].join('\n'),
     'utf8',
   );
 
@@ -822,6 +850,50 @@ try {
   reborn.shutdown();
   nativeSup.shutdown();
   console.log('✔ Native run records and their usage survive a restart; legacy records are normalized.');
+
+  const git = (args, cwd = dir) => execSync(`git ${args}`, { cwd, encoding: 'utf8' }).trim();
+  // core.autocrlf may rewrite line endings on checkout; compare content, not EOL style.
+  const readText = (file) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  const branchExists = (name) => {
+    try {
+      git(`rev-parse --verify --quiet refs/heads/${name}`);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // ── 20. Auto-merge keeps work the agent never committed ───────────────────
+  console.log('20. Testing auto-merge commits uncommitted agent work before merging...');
+  const mergeSup = new AgentSupervisor({ cwd: dir, killGraceMs: 200 });
+  const merged = waitForStatus(mergeSup, 'task-merge', ['completed', 'failed'], 60_000);
+  await mergeSup.dispatch({ taskId: 'task-merge', runnerCommand: mockCommand(dir, 'dirty.mjs'), verify: true, autoMerge: true, timeoutSeconds: 60 });
+  const mergedRun = await merged;
+  assert.equal(mergedRun.status, 'completed', `auto-merge failed: ${mergedRun.error}`);
+  assert.equal(readText(path.join(dir, 'agent-output.txt')), 'verified agent work\n', 'an uncommitted new file reaches the main checkout');
+  assert.ok(readText(path.join(dir, 'README.md')).includes('agent edit'), 'an uncommitted modification reaches the main checkout');
+  assert.match(git('log -3 --format=%s'), /chore\(agent\): commit uncommitted work from task-merge/, 'pending work is committed on the agent branch');
+  assert.ok(!fs.existsSync(path.join(dir, '.worktrees', 'task-task-merge')), 'the worktree is removed only after the merge');
+  assert.ok(!branchExists('agent/task-task-merge'), 'the merged branch is deleted');
+  assert.ok(mergeSup.getLogs('task-merge', 50).log.includes('uncommitted agent work was committed first'), 'the log says what happened');
+  console.log('✔ Auto-merge committed the agent\'s uncommitted work, merged it, then cleaned up.');
+
+  // ── 21. A merge conflict keeps the worktree, the branch and the work ──────
+  console.log('21. Testing a merge conflict leaves all work intact...');
+  const conflicted = waitForStatus(mergeSup, 'task-merge-conflict', ['completed', 'failed'], 60_000);
+  await mergeSup.dispatch({ taskId: 'task-merge-conflict', runnerCommand: mockCommand(dir, 'conflict.mjs'), verify: true, autoMerge: true, timeoutSeconds: 60 });
+  const conflictRun = await conflicted;
+  assert.equal(conflictRun.status, 'failed');
+  assert.match(conflictRun.error, /Merge conflict/);
+  assert.match(conflictRun.error, /kept with all work committed/);
+  assert.ok(fs.existsSync(path.join(dir, '.worktrees', 'task-task-merge-conflict', 'README.md')), 'the worktree survives a failed merge');
+  assert.ok(branchExists('agent/task-task-merge-conflict'), 'the agent branch survives a failed merge');
+  assert.equal(git('show agent/task-task-merge-conflict:README.md'), '# Agent edit', 'the agent\'s edit is committed on its branch');
+  assert.equal(readText(path.join(dir, 'README.md')), '# Root edit\n', 'the main checkout is left as it was');
+  assert.throws(() => git('rev-parse --verify --quiet MERGE_HEAD'), 'the conflicted merge is aborted, not left half-done');
+  assert.ok(fs.existsSync(path.join(dir, '.worktrees', 'task-task-merge-conflict', '.ai')), 'contracts are re-mounted into the kept worktree');
+  mergeSup.shutdown();
+  console.log('✔ A conflicting merge was aborted with the worktree, branch and agent edits preserved.');
 
   console.log('\n🎉 ALL AGENT SUPERVISOR TESTS PASSED!');
 } finally {
