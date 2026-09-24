@@ -182,7 +182,7 @@ try {
       for (const label of labels) assert.ok(searchable.includes(label.toLowerCase()), `${group}: "${label}" not rendered`);
     };
     expectText('navigation tab', ['Overview & Status', 'Live Tasks', 'Agent Worktrees', 'Benchmarks', 'Database']);
-    expectText('overview KPI card', ['Active Milestones', 'Task Velocity', 'Telemetry & Costs', 'Specification Contracts']);
+    expectText('overview KPI card', ['Active Milestones', 'Task Velocity', 'Financial & Cache Telemetry', 'Specification Contracts']);
     expectText('contract checklist', ['master_plan', 'db_schema', 'api_contracts', 'ui_specs']);
     expectText('kanban', ['Pending', 'In Progress', 'Completed', 'Blocked', 'Attempts']);
     expectText('worktree table', ['Branch', 'Task ID', 'Commit', 'Merge to Main', 'Delete Workspace']);
@@ -231,7 +231,7 @@ try {
     const dialog = /<dialog\b[^>]*id=["']dispatch-dialog["'][\s\S]*?<\/dialog>/i.exec(html);
     assert.ok(dialog, '#dispatch-dialog must be rendered');
     const dlg = decodeEntities(dialog[0]);
-    for (const label of ['Isolated Worktree', 'Auto-verify Gatekeeper', 'Auto-merge on Pass', 'Cancel', 'Launch Agent', 'Ctrl+Enter']) {
+    for (const label of ['Isolated Worktree', 'Auto-verify Gatekeeper', 'Auto-merge on Pass', 'Cancel', 'Launch Autonomous Runner', 'Ctrl+Enter']) {
       assert.ok(dlg.includes(label), `dispatch modal missing "${label}"`);
     }
     const checkbox = (id) => new RegExp(`<input[^>]*type=["']checkbox["'][^>]*id=["']${id}["'][^>]*>`).exec(dlg)?.[0] ?? '';
@@ -249,6 +249,46 @@ try {
     assert.match(code, /['"]\/api\/pipeline\/worktrees\/diff\?taskId=['"]/, 'diff viewer must call GET /api/pipeline/worktrees/diff');
     assert.ok(searchable.includes('inspect diff'), 'worktree table needs an "Inspect Diff" action');
     console.log('✔ Dispatch modal (preview, switches, Ctrl+Enter) and Worktree Changes diff tab are wired');
+  }
+
+  // 4d. Dual-mode dispatch, grounded spend KPI and self-healing review (ui_specs.md View 1 card 3, View 3, §4 tab 3)
+  {
+    const dlg = decodeEntities(/<dialog\b[^>]*id=["']dispatch-dialog["'][\s\S]*?<\/dialog>/i.exec(html)[0]);
+    const radio = (name, id) => new RegExp(`<input[^>]*type=["']radio["'][^>]*name=["']${name}["'][^>]*id=["']${id}["'][^>]*>`).exec(dlg)?.[0] ?? '';
+    assert.ok(dlg.includes('Native Engine') && dlg.includes('Direct API, Prompt Caching & Fast Streaming'), 'engine selector offers the Native Engine');
+    assert.ok(dlg.includes('CLI Terminal Pairing'), 'engine selector offers CLI Terminal Pairing');
+    assert.match(radio('dispatch-engine', 'dispatch-engine-native'), /\bchecked\b/, 'Native Engine is selected by default');
+    assert.doesNotMatch(radio('dispatch-engine', 'dispatch-engine-cli'), /\bchecked\b/, 'CLI pairing is opt-in');
+    for (const chip of ['None', 'Fast / Deterministic', 'Standard', '2,048 tokens', 'Deep', '4,096 tokens']) {
+      assert.ok(dlg.includes(chip), `thinking budget selector missing "${chip}"`);
+    }
+    assert.match(radio('dispatch-budget', 'dispatch-budget-none'), /\bchecked\b/, 'the None budget chip is the default');
+    assert.match(radio('dispatch-budget', 'dispatch-budget-standard'), /value=["']2048["']/, 'Standard sends a 2,048-token budget');
+    assert.match(radio('dispatch-budget', 'dispatch-budget-deep'), /value=["']4096["']/, 'Deep sends a 4,096-token budget');
+    assert.match(dlg, /<fieldset\b[^>]*>\s*<legend>Engine<\/legend>/, 'engine options are a labelled radio group');
+    for (const field of ['runnerEngine', 'thinkingBudget']) assert.match(code, new RegExp(`\\b${field}\\b`), `dispatch payload must send ${field}`);
+    assert.match(code, /effort/, 'the budget hint explains how budgets map to effort on the native engine');
+
+    for (const label of ['Cached Input', 'Fresh Input', 'Output / Thinking', 'Gatekeeper Pass', 'Cache Hit Rate', 'via Ephemeral Caching', 'actual spend']) {
+      assert.ok(code.includes(label), `financial & cache telemetry card missing "${label}"`);
+    }
+    assert.match(code, /actualSpendUsd/, 'the spend KPI reads actualSpendUsd from /api/pipeline/status');
+    assert.match(code, /['"]\/api\/pipeline\/telemetry\/detailed['"]/, 'client must call GET /api/pipeline/telemetry/detailed');
+
+    const drawer = decodeEntities(/<section\b[^>]*id=["']runner-console-drawer["'][\s\S]*?<\/section>/i.exec(html)[0]);
+    assert.ok(drawer.includes('Self-Healing Proposal'), 'console drawer needs the Self-Healing Proposal tab');
+    assert.match(drawer, /<button\b[^>]*id=["']rc-tab-heal["'][^>]*role=["']tab["']|<button\b[^>]*role=["']tab["'][^>]*id=["']rc-tab-heal["']/, 'the proposal view is a tab in the drawer tablist');
+    assert.match(drawer, /id=["']rc-heal["'][^>]*role=["']tabpanel["']|role=["']tabpanel["'][^>]*id=["']rc-heal["']/, 'the proposal view is a tabpanel');
+    for (const label of ['PASSED in sandbox', 'Approve &amp; Apply Patch', 'Reject Proposal', 'Proposal Ready']) {
+      assert.ok(code.includes(label), `self-healing review missing "${label}"`);
+    }
+    assert.match(code, /['"]\/api\/pipeline\/escalations\?status=pending_review['"]/, 'client must list pending escalations');
+    assert.match(code, /['"]\/api\/pipeline\/escalations\/resolve['"]/, 'approve/reject must POST /api/pipeline/escalations/resolve');
+    assert.match(code, /decision\s*:/, 'resolve payload must carry the decision');
+    assert.match(code, /addEventListener\(\s*['"]runner_token_usage['"]/, 'client must stream runner_token_usage SSE events');
+    assert.match(html, /id=["']ncount-proposals["']/, 'Live Tasks nav item needs the amber proposal count badge');
+    assert.ok(cssNorm.includes('#d97706') && cssNorm.includes('#fef3c7'), 'amber proposal tokens (#d97706 / #fef3c7) from ui_specs.md required');
+    console.log('✔ Dual-mode dispatch (engine + budget chips), grounded spend KPI and self-healing proposal tab are wired');
   }
 
   // 5. Client script: valid JS, SSE listener and pipeline endpoint wiring
