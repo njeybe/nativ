@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import { MasterPlan } from '../scanner/types.js';
-import { loadTelemetry, formatTelemetrySummary } from '../core/telemetry.js';
+import { loadTelemetry, formatTelemetrySummary, recomputeTelemetrySummary } from '../core/telemetry.js';
 
 export interface StatusOptions {
   telemetry?: boolean;
@@ -80,7 +80,9 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     console.log(pc.bold(pc.cyan(`\n📈 Completion: ${completedTasks}/${totalTasks} tasks (${pct}%)`)));
 
     if (options.telemetry || telemetry.summary.totalTasksCompleted > 0) {
-      console.log(formatTelemetrySummary(telemetry) + '\n');
+      // Re-derive the summary in memory so it reflects current rates even before the next write.
+      recomputeTelemetrySummary(telemetry);
+      console.log(formatTelemetrySummary(telemetry, { completedTasks }) + '\n');
     } else {
       console.log(pc.dim('\nTip: Run `nativ status --telemetry` for full token, duration, and cost metrics.\n'));
     }

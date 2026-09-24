@@ -78,8 +78,11 @@ export interface ProjectTelemetry {
   tasks: TaskTelemetryRecord[];
 }
 
-export const INPUT_TOKEN_COST_PER_M = 3.0; // $3.00 / 1M tokens (Claude 3.5/3.7 Sonnet / Gemini Pro standard)
-export const OUTPUT_TOKEN_COST_PER_M = 15.0; // $15.00 / 1M tokens
+/** Model whose rates price heuristic estimates; matches the native engine's default model. */
+export const DEFAULT_TELEMETRY_MODEL = 'claude-opus-5-5';
+/** List price of DEFAULT_TELEMETRY_MODEL; also the fallback for models missing from MODEL_PRICING. */
+export const INPUT_TOKEN_COST_PER_M = 4.0; // $4.00 / 1M tokens
+export const OUTPUT_TOKEN_COST_PER_M = 20.0; // $20.00 / 1M tokens
 
 export interface ModelPricing {
   inputPerM: number;
@@ -109,6 +112,11 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
 
 /** Unknown models fall back to the heuristic estimate rates so spend is never silently zero. */
 const FALLBACK_PRICING = standardPricing(INPUT_TOKEN_COST_PER_M, OUTPUT_TOKEN_COST_PER_M);
+
+/** True when MODEL_PRICING knows the model (exactly or as a dated / suffixed variant). */
+export function isPricedModel(model: unknown): model is string {
+  return typeof model === 'string' && Object.keys(MODEL_PRICING).some((id) => model === id || model.startsWith(`${id}-`));
+}
 
 /** Resolves pricing by exact ID, then by longest known prefix (e.g. dated or `-fast` variants). */
 export function resolveModelPricing(model: string): ModelPricing {
@@ -167,10 +175,17 @@ export function cacheHitRate(usage: Pick<ActualTokenUsage, 'inputTokens' | 'cach
   return promptTokens > 0 ? Math.round((usage.cacheReadTokens / promptTokens) * 10000) / 10000 : 0;
 }
 
+/** Prices estimated input/output tokens at a model's list rates. */
+export function priceEstimate(model: string, inputEstimated: number, outputEstimated: number): number {
+  const p = resolveModelPricing(model);
+  const cost = (inputEstimated / 1_000_000) * p.inputPerM + (outputEstimated / 1_000_000) * p.outputPerM;
+  return Math.round(cost * 10000) / 10000;
+}
+
 /**
  * Calculates estimated tokens and cost based on contract slice, target files, and diff heuristics.
  */
-export function estimateTokens(targetDir: string, task: MasterPlanTask): TokenEstimate {
+export function estimateTokens(targetDir: string, task: MasterPlanTask, model: string = DEFAULT_TELEMETRY_MODEL): TokenEstimate {
   let fileBytes = 0;
   if (Array.isArray(task.targetFiles)) {
     for (const relFile of task.targetFiles) {
@@ -199,15 +214,11 @@ export function estimateTokens(targetDir: string, task: MasterPlanTask): TokenEs
     outputEstimated = Math.max(350, Math.round(fileBytes / 6));
   }
 
-  const cost =
-    (inputEstimated / 1_000_000) * INPUT_TOKEN_COST_PER_M +
-    (outputEstimated / 1_000_000) * OUTPUT_TOKEN_COST_PER_M;
-
   return {
     inputEstimated,
     outputEstimated,
     totalEstimated: inputEstimated + outputEstimated,
-    costUsdEstimated: Math.round(cost * 10000) / 10000,
+    costUsdEstimated: priceEstimate(model, inputEstimated, outputEstimated),
   };
 }
 
@@ -220,6 +231,9 @@ export function loadTelemetry(telemetryPath: string, projectName: string = 'proj
       const raw = fs.readFileSync(telemetryPath, 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object' && Array.isArray(parsed.tasks)) {
+        // Files written before the current model table name retired models (e.g. claude-3-7-sonnet);
+        // estimates are priced at the current default instead.
+        if (!isPricedModel(parsed.modelTierDefault)) parsed.modelTierDefault = DEFAULT_TELEMETRY_MODEL;
         return parsed as ProjectTelemetry;
       }
     } catch {
@@ -232,7 +246,7 @@ export function loadTelemetry(telemetryPath: string, projectName: string = 'proj
     version: '1.0.0',
     projectName,
     lastUpdated: new Date().toISOString(),
-    modelTierDefault: 'claude-opus-5-5',
+    modelTierDefault: DEFAULT_TELEMETRY_MODEL,
     summary: {
       totalTasksCompleted: 0,
       totalDurationMs: 0,
@@ -306,8 +320,10 @@ export function recomputeTelemetrySummary(telemetry: ProjectTelemetry): void {
   for (const t of completedTasks) {
     totalDuration += t.durationMs || 0;
     if (t.tokens) {
+      // Token estimates are kept as recorded; only the rate is current, so older records are re-priced.
+      t.tokens.costUsdEstimated = priceEstimate(telemetry.modelTierDefault, t.tokens.inputEstimated || 0, t.tokens.outputEstimated || 0);
       totalTokens += t.tokens.totalEstimated || 0;
-      totalCost += t.tokens.costUsdEstimated || 0;
+      totalCost += t.tokens.costUsdEstimated;
     }
   }
 
@@ -414,7 +430,7 @@ export async function recordTaskComplete(
       }
     }
 
-    record.tokens = estimateTokens(targetDir, task);
+    record.tokens = estimateTokens(targetDir, task, telemetry.modelTierDefault);
     recomputeTelemetrySummary(telemetry);
 
     saveTelemetry(telemetryPath, telemetry);
@@ -472,15 +488,19 @@ export async function recordCircuitBreakerTrip(targetDir: string, taskId: string
 /**
  * Returns formatted telemetry dashboard summary lines for CLI display.
  */
-export function formatTelemetrySummary(telemetry: ProjectTelemetry): string {
+export function formatTelemetrySummary(telemetry: ProjectTelemetry, plan?: { completedTasks: number }): string {
   const { summary } = telemetry;
   const minutes = (summary.totalDurationMs / 60000).toFixed(1);
   const passPct = Math.round(summary.verificationPassRate * 100);
+  // Tasks completed before telemetry existed (or with --no-verify from older builds) have no record.
+  const untracked = plan ? Math.max(0, plan.completedTasks - summary.totalTasksCompleted) : 0;
 
   const lines = [
     pc.bold(pc.cyan('\n⚡ Execution & Cost Telemetry')),
     pc.dim('  Model Tier Benchmark: ') + pc.white(telemetry.modelTierDefault),
-    pc.dim('  Tasks Completed:      ') + pc.green(`${summary.totalTasksCompleted}`),
+    pc.dim('  Tasks Completed:      ') +
+      pc.green(`${summary.totalTasksCompleted}`) +
+      (untracked ? pc.dim(` measured (+${untracked} completed without telemetry)`) : ''),
     pc.dim('  Total Time Active:    ') + pc.white(`${minutes} min (${summary.totalDurationMs}ms)`),
     pc.dim('  Estimated Tokens:     ') + pc.yellow(`${summary.estimatedTotalTokens.toLocaleString()}`),
     pc.dim('  Estimated Cost:       ') + pc.green(`$${summary.estimatedTotalCostUsd.toFixed(4)} USD`),

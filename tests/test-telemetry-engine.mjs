@@ -12,6 +12,7 @@ import {
   recordCircuitBreakerTrip,
   formatTelemetrySummary,
   estimateTokens,
+  recomputeTelemetrySummary,
 } from '../dist/core/telemetry.js';
 import { createMcpServer } from '../dist/mcp/server.js';
 import { CircuitBreaker } from '../dist/governor/circuit-breaker.js';
@@ -215,6 +216,40 @@ async function runTests() {
       assert.equal(parsed.version, '1.0.0');
       assert.equal(parsed.summary.totalTasksCompleted, 2);
       console.log('✔ Test 9: Telemetry contract artifact conforms to nativ://telemetry MCP resource');
+    }
+
+    // 10. Estimates use current model rates; retired model labels and stale prices are corrected
+    {
+      const legacyPath = path.join(dir, '.ai', 'legacy-telemetry.json');
+      fs.writeFileSync(
+        legacyPath,
+        JSON.stringify({
+          version: '1.0.0',
+          projectName: 'legacy',
+          lastUpdated: '2026-01-01T00:00:00.000Z',
+          modelTierDefault: 'claude-3-7-sonnet',
+          summary: { totalTasksCompleted: 1, totalDurationMs: 1000, estimatedTotalTokens: 12000, estimatedTotalCostUsd: 0.072, verificationPassRate: 1, totalVerificationsRun: 1, totalVerificationsPassed: 1, circuitBreakerTrips: 0 },
+          tasks: [{ taskId: 'old', title: 'old', assignedSubagent: 'backend', startedAt: '2026-01-01T00:00:00.000Z', durationMs: 1000, status: 'completed', tokens: { inputEstimated: 9000, outputEstimated: 3000, totalEstimated: 12000, costUsdEstimated: 0.072 } }],
+        }),
+      );
+      const legacy = loadTelemetry(legacyPath);
+      assert.equal(legacy.modelTierDefault, 'claude-opus-5-5', 'a retired model label is replaced by the current default');
+
+      // No target files: 3,500 input + 350 output tokens at Opus 5.5 rates ($4 / $20 per MTok).
+      const noFiles = { id: 'bare', title: 'Bare', assignedSubagent: 'backend', dependencies: [], targetFiles: [], status: 'pending' };
+      assert.equal(estimateTokens(dir, noFiles, 'claude-opus-5-5').costUsdEstimated, 0.021, 'estimates are priced at the current model rates');
+      assert.equal(estimateTokens(dir, noFiles).costUsdEstimated, 0.021, 'the default pricing model is claude-opus-5-5');
+      assert.equal(estimateTokens(dir, noFiles, 'claude-sonnet-5').costUsdEstimated, 0.0105, 'estimates follow the model they are priced for');
+
+      // Stored token estimates are re-priced when the summary is recomputed: 9,000 × $4 + 3,000 × $20.
+      recomputeTelemetrySummary(legacy);
+      assert.equal(legacy.tasks[0].tokens.costUsdEstimated, 0.096);
+      assert.equal(legacy.summary.estimatedTotalCostUsd, 0.096);
+
+      const text = formatTelemetrySummary(legacy, { completedTasks: 3 });
+      assert.ok(text.includes('claude-opus-5-5'), 'the summary names the pricing model');
+      assert.ok(text.includes('+2 completed without telemetry'), 'tasks completed before telemetry existed are called out, not silently missing');
+      console.log('✔ Test 10: Estimates use current rates, retired model labels are replaced, untracked tasks are reported');
     }
 
     console.log('\n--- All Execution & Cost Telemetry Engine Tests Passed! ---\n');

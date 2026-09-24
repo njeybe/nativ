@@ -1004,8 +1004,10 @@ try {
     assert.deepEqual(taskBreakdowns.slice(0, 2).map((b) => b.taskId), ['task-a', 'task-c'], 'the most expensive tasks come first');
     const [a] = taskBreakdowns;
     assert.equal(a.status, 'completed');
-    closeTo(a.estimated.costUsd, 0.06, 'task-a estimated cost');
-    closeTo(a.varianceUsd, -0.0348, 'task-a variance (actual − estimate)');
+    // The native run's telemetry write re-priced the stored estimate at current Opus 5.5 rates:
+    // 9,000 in × $4 + 3,000 out × $20 = $0.096 (the fixture's hand-written $0.06 is replaced).
+    closeTo(a.estimated.costUsd, 0.096, 'task-a estimated cost');
+    closeTo(a.varianceUsd, -0.0708, 'task-a variance (actual − estimate)');
     closeTo(a.actual.cacheHitRate, 0.6667, 'task-a cache hit rate', 1e-4);
 
     const c = taskBreakdowns.find((b) => b.taskId === 'task-c');
