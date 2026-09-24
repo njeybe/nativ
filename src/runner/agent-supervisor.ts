@@ -612,6 +612,35 @@ function buildToolEnv(...sources: Array<Record<string, string | undefined> | und
   return env;
 }
 
+/** Claude Code's own credentials and provider settings: the cli runner cannot start without them. */
+const CLAUDE_CODE_AUTH_ENV = /^(ANTHROPIC_(API_KEY|AUTH_TOKEN|BASE_URL|MODEL|SMALL_FAST_MODEL|CUSTOM_HEADERS|BETAS|VERTEX_PROJECT_ID)|CLAUDE_CODE_[A-Z0-9_]+|CLAUDE_CONFIG_DIR|CLOUD_ML_REGION|VERTEX_REGION_[A-Z0-9_]+)$/;
+const AWS_ENV = /^AWS_[A-Z0-9_]+$/;
+
+/**
+ * Environment for cli runners. The agent inside runs with --dangerously-skip-permissions and can
+ * print anything it inherits, so credential-looking variables are withheld, except the ones Claude
+ * Code itself authenticates with (and AWS credentials when it is configured for Bedrock).
+ * NATIV_RUNNER_PASS_ENV="NAME1,NAME2" passes extra variables through deliberately; variables an
+ * operator hands to dispatch() explicitly are also passed as-is.
+ */
+export function buildRunnerEnv(base: NodeJS.ProcessEnv, explicit?: Record<string, string>): NodeJS.ProcessEnv {
+  const passThrough = new Set(
+    String(base.NATIV_RUNNER_PASS_ENV ?? '')
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  const bedrock = Boolean(base.CLAUDE_CODE_USE_BEDROCK);
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (value === undefined) continue;
+    const allowed =
+      !SECRET_ENV_PATTERN.test(key) || CLAUDE_CODE_AUTH_ENV.test(key) || passThrough.has(key) || (bedrock && AWS_ENV.test(key));
+    if (allowed) env[key] = value;
+  }
+  return { ...env, ...explicit };
+}
+
 /**
  * Best-effort policy for model-authored shell commands. The worktree is the
  * real boundary (as with the cli engine); this blocks the obvious escapes and
@@ -1217,8 +1246,7 @@ export class AgentSupervisor extends EventEmitter {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
-        ...process.env,
-        ...options.env,
+        ...buildRunnerEnv(process.env, options.env),
         ...(record.thinking?.budgetTokens ? { MAX_THINKING_TOKENS: String(record.thinking.budgetTokens) } : {}),
         NATIV_RUN_ID: record.runId,
         NATIV_TASK_ID: record.taskId,

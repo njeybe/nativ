@@ -81,6 +81,7 @@ function createFixture() {
           task('task-native-truncated'),
           task('task-native-legacy'),
           task('task-cli-flags'),
+          task('task-cli-secrets'),
           task('task-merge', { verificationCommand: 'node --version' }),
           task('task-merge-conflict', { verificationCommand: 'node --version' }),
           task('task-idle'),
@@ -128,6 +129,18 @@ function createFixture() {
   fs.writeFileSync(
     path.join(mocks, 'env.mjs'),
     "process.stdout.write(`MAX_THINKING_TOKENS=${process.env.MAX_THINKING_TOKENS ?? 'unset'}\\n`);\n",
+    'utf8',
+  );
+  // Reports which variables a cli runner inherited (never their secret values).
+  fs.writeFileSync(
+    path.join(mocks, 'secrets.mjs'),
+    [
+      'const e = process.env;',
+      "console.log(`DB=${e.NATIV_TEST_DB_PASSWORD ? 'leaked' : 'stripped'}`);",
+      "console.log(`KEY=${e.ANTHROPIC_API_KEY ? 'present' : 'missing'}`);",
+      "console.log(`PASS=${e.NATIV_TEST_PASS_TOKEN ?? 'stripped'}`);",
+      "console.log(`MAX_THINKING_TOKENS=${e.MAX_THINKING_TOKENS ?? 'unset'}`);",
+    ].join('\n'),
     'utf8',
   );
   // An agent that finishes its work but never commits it.
@@ -328,6 +341,7 @@ const {
   DEFAULT_IDLE_TIMEOUT_SECONDS,
   DEFAULT_NATIVE_ALLOWED_COMMANDS,
   buildDefaultClaudeCommand,
+  buildRunnerEnv,
   checkNativeBashCommand,
   formatClaudeStreamLine,
   usesClaudeStreamJson,
@@ -890,6 +904,34 @@ try {
   assert.deepEqual(cliRecord.thinking, { budget: 4096, effort: null, budgetTokens: 4096 });
   await cliDone;
   assert.ok(cliSup.getLogs('task-cli-flags', 20).log.includes('MAX_THINKING_TOKENS=4096'), 'the budget reaches Claude Code as MAX_THINKING_TOKENS');
+
+  // The cli agent runs with --dangerously-skip-permissions: it must not inherit credentials it could print.
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    NATIV_TEST_DB_PASSWORD: 'hunter2',
+    ANTHROPIC_API_KEY: 'sk-test-kept-for-claude-code',
+    NATIV_TEST_PASS_TOKEN: 'deliberately-passed',
+    NATIV_RUNNER_PASS_ENV: 'NATIV_TEST_PASS_TOKEN',
+  });
+  try {
+    const secretsDone = waitForStatus(cliSup, 'task-cli-secrets', 'completed');
+    await cliSup.dispatch({ taskId: 'task-cli-secrets', runnerCommand: mockCommand(dir, 'secrets.mjs'), thinkingBudget: 0, useWorktree: false, timeoutSeconds: 30 });
+    await secretsDone;
+    const secretsLog = cliSup.getLogs('task-cli-secrets', 20).log;
+    assert.ok(secretsLog.includes('DB=stripped'), `credential-looking variables are withheld: ${secretsLog}`);
+    assert.ok(secretsLog.includes('KEY=present'), 'Claude Code keeps the credentials it authenticates with');
+    assert.ok(secretsLog.includes('PASS=deliberately-passed'), 'NATIV_RUNNER_PASS_ENV passes named variables through');
+    assert.ok(secretsLog.includes('MAX_THINKING_TOKENS=unset'), 'a zero budget leaves Claude Code on its own default');
+    assert.ok(!secretsLog.includes('hunter2'));
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  const bedrockEnv = buildRunnerEnv({ PATH: '/bin', AWS_SECRET_ACCESS_KEY: 's', CLAUDE_CODE_USE_BEDROCK: '1', GITHUB_TOKEN: 'g' });
+  assert.equal(bedrockEnv.AWS_SECRET_ACCESS_KEY, 's', 'Bedrock-configured Claude Code keeps its AWS credentials');
+  assert.equal(bedrockEnv.GITHUB_TOKEN, undefined);
+  assert.equal(buildRunnerEnv({ AWS_SECRET_ACCESS_KEY: 's' }).AWS_SECRET_ACCESS_KEY, undefined, 'AWS credentials are withheld unless Bedrock is in use');
+  assert.equal(buildRunnerEnv({ DATABASE_URL: 'x' }, { DATABASE_URL: 'explicit' }).DATABASE_URL, 'explicit', 'variables handed to dispatch() explicitly are kept');
   cliSup.shutdown();
   console.log('✔ CLI dispatch forwards the model flag and MAX_THINKING_TOKENS.');
 
