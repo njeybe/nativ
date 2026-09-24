@@ -97,7 +97,56 @@ export function safeUnlinkWorktreeAiDirectory(worktreeDir: string): boolean {
   try {
     const stat = fs.lstatSync(targetAi);
     if (stat.isSymbolicLink() || (process.platform === 'win32' && stat.isDirectory())) {
-      fs.unlinkSync(targetAi);
+      try {
+        fs.unlinkSync(targetAi);
+      } catch {
+        fs.rmdirSync(targetAi);
+      }
+      return true;
+    }
+  } catch {
+    // If it doesn't exist or isn't a link, ignore
+  }
+  return false;
+}
+
+/**
+ * Creates a directory junction (Windows) or symlink (Unix) linking node_modules/
+ * from the main project root into the newly created worktree so sub-agents have
+ * access to project dependencies without running npm install in each worktree.
+ */
+export function linkWorktreeNodeModules(worktreeDir: string, rootDir: string): boolean {
+  const rootModules = path.join(rootDir, 'node_modules');
+  const targetModules = path.join(worktreeDir, 'node_modules');
+
+  if (!fs.existsSync(rootModules) || fs.existsSync(targetModules)) {
+    return false;
+  }
+
+  try {
+    const isWindows = process.platform === 'win32';
+    fs.symlinkSync(rootModules, targetModules, isWindows ? 'junction' : 'dir');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Safely unlinks the node_modules junction/symlink in a worktree directory before
+ * Git or filesystem deletion touches it, ensuring original node_modules in the
+ * project root are never deleted.
+ */
+export function safeUnlinkWorktreeNodeModules(worktreeDir: string): boolean {
+  const targetModules = path.join(worktreeDir, 'node_modules');
+  try {
+    const stat = fs.lstatSync(targetModules);
+    if (stat.isSymbolicLink() || (process.platform === 'win32' && stat.isDirectory())) {
+      try {
+        fs.unlinkSync(targetModules);
+      } catch {
+        fs.rmdirSync(targetModules);
+      }
       return true;
     }
   } catch {

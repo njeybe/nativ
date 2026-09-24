@@ -1439,7 +1439,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     if (isRunActive(run)) return actionBtn('run-console', t.id, 'Live Logs', '') + actionBtn('run-abort', t.id, 'Abort', 'danger');
     var console_ = run ? actionBtn('run-console', t.id, 'Live Logs', '') : '';
     if (t.status === 'pending') return console_ + actionBtn('task-start', t.id, 'Start', '') + dispatchBtn(t);
-    if (t.status === 'in_progress') return console_ + actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary');
+    if (t.status === 'in_progress') return console_ + actionBtn('task-block', t.id, 'Block', 'danger') + actionBtn('task-complete', t.id, 'Complete', 'primary') + dispatchBtn(t);
     if (t.status === 'blocked') return console_ + actionBtn('task-start', t.id, 'Retry', '') + dispatchBtn(t);
     return console_ + '<span class="done-label">' + ICON.check + 'Done</span>';
   }
@@ -1489,12 +1489,13 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
   }
 
   // ─── Autonomous dispatch: POST /tasks/dispatch and /tasks/abort ────────────
-  function runDispatch(taskId) {
+  function runDispatch(taskId, customOptions) {
     var key = 'task:' + taskId;
     if (pipe.busy[key]) return;
     pipe.busy[key] = 'dispatch';
     repaint('tasks');
-    postJson('/api/pipeline/tasks/dispatch', { taskId: taskId }).then(function (body) {
+    var payload = Object.assign({ taskId: taskId }, customOptions || {});
+    postJson('/api/pipeline/tasks/dispatch', payload).then(function (body) {
       upsertRun(body && body.run);
       toast('Dispatched Claude for ' + taskId, 'ok');
       openConsole(taskId, true);
@@ -1688,7 +1689,11 @@ dialog::backdrop { background: rgb(15 23 42 / 0.32); backdrop-filter: blur(2px);
     }
     repaint('tasks');
     if (!RUN_ACTIVE[run.status]) {
-      toast((RUN_LABEL[run.status] || run.status) + ': ' + run.taskId, run.status === 'completed' ? 'ok' : 'err');
+      var statusMsg = (RUN_LABEL[run.status] || run.status) + ': ' + run.taskId;
+      if (run.error && run.status !== 'completed') {
+        statusMsg += ' (' + run.error + ')';
+      }
+      toast(statusMsg, run.status === 'completed' ? 'ok' : 'err');
       // The agent may have moved the task through "nativ task complete" while it ran.
       queueRefresh(['status', 'tasks', 'worktrees', 'runs']);
     }

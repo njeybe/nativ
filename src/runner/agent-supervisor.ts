@@ -8,6 +8,8 @@ import {
   resolveProjectRoot,
   linkWorktreeAiDirectory,
   safeUnlinkWorktreeAiDirectory,
+  linkWorktreeNodeModules,
+  safeUnlinkWorktreeNodeModules,
 } from '../core/root-resolver.js';
 import type { MasterPlanTask } from '../scanner/types.js';
 
@@ -181,6 +183,76 @@ function tailLines(text: string, count: number): string {
   return lines.slice(lines.length - count).join('\n');
 }
 
+/** Extracts the executable binary or command name, handling quoted Windows paths. */
+export function extractBinary(cmd: string): string {
+  const trimmed = cmd.trim();
+  if (trimmed.startsWith('"')) {
+    const nextQuote = trimmed.indexOf('"', 1);
+    if (nextQuote !== -1) return trimmed.slice(1, nextQuote);
+  }
+  if (trimmed.startsWith("'")) {
+    const nextQuote = trimmed.indexOf("'", 1);
+    if (nextQuote !== -1) return trimmed.slice(1, nextQuote);
+  }
+  return trimmed.split(/\s+/)[0] || '';
+}
+
+/** Pre-flight check verifying whether a command binary exists in PATH or on the filesystem. */
+export function isExecutableInPath(cmd: string): boolean {
+  const bin = extractBinary(cmd);
+  if (!bin) return false;
+  if (
+    path.isAbsolute(bin) ||
+    bin.startsWith('./') ||
+    bin.startsWith('.\\') ||
+    bin.startsWith('../') ||
+    bin.startsWith('..\\')
+  ) {
+    return fs.existsSync(bin);
+  }
+  try {
+    const checkCmd = process.platform === 'win32' ? 'where.exe' : 'which';
+    const res = spawnSync(checkCmd, [bin], { stdio: 'ignore', windowsHide: true });
+    if (res.status === 0) return true;
+  } catch {}
+
+  const pathEnv = process.env.PATH || '';
+  const delimiter = path.delimiter;
+  const dirs = pathEnv.split(delimiter);
+  const extensions =
+    process.platform === 'win32'
+      ? (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';')
+      : [''];
+  for (const dir of dirs) {
+    if (!dir) continue;
+    for (const ext of extensions) {
+      const full = path.join(dir, bin + (ext.startsWith('.') ? ext : `.${ext}`));
+      try {
+        if (fs.existsSync(full)) return true;
+      } catch {}
+    }
+  }
+  return false;
+}
+
+/**
+ * Builds the autonomous prompt and arguments required by Claude Code CLI
+ * to execute non-interactively in a headless child process.
+ */
+export function buildDefaultClaudeCommand(task: MasterPlanTask): string {
+  const parts = [
+    `Execute task ${task.id} (${task.title}).`,
+    task.description ? `Description: ${task.description}.` : '',
+    task.verificationCommand ? `Verify your work using: ${task.verificationCommand}.` : '',
+    `Start by running: nativ task start ${task.id}. When finished and verified, run: nativ task complete ${task.id}.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const escapedPrompt = parts.replace(/"/g, '\\"');
+  return `claude -p "${escapedPrompt}" --dangerously-skip-permissions`;
+}
+
 /**
  * Supervises autonomous agent runs: detached spawn inside an isolated git
  * worktree, a timeout killswitch, a bounded streaming log buffer, and
@@ -204,7 +276,8 @@ export class AgentSupervisor extends EventEmitter {
     super();
     this.rootDir = resolveProjectRoot(options.cwd);
     this.runsDir = path.join(this.rootDir, '.nativ', 'runs');
-    this.defaultRunnerCommand = options.defaultRunnerCommand ?? DEFAULT_RUNNER_COMMAND;
+    this.defaultRunnerCommand =
+      options.defaultRunnerCommand ?? process.env.NATIV_RUNNER_COMMAND ?? DEFAULT_RUNNER_COMMAND;
     this.defaultTimeoutSeconds = options.defaultTimeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
     this.maxLogBufferBytes = options.maxLogBufferBytes ?? DEFAULT_MAX_LOG_BUFFER_BYTES;
     this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
@@ -230,9 +303,25 @@ export class AgentSupervisor extends EventEmitter {
     const task = this.requireTask(taskId);
     this.assertDependenciesMet(task);
 
-    const command = (options.runnerCommand || '').trim() || this.defaultRunnerCommand;
+    let rawCommand = (options.runnerCommand || '').trim() || this.defaultRunnerCommand;
     const timeoutSeconds = this.normalizeTimeout(options.timeoutSeconds);
     const useWorktree = options.useWorktree !== false;
+    const worktreeDir = useWorktree ? path.join(this.rootDir, '.worktrees', `task-${taskId}`) : this.rootDir;
+
+    if (rawCommand === 'claude') {
+      if (!isExecutableInPath('claude')) {
+        throw new SupervisorError(
+          'CLAUDE_NOT_FOUND',
+          "The 'claude' CLI executable was not found in PATH. Install Claude Code (npm install -g @anthropic-ai/claude-code) or configure runnerCommand / NATIV_RUNNER_COMMAND.",
+        );
+      }
+      rawCommand = buildDefaultClaudeCommand(task);
+    }
+
+    const command = rawCommand
+      .replace(/\{taskId\}/g, taskId)
+      .replace(/\{taskTitle\}/g, task.title)
+      .replace(/\{worktreeDir\}/g, worktreeDir);
 
     const record: RunnerRecord = {
       runId: randomUUID(),
@@ -240,7 +329,7 @@ export class AgentSupervisor extends EventEmitter {
       status: useWorktree ? 'spawning_worktree' : 'running',
       pid: null,
       branch: useWorktree ? `agent/task-${taskId}` : null,
-      worktreeDir: useWorktree ? path.join(this.rootDir, '.worktrees', `task-${taskId}`) : this.rootDir,
+      worktreeDir,
       command,
       startedAt: new Date().toISOString(),
       endedAt: null,
@@ -419,9 +508,24 @@ export class AgentSupervisor extends EventEmitter {
     const worktreeDir = record.worktreeDir;
     const branch = record.branch!;
 
+    // Prune stale git worktrees so git doesn't refuse creation
+    try {
+      spawnSync('git', ['worktree', 'prune'], { cwd: this.rootDir, stdio: 'ignore', windowsHide: true });
+    } catch {}
+
     if (fs.existsSync(worktreeDir)) {
-      linkWorktreeAiDirectory(worktreeDir, this.rootDir);
-      return;
+      const gitRef = path.join(worktreeDir, '.git');
+      if (fs.existsSync(gitRef)) {
+        linkWorktreeAiDirectory(worktreeDir, this.rootDir);
+        linkWorktreeNodeModules(worktreeDir, this.rootDir);
+        return;
+      }
+      // Zombie directory without .git: clean it up so git worktree add doesn't fail
+      try {
+        safeUnlinkWorktreeAiDirectory(worktreeDir);
+        safeUnlinkWorktreeNodeModules(worktreeDir);
+        fs.rmSync(worktreeDir, { recursive: true, force: true });
+      } catch {}
     }
 
     fs.mkdirSync(path.join(this.rootDir, '.worktrees'), { recursive: true });
@@ -444,6 +548,7 @@ export class AgentSupervisor extends EventEmitter {
     }
 
     linkWorktreeAiDirectory(worktreeDir, this.rootDir);
+    linkWorktreeNodeModules(worktreeDir, this.rootDir);
   }
 
   private spawnRunner(run: ActiveRun, task: MasterPlanTask, options: DispatchOptions): void {
@@ -526,8 +631,14 @@ export class AgentSupervisor extends EventEmitter {
       return;
     }
     if (code !== 0) {
+      let errDetail = record.error;
+      if (!errDetail) {
+        const lastErrLine = run.buffer.trim().split('\n').filter(Boolean).pop()?.trim();
+        const baseMsg = `Runner exited with code ${code ?? 'null'}${signal ? ` (${signal})` : ''}`;
+        errDetail = lastErrLine && lastErrLine.length < 200 ? `${baseMsg}: ${lastErrLine}` : baseMsg;
+      }
       this.finalize(run, 'failed', {
-        error: record.error ?? `Runner exited with code ${code ?? 'null'}${signal ? ` (${signal})` : ''}`,
+        error: errDetail,
       });
       return;
     }
@@ -577,12 +688,16 @@ export class AgentSupervisor extends EventEmitter {
   private mergeWorktree(record: RunnerRecord): void {
     const branch = record.branch!;
     if (fs.existsSync(record.worktreeDir)) {
+      safeUnlinkWorktreeNodeModules(record.worktreeDir);
       safeUnlinkWorktreeAiDirectory(record.worktreeDir);
       spawnSync('git', ['worktree', 'remove', record.worktreeDir, '--force'], {
         cwd: this.rootDir,
         encoding: 'utf8',
         windowsHide: true,
       });
+      try {
+        spawnSync('git', ['worktree', 'prune'], { cwd: this.rootDir, stdio: 'ignore', windowsHide: true });
+      } catch {}
     }
 
     const merge = spawnSync('git', ['merge', branch, '--no-edit'], {

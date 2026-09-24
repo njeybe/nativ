@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import { MasterPlan, MasterPlanTask } from '../scanner/types.js';
-import { resolveProjectRoot, linkWorktreeAiDirectory, safeUnlinkWorktreeAiDirectory } from '../core/root-resolver.js';
+import {
+  resolveProjectRoot,
+  linkWorktreeAiDirectory,
+  safeUnlinkWorktreeAiDirectory,
+  linkWorktreeNodeModules,
+  safeUnlinkWorktreeNodeModules,
+} from '../core/root-resolver.js';
 import { CircuitBreaker } from '../governor/index.js';
 
 function isGitRepo(targetDir: string): boolean {
@@ -90,6 +96,12 @@ export async function runWorktreeCreate(
     }
 
     fs.mkdirSync(path.join(rootDir, '.worktrees'), { recursive: true });
+
+    // Prune stale git worktrees so git worktree add does not fail on orphaned records
+    try {
+      execSync('git worktree prune', { cwd: rootDir, stdio: 'ignore' });
+    } catch {}
+
     execSync(`git worktree add "${worktreeDir}" -b "${branchName}"`, {
       cwd: rootDir,
       stdio: options.json ? 'pipe' : 'inherit',
@@ -97,6 +109,7 @@ export async function runWorktreeCreate(
 
     // Link/mount .ai contract directory into the worktree
     const aiMounted = linkWorktreeAiDirectory(worktreeDir, rootDir);
+    linkWorktreeNodeModules(worktreeDir, rootDir);
 
     const result: WorktreeCreateResult = {
       success: true,
@@ -291,10 +304,21 @@ export async function runWorktreeMerge(
       console.log(pc.cyan(`\n🔀 Merging worktree for Task [${taskId}]...`));
     }
 
-    // 1. Remove worktree directory safely (unlinking .ai junction first)
+    // 1. Remove worktree directory safely (unlinking mounts first)
     if (fs.existsSync(worktreeDir)) {
+      safeUnlinkWorktreeNodeModules(worktreeDir);
       safeUnlinkWorktreeAiDirectory(worktreeDir);
-      execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
+      try {
+        execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
+      } catch {}
+      try {
+        execSync('git worktree prune', { cwd: rootDir, stdio: 'ignore' });
+      } catch {}
+      if (fs.existsSync(worktreeDir)) {
+        try {
+          fs.rmSync(worktreeDir, { recursive: true, force: true });
+        } catch {}
+      }
       if (!options.json) {
         console.log(pc.dim(`  ✔ Removed worktree directory: ${worktreeDir}`));
       }
@@ -380,8 +404,19 @@ export async function runWorktreeRemove(
     }
 
     if (fs.existsSync(worktreeDir)) {
+      safeUnlinkWorktreeNodeModules(worktreeDir);
       safeUnlinkWorktreeAiDirectory(worktreeDir);
-      execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
+      try {
+        execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: rootDir, stdio: options.json ? 'pipe' : 'inherit' });
+      } catch {}
+      try {
+        execSync('git worktree prune', { cwd: rootDir, stdio: 'ignore' });
+      } catch {}
+      if (fs.existsSync(worktreeDir)) {
+        try {
+          fs.rmSync(worktreeDir, { recursive: true, force: true });
+        } catch {}
+      }
       if (!options.json) {
         console.log(pc.dim(`  ✔ Removed worktree directory: ${worktreeDir}`));
       }
