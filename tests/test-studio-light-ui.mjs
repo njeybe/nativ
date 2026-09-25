@@ -295,6 +295,57 @@ try {
     console.log('✔ Dual-mode dispatch (engine + budget chips), grounded spend KPI and self-healing proposal tab are wired');
   }
 
+  // 4e. Tier 1 AI Strategist: header chip, 4-part decision card, canvas engine (ui_specs.md §5)
+  {
+    const ruleFor = (selector) => rules.filter((r) => r.selectors.includes(selector));
+    const declOf = (selector, prop) => ruleFor(selector).flatMap((r) => r.decls).filter((d) => d.prop === prop).map((d) => norm(resolve(d.value)));
+
+    const topbar = /<header\b[^>]*class=["']topbar["'][\s\S]*?<\/header>/i.exec(html)[0];
+    const chip = /<button\b[^>]*id=["']t1-chip["'][\s\S]*?<\/button>/i.exec(topbar)?.[0];
+    assert.ok(chip, 'top bar needs the Tier 1 strategist chip');
+    assert.ok(topbar.indexOf('id="t1-chip"') < topbar.indexOf('id="live"'), 'the chip sits beside the live stream indicator');
+    assert.match(decodeEntities(chip.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' '), /Tier 1 AI: Gemini 3\.8 Flash/);
+    assert.match(chip, /<svg\b/, 'chip glyphs are inline SVG, not emoji');
+    assert.match(chip, /aria-haspopup=["']dialog["']/);
+    assert.match(chip, /aria-expanded=["']false["']/);
+
+    const menu = /<div\b[^>]*id=["']t1-menu["'][\s\S]*?<\/dl>/i.exec(topbar)?.[0];
+    assert.ok(menu, 'chip needs its details dropdown');
+    assert.match(menu, /\bhidden\b/, 'the dropdown starts closed');
+    const menuText = decodeEntities(menu);
+    for (const label of ['gemini-3.8-flash', 'Last evaluation', 'Autonomous Auto-Triage', 'Evaluated', 'Auto-resolved', 'Human-escalated',
+      'Always halts on destructive database operations & major API contract breaks.']) {
+      assert.ok(menuText.includes(label), `Tier 1 dropdown missing "${label}"`);
+    }
+    assert.match(menu, /<button\b[^>]*id=["']t1-auto["'][^>]*role=["']switch["']|<button\b[^>]*role=["']switch["'][^>]*id=["']t1-auto["']/, 'auto-triage toggle is a switch');
+
+    for (const endpoint of ['/api/pipeline/triage/status', '/api/pipeline/triage/evaluate', '/api/pipeline/triage/config']) {
+      assert.match(code, new RegExp(`['"]${endpoint.replace(/\//g, '\\/')}['"]`), `client never calls ${endpoint}`);
+    }
+    assert.match(code, /autoTriageEnabled\s*:/, 'the toggle posts autoTriageEnabled');
+    assert.match(code, /notes\s*=\s*notes|payload\.notes/, 'card decisions travel as resolution notes');
+
+    for (const copy of ['Human Decision Required', 'What is Happening?', 'Why is This Happening?', 'Who &amp; What is Affected?',
+      'Actionable Options &amp; Trade-offs', '(Recommended)', 'Custom instructions', 'Auto-Resolved by Tier 1 AI Strategist',
+      'Applied contract modification', 'Auto-unblocking', 'Run Tier 1 Triage']) {
+      assert.ok(code.includes(copy), `self-healing tab missing "${copy}"`);
+    }
+    assert.match(code, /role="radiogroup"/, 'decision options form a radio group');
+    assert.match(code, /id="t1-custom"/, 'custom instructions need an input field');
+
+    assert.ok(declOf('.t1-card', 'border-left').includes('4pxsolid#d97706'), 'decision card has the amber #d97706 indicator bar');
+    assert.ok(declOf('.t1-badge', 'background').includes('#fef3c7'), 'Human Decision Required badge uses #fef3c7');
+    assert.ok(declOf('.t1-opt.is-recommended', 'background').includes('#4f46e5'), 'recommended option is the primary indigo button');
+    assert.ok(declOf('.t1-banner.is-resolved', 'background').includes('#059669'), 'auto-resolved banner is emerald');
+    assert.ok(declOf('.cable.is-t1.is-triage', 'stroke').includes('#0284c7'), 'triage cable pulses sky blue');
+    assert.ok(declOf('.cable.is-t1.is-resolved', 'stroke').includes('#059669'), 'resolution cable pulses emerald');
+    assert.ok(declOf('.cable.is-t1.is-human', 'stroke').includes('#d97706'), 'human-decision cable is amber');
+    assert.ok(declOf('.cnode.is-human .cnode-card', 'border-color').includes('#d97706'), 'nodes awaiting a decision glow amber');
+    assert.match(code, /t1-pulse/, 'strategist cables carry traveling pulses');
+    assert.match(code, /Tier 1 AI Strategist<\/div>/, 'the canvas shows the strategist engine node');
+    console.log('✔ Tier 1 strategist chip + dropdown, 4-part decision card, auto-resolve banner and canvas strategist cables are wired');
+  }
+
   // 5. Client script: valid JS, SSE listener and pipeline endpoint wiring
   {
     assert.ok(classic.length > 0, 'dashboard must ship an inline client script');

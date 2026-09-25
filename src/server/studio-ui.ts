@@ -413,6 +413,89 @@ body.has-console-min { padding-bottom: 56px; }
 .heal-result.is-error { color: color-mix(in srgb, var(--danger) 55%, #fff); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .heal-skel { height: 12px; margin: 8px 0; border-radius: 4px; background: var(--term-line); animation: blink 1.4s ease-in-out infinite; }
 @media (max-width: 768px) { .heal-grid { grid-template-columns: 1fr; } }
+/* Tier 1 AI Strategist (ui_specs.md §5): header chip, triage verdicts, decision card, canvas engine. */
+.t1 { position: relative; }
+.t1-chip { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 10px; font: 500 12.5px/1 var(--font); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-control); cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s; }
+.t1-chip:hover { background: var(--bg); border-color: var(--chip-border); }
+.t1-chip:focus-visible, .t1-switch:focus-visible, .t1-opt:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.t1-chip .t1-spark { color: var(--primary); }
+.t1-chip[data-state="triaging"] { border-color: var(--active-line); }
+.t1-chip[data-state="triaging"] .t1-spark { color: var(--active); animation: blink 1s ease-in-out infinite; }
+.t1-chip[data-state="attention"] { border-color: var(--proposal-line); }
+.t1-chip[data-state="attention"] .t1-spark { color: var(--proposal); }
+.t1-chip-label { color: var(--muted); }
+.t1-caret { color: var(--muted); transition: transform .15s; }
+.t1-chip[aria-expanded="true"] .t1-caret { transform: rotate(180deg); }
+.t1-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 300px; padding: 12px; font-size: 12.5px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-float); }
+.t1-menu:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.t1-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; color: var(--muted); }
+.t1-row b, .t1-row code { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.t1-row code { font-family: var(--mono); font-size: 12px; }
+.t1-switch { position: relative; width: 54px; height: 24px; padding: 0 8px; font: 600 10.5px/22px var(--mono); color: var(--muted); text-align: right; background: var(--chip); border: 1px solid var(--chip-border); border-radius: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
+.t1-switch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow); transition: transform .15s; }
+.t1-switch[aria-checked="true"] { color: #fff; text-align: left; background: var(--success); border-color: var(--success); }
+.t1-switch[aria-checked="true"]::before { transform: translateX(30px); }
+.t1-switch:disabled { opacity: .5; cursor: not-allowed; }
+.t1-policy { display: flex; gap: 6px; margin: 8px 0; padding: 8px; line-height: 1.45; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-control); }
+.t1-policy .icon { flex: none; margin-top: 1px; color: var(--success); }
+.t1-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.t1-stats div { min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--r-control); }
+.t1-stats dt { font-size: 11px; color: var(--muted); }
+.t1-stats dd { margin: 2px 0 0; font: 600 15px/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.t1-strip { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; padding: 8px 10px; color: var(--term-muted); border: 1px solid var(--term-line); border-radius: var(--r-control); }
+.t1-strip > span { display: inline-flex; align-items: center; gap: 6px; }
+.t1-strip strong { color: var(--term-text); font-weight: 600; }
+.t1-strip.is-triaging { border-color: color-mix(in srgb, var(--active) 60%, transparent); background: color-mix(in srgb, var(--active) 14%, transparent); }
+.rc-btn.t1-run { color: #fff; background: var(--active); border-color: var(--active); }
+.rc-btn.t1-run:hover:not(:disabled) { background: color-mix(in srgb, var(--active) 88%, #000); }
+.t1-banner { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 10px; font-weight: 600; border-radius: var(--r-control); }
+.t1-banner.is-resolved { color: #fff; background: var(--success); }
+.t1-banner.is-safe { color: var(--run); border: 1px solid color-mix(in srgb, var(--run) 45%, transparent); }
+.t1-card { margin: 0 0 12px; padding: 12px 12px 12px 16px; border: 1px solid var(--term-line); border-left: 4px solid var(--proposal); border-radius: var(--r-card); }
+.t1-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.t1-badge { font: 600 11.5px/20px var(--font); padding: 0 8px; color: var(--proposal); background: var(--proposal-bg); border-radius: var(--r-control); }
+.t1-meta { margin-left: auto; font: 500 11px/18px var(--mono); color: var(--term-muted); }
+.t1-parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: t1; }
+.t1-parts > li { counter-increment: t1; }
+.t1-parts h4 { margin: 0 0 3px; font-size: 12.5px; font-weight: 600; color: var(--term-text); }
+.t1-parts h4::before { content: counter(t1) ". "; color: var(--proposal); }
+.t1-parts p { margin: 0; color: var(--term-muted); overflow-wrap: anywhere; }
+.t1-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.t1-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 1 1 200px; min-width: 0; padding: 8px 10px; font: inherit; text-align: left; color: var(--term-text); background: transparent; border: 1px solid var(--muted); border-radius: var(--r-control); cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s; }
+.t1-opt b { font-weight: 600; }
+.t1-opt span { font-size: 12px; color: var(--term-muted); }
+.t1-opt:hover { border-color: var(--term-text); }
+.t1-opt.is-recommended { background: var(--primary); border-color: var(--primary); }
+.t1-opt.is-recommended:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.t1-opt.is-recommended span { color: color-mix(in srgb, #fff 82%, var(--primary)); }
+.t1-opt[aria-checked="true"] { box-shadow: 0 0 0 2px var(--term-bg), 0 0 0 4px var(--proposal); }
+.t1-custom { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--term-muted); }
+.t1-custom textarea { width: 100%; box-sizing: border-box; min-height: 52px; padding: 6px 8px; font: 12.5px/1.45 var(--font); color: var(--term-text); background: rgb(148 163 184 / 0.08); border: 1px solid var(--term-line); border-radius: var(--r-control); resize: vertical; }
+.t1-custom textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.t1-decided { margin: 8px 0 0; font-size: 12px; color: var(--term-muted); }
+.cable.is-t1 { stroke: var(--chip-border); stroke-width: 2px; stroke-dasharray: 2 6; }
+.cable.is-t1.is-triage { stroke: var(--active); stroke-dasharray: 6 6; animation: cable-dash 1s linear infinite; }
+.cable.is-t1.is-resolved { stroke: var(--success); stroke-dasharray: none; }
+.cable.is-t1.is-human { stroke: var(--proposal); stroke-dasharray: 4 4; }
+.t1-pulse { fill: var(--active); filter: drop-shadow(0 0 6px var(--active)); }
+.t1-pulse.is-resolved { fill: var(--success); filter: drop-shadow(0 0 6px var(--success)); }
+.cnode.is-human .cnode-card { border-color: var(--proposal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--proposal) 20%, transparent), 0 0 20px -3px color-mix(in srgb, var(--proposal) 45%, transparent); }
+.t1-node-card { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--primary-line); border-radius: var(--r-card); box-shadow: var(--shadow); transition: border-color .2s, box-shadow .2s; }
+.t1-node-card .t1-spark { flex: none; color: var(--primary); }
+.t1-node-card.is-triaging { border-color: var(--active); box-shadow: 0 0 0 3px color-mix(in srgb, var(--active) 18%, transparent), 0 0 20px -3px color-mix(in srgb, var(--active) 40%, transparent); }
+.t1-node-card.is-triaging .t1-spark { color: var(--active); }
+.t1-node-card.is-resolved { border-color: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent), 0 0 20px -3px color-mix(in srgb, var(--success) 40%, transparent); }
+.t1-node-card.is-resolved .t1-spark { color: var(--success); }
+.t1-node-card.is-human { border-color: var(--proposal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--proposal) 20%, transparent); }
+.t1-node-card.is-human .t1-spark { color: var(--proposal); }
+.t1-node-text { min-width: 0; }
+.t1-node-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.t1-node-sub { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { .t1-chip[data-state="triaging"] .t1-spark, .cable.is-t1.is-triage { animation: none; } }
+@media (max-width: 760px) {
+  .t1-chip-label, .t1-chip-model { display: none; }
+  .t1-menu { position: fixed; top: 56px; left: 16px; right: 16px; width: auto; }
+}
 .df-add { display: block; color: var(--run); background: color-mix(in srgb, var(--run) 12%, transparent); }
 .df-del { display: block; color: color-mix(in srgb, var(--danger) 55%, #fff); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .df-hunk { display: block; color: var(--run-line); }
@@ -774,6 +857,17 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
 <header class="topbar">
   <div class="crumb"><span class="crumb-root">Mission Control</span><span class="crumb-sep" aria-hidden="true">/</span><span class="crumb-view" id="crumb-view">Overview &amp; Status</span></div>
   <div class="appbar-actions">
+    <div class="t1" id="t1">
+      <button class="t1-chip" id="t1-chip" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="t1-menu" data-state="idle" title="Tier 1 AI Strategist"><svg class="icon t1-spark" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5l1.6 4.9 4.9 1.6-4.9 1.6L8 14.5l-1.6-4.9L1.5 8l4.9-1.6z"/></svg><span class="t1-chip-label">Tier 1 AI:</span><span class="t1-chip-model" id="t1-chip-model">Gemini 3.8 Flash</span><svg class="icon t1-caret" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button>
+      <div class="t1-menu" id="t1-menu" role="dialog" aria-label="Tier 1 AI Strategist" tabindex="-1" hidden>
+        <div class="t1-row"><span>Active model</span><code id="t1-model">gemini-3.8-flash</code></div>
+        <div class="t1-row"><span>Last evaluation</span><b id="t1-latency">No evaluations yet</b></div>
+        <div class="t1-row"><span>Gemini API key</span><b id="t1-key">Checking</b></div>
+        <div class="t1-row"><span id="t1-auto-label">Autonomous Auto-Triage</span><button class="t1-switch" id="t1-auto" type="button" role="switch" aria-checked="false" aria-labelledby="t1-auto-label" title="When on, fixes Tier 1 proves safe are applied without asking" disabled>OFF</button></div>
+        <p class="t1-policy"><svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><path d="M5.6 8.1l1.7 1.7 3.2-3.3"/></svg>Always halts on destructive database operations &amp; major API contract breaks.</p>
+        <dl class="t1-stats"><div><dt>Evaluated</dt><dd id="t1-evaluated">0</dd></div><div><dt>Auto-resolved</dt><dd id="t1-resolved">0</dd></div><div><dt>Human-escalated</dt><dd id="t1-human">0</dd></div></dl>
+      </div>
+    </div>
     <span class="live" id="live" data-state="connecting" role="status" aria-live="polite"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="live-label">Connecting</span><span class="live-tag">SSE</span></span>
     <button class="btn" id="btn-refresh-all" type="button"><svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/><path d="M13.5 2.5v3h-3"/></svg>Refresh</button>
   </div>
@@ -1090,6 +1184,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   var $ = function (id) { return document.getElementById(id); };
 
   var ICON = {
+    spark: '<svg class="icon t1-spark" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5l1.6 4.9 4.9 1.6-4.9 1.6L8 14.5l-1.6-4.9L1.5 8l4.9-1.6z"/></svg>',
     check: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>',
     x: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
     shield: '<svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><path d="M5.6 8.1l1.7 1.7 3.2-3.3"/></svg>',
@@ -1256,9 +1351,10 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     benchmarks: '/api/pipeline/benchmarks',
     runs: '/api/pipeline/tasks/runs',
     telemetry: '/api/pipeline/telemetry/detailed',
-    escalations: '/api/pipeline/escalations?status=pending_review'
+    escalations: '/api/pipeline/escalations?status=pending_review',
+    triage: '/api/pipeline/triage/status'
   };
-  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs', 'telemetry', 'escalations'];
+  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs', 'telemetry', 'escalations', 'triage'];
   /** Circuit-breaker budget from the task execution loop. */
   var MAX_ATTEMPTS = 3;
   var REDUCED_MOTION = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
@@ -1274,6 +1370,11 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     telemetry: null,
     /** Pending escalations, newest first; each may carry a self-healing proposedPatch. */
     escalations: [],
+    /** GET /api/pipeline/triage/status, plus this tab's in-flight (escalationId → taskId) and recent auto-resolutions (taskId → time). */
+    triage: null,
+    triageRunning: {},
+    triageRecent: {},
+    triageLast: null,
     sim: { active: false, speed: 1, scenario: 'default', zoom: 1, panX: 0, panY: 0 },
     loaded: {},
     errors: {},
@@ -1362,6 +1463,10 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     } else if (part === 'escalations') {
       pipe.escalations = Array.isArray(body.escalations) ? body.escalations : [];
       syncHealTab();
+      renderTriageChip();
+    } else if (part === 'triage') {
+      pipe.triage = body;
+      renderTriageChip();
     }
   }
 
@@ -2198,12 +2303,220 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     return ['logs', 'diff', 'heal'].filter(function (name) { return !$('rc-tab-' + name).hidden; });
   }
 
+  // ─── Tier 1 AI Strategist (/api/pipeline/triage/*, ui_specs.md §5) ─────────
+  /** Decision-card selection for the escalation on screen; survives re-renders from live updates. */
+  var t1Choice = { escalationId: null, index: 0, custom: '' };
+
+  /** "gemini-3.8-flash" -> "Gemini 3.8 Flash". */
+  function modelName(id) {
+    return String(id || 'gemini').split('-').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+  }
+  function triageRunningCount() { return Object.keys(pipe.triageRunning).length; }
+  /** Pending escalations whose stored Tier 1 verdict asks the product owner to decide. */
+  function awaitingDecision() {
+    return (pipe.escalations || []).filter(function (e) {
+      return e.status === 'pending_review' && e.triage && e.triage.classification === 'REQUIRE_HUMAN_DECISION';
+    });
+  }
+  function lastTriage() {
+    if (pipe.triageLast) return pipe.triageLast;
+    var newest = null;
+    (pipe.escalations || []).forEach(function (e) {
+      if (e.triage && (!newest || String(e.triage.evaluatedAt) > String(newest.evaluatedAt))) newest = e.triage;
+    });
+    return newest;
+  }
+
+  function renderTriageChip() {
+    var t = pipe.triage;
+    var model = (t && t.model) || 'gemini-3.8-flash';
+    var waiting = awaitingDecision().length;
+    var state = triageRunningCount() ? 'triaging' : waiting ? 'attention' : 'idle';
+    var chip = $('t1-chip');
+    chip.setAttribute('data-state', state);
+    chip.title = state === 'triaging' ? 'Tier 1 AI Strategist is assessing an escalation'
+      : state === 'attention' ? waiting + ' escalation' + (waiting === 1 ? ' needs' : 's need') + ' your decision' : 'Tier 1 AI Strategist';
+    $('t1-chip-model').textContent = modelName(model);
+    $('t1-model').textContent = model;
+    var last = lastTriage();
+    $('t1-latency').textContent = last ? fmtMs(last.latencyMs) + ' · ' + modelName(last.model || model) : 'No evaluations yet';
+    $('t1-key').textContent = pipe.errors.triage && !t ? 'Status unavailable' : !t ? 'Checking' : t.hasApiKey ? 'Configured' : 'Not set (offline rules)';
+    var sw = $('t1-auto');
+    var on = !!(t && t.autoTriageEnabled);
+    sw.setAttribute('aria-checked', String(on));
+    sw.textContent = on ? 'ON' : 'OFF';
+    sw.disabled = !t || !!pipe.busy.triageConfig;
+    var stats = (t && t.stats) || {};
+    $('t1-evaluated').textContent = num(stats.totalEvaluated || 0);
+    $('t1-resolved').textContent = num(stats.autoResolved || 0);
+    $('t1-human').textContent = num(stats.escalatedToHuman || 0);
+  }
+
+  function setTriageMenu(open) {
+    var menu = $('t1-menu');
+    if (menu.hidden === !open) return;
+    menu.hidden = !open;
+    $('t1-chip').setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    renderTriageChip();
+    fetchPipeline(['triage']);
+    ($('t1-auto').disabled ? menu : $('t1-auto')).focus();
+  }
+
+  function setAutoTriage(enabled) {
+    if (pipe.busy.triageConfig) return;
+    pipe.busy.triageConfig = true;
+    renderTriageChip();
+    postJson('/api/pipeline/triage/config', { autoTriageEnabled: enabled }).then(function (body) {
+      pipe.triage = Object.assign({}, pipe.triage || {}, { autoTriageEnabled: !!(body.config && body.config.autoTriageEnabled) });
+      toast(enabled ? 'Autonomous Auto-Triage on: fixes Tier 1 proves safe are applied without asking' : 'Autonomous Auto-Triage off: every fix waits for your approval', 'ok');
+    }, function (e) {
+      toast('Could not change Autonomous Auto-Triage: ' + e.message);
+    }).then(function () {
+      pipe.busy.triageConfig = false;
+      renderTriageChip();
+      if (rc.tab === 'heal') renderHeal();
+    });
+  }
+
+  /** Asks the strategist to assess one escalation. The server stores the verdict on the escalation record. */
+  function runTriage(escalation) {
+    if (!escalation || pipe.triageRunning[escalation.id]) return;
+    var taskId = escalation.taskId;
+    pipe.triageRunning[escalation.id] = taskId;
+    rc.heal = { taskId: taskId, busy: true, result: null };
+    renderTriageChip();
+    renderHeal();
+    repaint('canvas');
+    postJson('/api/pipeline/triage/evaluate', { escalationId: escalation.id }).then(function (body) {
+      pipe.triageLast = { latencyMs: body.latencyMs, model: body.model };
+      t1Choice.escalationId = null; // a re-run may bring new options
+      rc.heal = { taskId: taskId, busy: false, result: null, triage: body, escalation: escalation };
+      if (body.autoPatchApplied) {
+        pipe.triageRecent[taskId] = Date.now();
+        setTimeout(function () { delete pipe.triageRecent[taskId]; repaint('canvas'); }, 12000);
+        toast('Tier 1 auto-resolved ' + escalation.id + ' in ' + fmtMs(body.latencyMs), 'ok');
+      } else if (body.classification === 'REQUIRE_HUMAN_DECISION') {
+        toast(escalation.id + ' needs your decision', 'ok');
+      }
+      // A resolved escalation leaves the pending list; keep its stored verdict (applied patch, unblock) on screen.
+      return api('/api/pipeline/escalations?status=all').then(function (list) {
+        (list.escalations || []).some(function (e) {
+          if (e.id !== escalation.id) return false;
+          if (rc.heal && rc.heal.triage === body) rc.heal.escalation = e;
+          return true;
+        });
+      }, function () { /* the evaluate response is enough to render */ });
+    }, function (e) {
+      rc.heal = { taskId: taskId, busy: false, result: { ok: false, message: 'Tier 1 triage failed: ' + e.message } };
+      toast('Tier 1 triage failed for ' + escalation.id + ': ' + e.message);
+    }).then(function () {
+      delete pipe.triageRunning[escalation.id];
+      renderTriageChip();
+      renderHeal();
+      repaint('canvas');
+      return fetchPipeline(['escalations', 'triage', 'status', 'tasks', 'telemetry']);
+    });
+  }
+
+  /** Verdict for the console task: this tab's latest evaluation first, else the one stored on the escalation. */
+  function triageFor(escalation, heal) {
+    if (heal && heal.triage) {
+      var stored = heal.escalation || escalation;
+      return { verdict: (stored && stored.triage) || heal.triage, escalation: stored };
+    }
+    if (escalation && escalation.triage) return { verdict: escalation.triage, escalation: escalation };
+    return null;
+  }
+
+  function triageStrip(escalation, hasVerdict) {
+    var running = !!pipe.triageRunning[escalation.id];
+    var text = running ? 'is assessing this escalation' : hasVerdict ? 'has assessed this escalation. Run it again after the contracts change.'
+      : 'can assess this escalation: resolve a safe fix automatically or prepare a decision card for you.';
+    return '<div class="t1-strip' + (running ? ' is-triaging' : '') + '" role="status"><span>' + ICON.spark + '<strong>Tier 1 AI Strategist</strong> ' + esc(text) + '</span>' +
+      '<button class="rc-btn t1-run" type="button" data-heal="t1-run"' + (running ? ' disabled' : '') + '>' +
+      (running ? '<span class="spinner" aria-hidden="true"></span>Triaging…' : hasVerdict ? 'Re-run Triage' : 'Run Tier 1 Triage') + '</button></div>';
+  }
+
+  function triageVerdictHtml(v, escalation) {
+    var meta = modelName(v.model) + ' in ' + fmtMs(v.latencyMs);
+    if (v.classification === 'AUTO_RESOLVE' && v.autoPatchApplied) {
+      var patch = (v.resolution && v.resolution.patch) || (escalation.proposedPatch && escalation.proposedPatch.candidate);
+      var unblocked = v.unblockedTaskId || (escalation.resolution && escalation.resolution.unblockedTaskId);
+      return '<p class="t1-banner is-resolved" role="status">' + ICON.spark + esc('Auto-Resolved by Tier 1 AI Strategist (' + meta + ')') + '</p>' +
+        (patch ? '<section class="heal-section"><h4>Applied contract modification</h4><pre class="heal-patch">' + patchLine('+', patch) + '</pre></section>' : '') +
+        '<p class="heal-diag"><strong>Auto-unblocking:</strong> ' +
+        esc(unblocked ? 'Task ' + unblocked + ' is back in the queue and can be dispatched again.' : 'The task was not blocked, so nothing needed unblocking.') +
+        (v.reasoning ? ' ' + esc(v.reasoning) : '') + '</p>';
+    }
+    if (v.classification === 'AUTO_RESOLVE') {
+      var auto = !!(pipe.triage && pipe.triage.autoTriageEnabled);
+      var next = escalation.proposedPatch
+        ? 'Nothing was written yet. Approve the proposal below' + (auto ? '.' : ', or turn on Autonomous Auto-Triage and run triage again.')
+        : 'No contract change is needed. Approve below to unblock the task.';
+      return '<p class="t1-banner is-safe" role="status">' + ICON.spark + esc('Tier 1 AI Strategist: safe to resolve (' + meta + ')') + '</p>' +
+        '<p class="heal-diag">' + esc((v.reasoning ? v.reasoning + ' ' : '') + next) + '</p>';
+    }
+    return humanCardHtml(v, escalation, meta);
+  }
+
+  /** ui_specs.md §5.2: amber 4-part card. Options are selectable; the footer commits the choice. */
+  function humanCardHtml(v, escalation, meta) {
+    var card = v.humanCard || {};
+    var options = Array.isArray(card.options) ? card.options : [];
+    var recorded = escalation.humanDecision || null;
+    if (t1Choice.escalationId !== escalation.id) {
+      var pick = 0;
+      options.some(function (o, i) { if (o.recommended) { pick = i; return true; } return false; });
+      if (recorded) options.some(function (o, i) { if (o.id === recorded.optionId) { pick = i; return true; } return false; });
+      t1Choice = { escalationId: escalation.id, index: pick, custom: recorded && recorded.instructions ? recorded.instructions : '' };
+    }
+    var buttons = options.map(function (o, i) {
+      var label = String(o.label || 'Option ' + (i + 1));
+      var tag = o.recommended && !/recommended/i.test(label) ? ' (Recommended)' : '';
+      return '<button class="t1-opt' + (o.recommended ? ' is-recommended' : '') + '" type="button" role="radio" aria-checked="' + (t1Choice.index === i) + '"' +
+        ' tabindex="' + (t1Choice.index === i ? '0' : '-1') + '" data-t1-opt="' + i + '"><b>' + esc(label + tag) + '</b><span>' + esc(o.outcome || o.description || '') + '</span></button>';
+    }).join('');
+    return '<article class="t1-card" aria-label="Human decision required">' +
+      '<div class="t1-card-head"><span class="t1-badge">Human Decision Required</span><span class="heal-tag">' + esc(escalation.id) + '</span><span class="t1-meta">' + esc(meta) + '</span></div>' +
+      '<ol class="t1-parts">' +
+        '<li><h4>What is Happening?</h4><p>' + esc(card.symptom || escalation.summary || '') + '</p></li>' +
+        '<li><h4>Why is This Happening?</h4><p>' + esc(card.rootCause || '') + '</p></li>' +
+        '<li><h4>Who &amp; What is Affected?</h4><p>' + esc(card.blastRadius || '') + '</p></li>' +
+        '<li><h4>Actionable Options &amp; Trade-offs</h4>' +
+          '<div class="t1-options" role="radiogroup" aria-label="Decision options">' + buttons + '</div>' +
+          '<label class="t1-custom" for="t1-custom">Custom instructions (optional, used instead of the option above)' +
+          '<textarea id="t1-custom" maxlength="900" rows="2" placeholder="Tell the agent exactly what to do instead">' + esc(t1Choice.custom) + '</textarea></label>' +
+          (recorded ? '<p class="t1-decided">Recorded from the terminal: ' + esc(recorded.label || recorded.optionId) + '</p>' : '') +
+        '</li>' +
+      '</ol>' +
+    '</article>';
+  }
+
+  function decisionActions(escalation) {
+    return '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="t1-dismiss">Dismiss Escalation</button>' +
+      '<button class="rc-btn approve" type="button" data-heal="t1-decide">' + (escalation.proposedPatch ? 'Apply Proposal &amp; Unblock' : 'Unblock with This Decision') + '</button></div>';
+  }
+
+  /** Sends the card choice (or custom instructions) as the resolution notes the unblocked agent reads. */
+  function commitDecision(decision) {
+    var escalation = rc.taskId ? escalationFor(rc.taskId) : null;
+    var tri = triageFor(escalation, rc.heal && rc.heal.taskId === rc.taskId ? rc.heal : null);
+    if (!escalation || !tri) return;
+    var options = (tri.verdict.humanCard && tri.verdict.humanCard.options) || [];
+    var chosen = options[t1Choice.index];
+    var custom = String(t1Choice.custom || '').trim();
+    var notes = custom ? 'Product owner instructions: ' + custom
+      : chosen ? 'Product owner chose "' + (chosen.label || chosen.id) + '": ' + (chosen.outcome || chosen.description || '') : '';
+    resolveEscalation(decision, notes.slice(0, 1000), decision === 'approve' ? 't1-decide' : 't1-dismiss');
+  }
+
   // ─── Console tab 3: self-healing proposal review (/api/pipeline/escalations) ─
   /** Shows the tab only while the console's task has a pending escalation; keeps the panel in sync. */
   function syncHealTab() {
     var escalation = rc.taskId ? escalationFor(rc.taskId) : null;
     // Keep the tab while a just-finished resolution is still on screen.
-    var show = !!escalation || !!(rc.heal && rc.heal.result && rc.heal.taskId === rc.taskId);
+    var show = !!escalation || !!(rc.heal && (rc.heal.result || rc.heal.triage) && rc.heal.taskId === rc.taskId);
     $('rc-tab-heal').hidden = !show;
     $('rc-heal-count').hidden = !(escalation && escalation.proposedPatch);
     if (!show && rc.tab === 'heal') setConsoleTab('logs');
@@ -2216,15 +2529,16 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     return '<span class="' + (sign === '-' ? 'df-del' : 'df-add') + '">' + sign + ' ' + esc(p.operation + ' ' + p.path + value) + '</span>';
   }
 
-  function healBody(escalation) {
+  function healBody(escalation, opts) {
+    var withActions = !(opts && opts.actions === false);
     var p = escalation.proposedPatch;
     var diag = '<p class="heal-diag"><strong>' + esc(escalation.summary || 'Escalated') + '</strong>' +
       (escalation.details ? '<br>' + esc(escalation.details) : '') + '</p>';
     if (!p) {
       return '<div class="heal-head"><h3>No automatic fix could be proven</h3><span class="heal-tag">' + esc(escalation.id) + '</span></div>' + diag +
         '<p class="heal-diag">' + esc(escalation.recommendedAction || 'Review the affected contracts, then unblock the task or dismiss the escalation.') + '</p>' +
-        '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="reject">Dismiss</button>' +
-        '<button class="rc-btn approve" type="button" data-heal="approve">Approve &amp; Unblock Task</button></div>';
+        (withActions ? '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="reject">Dismiss</button>' +
+        '<button class="rc-btn approve" type="button" data-heal="approve">Approve &amp; Unblock Task</button></div>' : '');
     }
     var proof = p.verificationProof || {};
     var verdict = proof.passed
@@ -2243,12 +2557,14 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
         '<section class="heal-section"><h4>' + (p.kind === 'restore_tests' ? 'Restoration plan' : 'Rejected change &#8594; proposed change') + '</h4><pre class="heal-patch">' + patch + '</pre></section>' +
         '<section class="heal-section"><h4>Isolated verification</h4><ul class="heal-checks">' + (checks || '<li>No checks recorded.</li>') + '</ul></section>' +
       '</div>' +
-      '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="reject">Reject Proposal</button>' +
-      '<button class="rc-btn approve" type="button" data-heal="approve"' + (proof.passed ? '' : ' disabled title="Only sandbox-verified proposals can be applied"') + '>Approve &amp; Apply Patch</button></div>';
+      (withActions ? '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="reject">Reject Proposal</button>' +
+      '<button class="rc-btn approve" type="button" data-heal="approve"' + (proof.passed ? '' : ' disabled title="Only sandbox-verified proposals can be applied"') + '>Approve &amp; Apply Patch</button></div>' : '');
   }
 
   function renderHeal() {
     var panel = $('rc-heal');
+    // Live updates must not wipe instructions while they are being typed.
+    if (document.activeElement && document.activeElement.id === 't1-custom' && panel.contains(document.activeElement)) return;
     var heal = rc.heal && rc.heal.taskId === rc.taskId ? rc.heal : null;
     var result = heal && heal.result ? '<p class="heal-result' + (heal.result.ok ? '' : ' is-error') + '" role="status">' + esc(heal.result.message) + '</p>' : '';
     if (!pipe.loaded.escalations) { panel.innerHTML = '<div class="heal-skel"></div><div class="heal-skel"></div><div class="heal-skel" style="width:60%"></div>'; return; }
@@ -2258,24 +2574,34 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       return;
     }
     var escalation = escalationFor(rc.taskId);
-    if (!escalation) {
+    var tri = triageFor(escalation, heal);
+    if (!escalation && !tri) {
       panel.innerHTML = result || '<p class="heal-diag">No pending proposal for this task. When the circuit breaker trips on a third failed attempt, a sandbox-verified fix appears here for review.</p>';
       return;
     }
-    panel.innerHTML = result + healBody(escalation);
+    var html = result;
+    if (escalation) html += triageStrip(escalation, !!tri);
+    if (tri) html += triageVerdictHtml(tri.verdict, tri.escalation);
+    if (escalation) {
+      var deciding = !!tri && tri.verdict.classification === 'REQUIRE_HUMAN_DECISION' && tri.escalation.id === escalation.id;
+      html += healBody(escalation, { actions: !deciding }) + (deciding ? decisionActions(escalation) : '');
+    }
+    panel.innerHTML = html;
     if (heal && heal.busy) panel.querySelectorAll('[data-heal]').forEach(function (b) { b.disabled = true; });
   }
 
   /** One click resolves: approve applies the proposal and unblocks the task, reject dismisses it. */
-  function resolveEscalation(decision) {
+  function resolveEscalation(decision, notes, buttonKey) {
     var escalation = rc.taskId ? escalationFor(rc.taskId) : null;
     if (!escalation || (rc.heal && rc.heal.busy)) return;
     var taskId = rc.taskId;
     rc.heal = { taskId: taskId, busy: true, result: null };
     renderHeal();
-    var btn = $('rc-heal').querySelector('[data-heal="' + decision + '"]');
+    var btn = $('rc-heal').querySelector('[data-heal="' + (buttonKey || decision) + '"]');
     if (btn) btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (decision === 'approve' ? 'Applying…' : 'Rejecting…');
-    postJson('/api/pipeline/escalations/resolve', { escalationId: escalation.id, decision: decision }).then(function (body) {
+    var payload = { escalationId: escalation.id, decision: decision };
+    if (notes) payload.notes = notes;
+    postJson('/api/pipeline/escalations/resolve', payload).then(function (body) {
       rc.heal = { taskId: taskId, busy: false, result: { ok: true, message: body.message || 'Escalation resolved.' } };
       toast(body.message || 'Escalation resolved', 'ok');
     }, function (e) {
@@ -2283,7 +2609,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       toast('Could not ' + decision + ' ' + escalation.id + ': ' + e.message);
     }).then(function () {
       renderHeal();
-      return fetchPipeline(['escalations', 'status', 'tasks', 'telemetry']);
+      return fetchPipeline(['escalations', 'status', 'tasks', 'telemetry', 'triage']);
     });
   }
 
@@ -2501,7 +2827,24 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       });
     });
 
-    var svgW = Math.max(1040, 50 + maxCols * (nodeW + gapX) + 80);
+    // Tier 1 strategist engine (ui_specs.md §5.3), one column right of the DAG, cabled to escalated nodes:
+    // sky blue while triaging, emerald after an autonomous resolution, amber while a human decision is pending.
+    var t1W = 230, t1H = 64;
+    var t1X = 50 + maxCols * (nodeW + gapX), t1Y = 50;
+    var t1Links = [];
+    var humanNodes = {};
+    tasks.forEach(function (t) {
+      if (!nodePos[t.id]) return;
+      var escalation = escalationFor(t.id);
+      var human = !!(escalation && escalation.triage && escalation.triage.classification === 'REQUIRE_HUMAN_DECISION');
+      if (human) humanNodes[t.id] = true;
+      if (escalation && pipe.triageRunning[escalation.id]) t1Links.push({ id: t.id, state: 'is-triage' });
+      else if (pipe.triageRecent[t.id]) t1Links.push({ id: t.id, state: 'is-resolved' });
+      else if (human) t1Links.push({ id: t.id, state: 'is-human' });
+      else if (escalation) t1Links.push({ id: t.id, state: '' });
+    });
+
+    var svgW = Math.max(1040, t1X + t1W + 80);
     var svgH = Math.max(520, 50 + maxRows * (nodeH + gapY) + 80);
 
     // Build cables (edges)
@@ -2537,6 +2880,28 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       });
     });
 
+    var t1Cables = '';
+    t1Links.forEach(function (link) {
+      var pos = nodePos[link.id];
+      var fromX = t1X, fromY = t1Y + t1H / 2;
+      var toX = pos.x + nodeW / 2, toY = pos.y;
+      var d = 'M ' + fromX + ' ' + fromY + ' C ' + (fromX - 80) + ' ' + fromY + ', ' + toX + ' ' + (toY - 60) + ', ' + toX + ' ' + toY;
+      t1Cables += '<path class="cable is-t1' + (link.state ? ' ' + link.state : '') + '" d="' + d + '"/>';
+      if ((link.state === 'is-triage' || link.state === 'is-resolved') && !REDUCED_MOTION.matches) {
+        t1Cables += '<circle class="t1-pulse' + (link.state === 'is-resolved' ? ' is-resolved' : '') + '" r="4.5"><animateMotion path="' + d + '" dur="1.4s" repeatCount="indefinite"/></circle>';
+      }
+    });
+    var t1State = triageRunningCount() ? 'is-triaging' : Object.keys(pipe.triageRecent).length ? 'is-resolved' : Object.keys(humanNodes).length ? 'is-human' : '';
+    var t1Sub = t1State === 'is-triaging' ? 'Triaging an escalation'
+      : t1State === 'is-resolved' ? 'Auto-resolved and unblocked'
+      : t1State === 'is-human' ? 'Waiting on your decision'
+      : t1Links.length ? t1Links.length + ' escalation' + (t1Links.length === 1 ? '' : 's') + ' to assess' : 'Standing by';
+    var t1Model = modelName((pipe.triage && pipe.triage.model) || 'gemini-3.8-flash');
+    var t1Node = '<g class="t1-node" transform="translate(' + t1X + ',' + t1Y + ')"><foreignObject width="' + t1W + '" height="' + t1H + '">' +
+      '<div class="t1-node-card ' + t1State + '" xmlns="http://www.w3.org/1999/xhtml" role="img" aria-label="' + esc('Tier 1 AI Strategist: ' + t1Sub) + '">' + ICON.spark +
+      '<div class="t1-node-text"><div class="t1-node-title">Tier 1 AI Strategist</div><div class="t1-node-sub" title="' + esc(t1Model + ' · ' + t1Sub) + '">' + esc(t1Model + ' · ' + t1Sub) + '</div></div>' +
+      '</div></foreignObject></g>';
+
     // Build node cards inside SVG foreignObject
     var nodesHtml = '';
     tasks.forEach(function (t) {
@@ -2553,7 +2918,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       var statusText = effectiveStatus === 'completed' ? 'Done' : active ? 'Running' : effectiveStatus === 'blocked' ? 'Blocked' : 'Queued';
       var statusTone = effectiveStatus === 'completed' ? 'success' : active ? 'active' : effectiveStatus === 'blocked' ? 'danger' : 'neutral';
 
-      nodesHtml += '<g class="cnode ' + stCls + '" data-action="run-console" data-key="' + esc(t.id) + '" transform="translate(' + pos.x + ',' + pos.y + ')">' +
+      nodesHtml += '<g class="cnode ' + stCls + (humanNodes[t.id] ? ' is-human' : '') + '" data-action="run-console" data-key="' + esc(t.id) + '" transform="translate(' + pos.x + ',' + pos.y + ')">' +
         '<foreignObject width="' + nodeW + '" height="' + nodeH + '">' +
         '<div class="cnode-card ' + stCls + '" xmlns="http://www.w3.org/1999/xhtml">' +
           '<div class="cnode-head">' +
@@ -2564,6 +2929,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
           '<div class="cnode-foot">' +
             '<span class="cnode-port ' + (active ? 'is-active' : effectiveStatus === 'completed' ? 'is-done' : '') + '"></span>' +
             '<span class="badge badge-' + statusTone + '">' + esc(statusText) + '</span>' +
+            (humanNodes[t.id] ? '<span class="badge badge-proposal">Decision</span>' : '') +
             '<span class="cnode-port ' + (active ? 'is-active' : effectiveStatus === 'completed' ? 'is-done' : '') + '"></span>' +
           '</div>' +
         '</div>' +
@@ -2609,8 +2975,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       '</defs>' +
       '<rect width="100%" height="100%" fill="url(#dot-grid)"/>' +
       '<g id="canvas-stage" transform="' + transform + '">' +
-        '<g class="cables-layer">' + cablesHtml + pulsesHtml + '</g>' +
-        '<g class="nodes-layer">' + nodesHtml + '</g>' +
+        '<g class="cables-layer">' + cablesHtml + pulsesHtml + t1Cables + '</g>' +
+        '<g class="nodes-layer">' + nodesHtml + t1Node + '</g>' +
       '</g>' +
     '</svg>';
 
@@ -2825,7 +3191,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   // Keys are SSE event names on the wire; values are the pipeline slices each one invalidates.
   var EVENT_PARTS = {
     // .ai/escalation.json writes (circuit-breaker trips, resolutions) arrive as plan changes.
-    'plan_change': ['status', 'tasks', 'worktrees', 'escalations'],
+    'plan_change': ['status', 'tasks', 'worktrees', 'escalations', 'triage'],
     // The server also reports .ai/benchmark_report.json writes (e.g. a CLI "nativ bench") as telemetry changes.
     'telemetry_change': ['status', 'benchmarks', 'telemetry'],
     'benchmark_change': ['benchmarks'],
@@ -4272,11 +4638,50 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   });
   $('rc-diff-refresh').addEventListener('click', function () { if (rc.taskId) loadConsoleDiff(rc.taskId); });
   $('rc-heal').addEventListener('click', function (e) {
+    var opt = e.target.closest('[data-t1-opt]');
+    if (opt) {
+      t1Choice.index = Number(opt.getAttribute('data-t1-opt'));
+      $('rc-heal').querySelectorAll('[data-t1-opt]').forEach(function (b) {
+        b.setAttribute('aria-checked', String(b === opt));
+        b.tabIndex = b === opt ? 0 : -1;
+      });
+      return;
+    }
     var btn = e.target.closest('[data-heal]');
     if (!btn || btn.disabled) return;
     var what = btn.getAttribute('data-heal');
     if (what === 'retry') { pipe.loaded.escalations = false; renderHeal(); fetchPipeline(['escalations']); }
+    else if (what === 't1-run') runTriage(rc.taskId ? escalationFor(rc.taskId) : null);
+    else if (what === 't1-decide') commitDecision('approve');
+    else if (what === 't1-dismiss') commitDecision('reject');
     else resolveEscalation(what);
+  });
+  $('rc-heal').addEventListener('input', function (e) {
+    if (e.target.id === 't1-custom') t1Choice.custom = e.target.value;
+  });
+  // Decision options form a radio group: arrow keys move the selection.
+  $('rc-heal').addEventListener('keydown', function (e) {
+    var opt = e.target.closest && e.target.closest('[data-t1-opt]');
+    if (!opt || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(e.key) === -1) return;
+    e.preventDefault();
+    var all = Array.prototype.slice.call($('rc-heal').querySelectorAll('[data-t1-opt]'));
+    var step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : all.length - 1;
+    var next = all[(all.indexOf(opt) + step) % all.length];
+    next.click();
+    next.focus();
+  });
+
+  // ─── Events: Tier 1 strategist chip ────────────────────────────────────────
+  $('t1-chip').addEventListener('click', function () { setTriageMenu($('t1-menu').hidden); });
+  $('t1-auto').addEventListener('click', function () { setAutoTriage(!(pipe.triage && pipe.triage.autoTriageEnabled)); });
+  document.addEventListener('click', function (e) {
+    if (!$('t1-menu').hidden && !e.target.closest('#t1')) setTriageMenu(false);
+  });
+  $('t1').addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || $('t1-menu').hidden) return;
+    e.stopPropagation();
+    setTriageMenu(false);
+    $('t1-chip').focus();
   });
 
   // ─── Events: dispatch modal ────────────────────────────────────────────────
