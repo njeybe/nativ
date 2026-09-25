@@ -772,6 +772,45 @@ textarea.cmd-preview { min-height: 92px; font-family: var(--mono); font-size: 12
 kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--chip-border); border-radius: 4px; }
 .btn.primary kbd { color: #fff; background: transparent; border-color: color-mix(in srgb, #fff 45%, transparent); }
 
+/* Agent Cockpits: one pod per sub-agent (ui_specs.md §5.5) */
+.pods-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.pod-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; transition: border-color .15s, box-shadow .15s; }
+.pod-card.is-executing { border-color: var(--active-line); box-shadow: 0 0 0 3px color-mix(in srgb, var(--active) 10%, transparent), var(--shadow); }
+.pod-card.is-testing { border-color: var(--success-line); }
+.pod-card.is-blocked { border-color: var(--danger-line); box-shadow: inset 3px 0 0 var(--danger), var(--shadow); }
+.pod-card.is-skeleton { min-height: 330px; }
+.pod-head { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pod-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.pod-role { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 8px; font-family: var(--mono); font-size: 11.5px; font-weight: 600; border-radius: var(--r-control); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cnode-role-tier1-strategist { color: var(--primary); background: var(--primary-tint); border: 1px solid var(--primary-line); }
+.pod-phase { font-family: var(--mono); letter-spacing: .04em; }
+.pod-phase .phase-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pod-card.is-planning .phase-dot, .pod-card.is-executing .phase-dot, .pod-card.is-testing .phase-dot { animation: blink 1.2s ease-in-out infinite; }
+.pod-name { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.pod-focus { margin: 0; font-size: 12.5px; color: var(--muted); }
+.pod-task { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0; font-size: 13.5px; }
+.pod-task code { flex: none; color: var(--muted); }
+.pod-task span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod-meter { display: flex; flex-direction: column; gap: 5px; }
+.pod-meter-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.pod-meter-head b { font-family: var(--mono); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pod-burn { margin: 0; font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod-teleprompter { display: flex; flex-direction: column; justify-content: flex-end; height: calc(3 * 1.6em + 16px); padding: 8px 10px; font-family: var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--term-text); background: var(--term-bg); border-radius: var(--r-control); overflow: hidden; }
+.tele-line { overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.tele-line.is-muted { color: var(--term-muted); }
+.tele-line.is-err { color: var(--warn); }
+.tele-line.is-new { animation: tele-in .35s ease-out; }
+.pod-teleprompter.is-live .tele-line:last-child::after { content: ""; display: inline-block; width: 6px; height: 1.1em; margin-left: 3px; vertical-align: -2px; background: var(--term-text); animation: blink 1s step-end infinite; }
+@keyframes tele-in { from { opacity: 0; transform: translateY(4px); } }
+.pod-branch { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--muted); }
+.pod-branch .branch-badge { flex: 0 1 auto; min-width: 0; max-width: 60%; }
+.pod-path { min-width: 0; font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
+.pod-stats { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pod-clock { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--active); font-variant-numeric: tabular-nums; }
+.pods-empty { margin-bottom: 16px; padding: 24px; }
+@media (max-width: 1320px) { .pods-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Responsive */
 @media (max-width: 1180px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -806,7 +845,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   .path, .cell-sub { max-width: 58vw; }
 }
 @media (max-width: 640px) {
-  .kpi-grid, .kanban { grid-template-columns: 1fr; }
+  .kpi-grid, .kanban, .pods-grid { grid-template-columns: 1fr; }
   .brand-project, .live-tag, .crumb-root, .crumb-sep { display: none; }
   .panel-actions, .panel-actions input.input, .panel-actions select.input { width: 100%; max-width: none; }
   .param-grid { grid-template-columns: 1fr; }
@@ -836,6 +875,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       <button class="nav-tab" role="tab" id="nav-tasks" data-view="tasks" aria-controls="panel-tasks" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg><span class="nav-label">Live Tasks</span><span class="count count-proposal" id="ncount-proposals" hidden>0</span><span class="count" id="ncount-tasks">&#8211;</span></button>
       <button class="nav-tab" role="tab" id="nav-canvas" data-view="canvas" aria-controls="panel-canvas" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="3" cy="8" r="1.8"/><circle cx="13" cy="4" r="1.8"/><circle cx="13" cy="12" r="1.8"/><path d="M4.8 7.3l6.4-2.6M4.8 8.7l6.4 2.6"/></svg><span class="nav-label">Workflow Canvas</span><span class="count" id="ncount-canvas">&#8211;</span></button>
       <button class="nav-tab" role="tab" id="nav-worktrees" data-view="worktrees" aria-controls="panel-worktrees" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/></svg><span class="nav-label">Agent Worktrees</span><span class="count" id="ncount-worktrees">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-pods" data-view="pods" aria-controls="panel-pods" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2.5" width="6" height="7" rx="1"/><rect x="8.5" y="2.5" width="6" height="7" rx="1"/><path d="M3 6.8l1-1.3 1 2 1-1.2M10.2 5h2.6M10.2 7h1.6M4.5 9.5v2.5M11.5 9.5v2.5M2.5 13.5h11"/></svg><span class="nav-label">Agent Cockpits</span><span class="count" id="ncount-pods">&#8211;</span></button>
     </div>
     <div class="nav-group" aria-hidden="true">System &amp; Data</div>
     <div class="nav" role="none">
@@ -878,6 +918,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   <section class="panel" id="panel-tasks" role="tabpanel" aria-labelledby="nav-tasks" tabindex="0" hidden></section>
   <section class="panel" id="panel-canvas" role="tabpanel" aria-labelledby="nav-canvas" tabindex="0" hidden></section>
   <section class="panel" id="panel-worktrees" role="tabpanel" aria-labelledby="nav-worktrees" tabindex="0" hidden></section>
+  <section class="panel" id="panel-pods" role="tabpanel" aria-labelledby="nav-pods" tabindex="0" hidden></section>
   <section class="panel" id="panel-benchmarks" role="tabpanel" aria-labelledby="nav-benchmarks" tabindex="0" hidden></section>
   <section class="panel" id="panel-database" role="tabpanel" aria-labelledby="nav-database" tabindex="0" hidden>
     <div class="panel-head">
@@ -1336,12 +1377,13 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   }
 
   // ─── Mission Control: pipeline state ───────────────────────────────────────
-  var VIEWS = ['overview', 'tasks', 'canvas', 'worktrees', 'benchmarks', 'database'];
+  var VIEWS = ['overview', 'tasks', 'canvas', 'worktrees', 'pods', 'benchmarks', 'database'];
   var VIEW_DEPS = {
     overview: ['status', 'tasks', 'telemetry', 'escalations'],
     tasks: ['tasks', 'runs', 'escalations'],
     canvas: ['tasks', 'runs', 'escalations'],
     worktrees: ['worktrees', 'tasks'],
+    pods: ['tasks', 'runs', 'worktrees', 'escalations', 'triage'],
     benchmarks: ['benchmarks']
   };
   var PIPE_PATHS = {
@@ -1481,9 +1523,13 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   }
 
   /** Sidebar footer: the main (non-agent) worktree is the workspace root and carries the active branch. */
-  function setWorkspaceFooter() {
+  function mainWorktree() {
     var main = null;
     pipe.worktrees.some(function (w) { if (!w.isAgentWorktree) { main = w; return true; } return false; });
+    return main;
+  }
+  function setWorkspaceFooter() {
+    var main = mainWorktree();
     var root = main ? String(main.path || '') : '';
     $('sb-root').textContent = root || '–';
     $('sb-root').title = root;
@@ -1518,6 +1564,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     pBadge.title = proposals + ' self-healing proposal' + (proposals === 1 ? '' : 's') + ' awaiting review';
     var agents = pipe.worktrees.filter(function (w) { return w.isAgentWorktree; }).length;
     setCount('worktrees', pipe.loaded.worktrees && !pipe.errors.worktrees ? String(agents) : '–', 'Agent worktrees');
+    setCount('pods', tasksOk ? String(workingPods(podStates())) : '–', 'Agents working now');
     var s = pipe.report && pipe.report.summary;
     setCount('benchmarks', s ? compactNum(Number(s.averageThroughputOpsPerSec) || 0) : '–', s ? 'Average throughput (ops/sec) · score ' + clampPct(s.score) + '%' : 'Benchmark throughput');
     var dbReady = state.dbStarted && !state.loading;
@@ -1530,6 +1577,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     tasks: function () { return renderTasks(); },
     canvas: function () { return renderCanvas(); },
     worktrees: function () { return renderWorktrees(); },
+    pods: function () { return renderPods(); },
     benchmarks: function () { return renderBenchmarks(); }
   };
 
@@ -2388,6 +2436,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     renderTriageChip();
     renderHeal();
     repaint('canvas');
+    updateNavCounts();
+    repaint('pods');
     postJson('/api/pipeline/triage/evaluate', { escalationId: escalation.id }).then(function (body) {
       pipe.triageLast = { latencyMs: body.latencyMs, model: body.model };
       t1Choice.escalationId = null; // a re-run may bring new options
@@ -2415,6 +2465,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       renderTriageChip();
       renderHeal();
       repaint('canvas');
+      repaint('pods');
       return fetchPipeline(['escalations', 'triage', 'status', 'tasks', 'telemetry']);
     });
   }
@@ -2683,8 +2734,10 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       if (isRunActive(run)) rcTick();
       queueConsoleDiff();
     }
+    updateNavCounts();
     repaint('tasks');
     repaint('canvas');
+    repaint('pods');
     if (!RUN_ACTIVE[run.status]) {
       var statusMsg = (RUN_LABEL[run.status] || run.status) + ': ' + run.taskId;
       if (run.error && run.status !== 'completed') {
@@ -2700,6 +2753,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     if (!entry || !entry.taskId) return;
     var run = runFor(entry.taskId);
     if (run) run.logBytes = (run.logBytes || 0) + (entry.chunk ? entry.chunk.length : 0);
+    feedPodTail(entry);
     if (rc.taskId !== entry.taskId || !rc.backfilled) return;
     var empty = $('rc-body').querySelector('.rc-empty');
     if (empty) $('rc-body').innerHTML = '';
@@ -3086,6 +3140,332 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       return fetchPipeline(['worktrees', 'tasks', 'status']);
     });
   }
+
+  // ─── View: Agent Cockpits (ui_specs.md §5.5, Concept A) ────────────────────
+  var PODS = [
+    { role: 'tier1-strategist', name: 'Tier 1 Strategist', focus: 'Macro-Architect / Triage' },
+    { role: 'backend', name: 'Backend', focus: 'API & Core Engine' },
+    { role: 'frontend', name: 'Frontend', focus: 'Studio & UI/UX' },
+    { role: 'qa-tester', name: 'QA Tester', focus: 'Gatekeeper & Regression' },
+    { role: 'database', name: 'Database', focus: 'Schema & Migrations' },
+    { role: 'security-auditor', name: 'Security Auditor', focus: 'Credentials & Safety' }
+  ];
+  function podSvg(body, fill) {
+    return '<svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="' + (fill ? 'currentColor' : 'none') + '" stroke="' + (fill ? 'none' : 'currentColor') +
+      '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + '</svg>';
+  }
+  var POD_ICON = {
+    'tier1-strategist': podSvg('<path d="M8 1.5l1.6 4.9 4.9 1.6-4.9 1.6L8 14.5l-1.6-4.9L1.5 8l4.9-1.6z"/>', true),
+    backend: podSvg('<rect x="2.5" y="2.5" width="11" height="4.5" rx="1"/><rect x="2.5" y="9" width="11" height="4.5" rx="1"/><path d="M5 4.75h.01M5 11.25h.01"/>'),
+    frontend: podSvg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 5.5h13M5.5 5.5v8"/>'),
+    'qa-tester': podSvg('<rect x="3" y="2.5" width="10" height="11.5" rx="1.5"/><path d="M6 1.5h4v2H6zM5.5 9l1.8 1.8 3.2-3.6"/>'),
+    database: podSvg('<ellipse cx="8" cy="3.5" rx="5" ry="1.8"/><path d="M3 3.5v9c0 1 2.2 1.8 5 1.8s5-.8 5-1.8v-9M3 8c0 1 2.2 1.8 5 1.8S13 9 13 8"/>'),
+    'security-auditor': podSvg('<path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><circle cx="8" cy="7" r="1.3"/><path d="M8 8.3v2.2"/>'),
+    console: podSvg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5l2 1.5-2 1.5M8.5 10h3"/>'),
+    branch: podSvg('<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/>')
+  };
+  /** Phase badge tone; PLANNING, EXECUTING and TESTING count as "working" in the sidebar badge. */
+  var POD_PHASE = { IDLE: 'neutral', PLANNING: 'accent', EXECUTING: 'active', TESTING: 'success', BLOCKED: 'danger' };
+  var RUN_PHASE = { spawning_worktree: 'PLANNING', running: 'EXECUTING', verifying: 'TESTING', merging: 'TESTING' };
+  /** Deep, the largest budget the dispatch modal offers, fills the meter. */
+  var POD_BUDGET_MAX = 4096;
+  var POD_TAIL = 3;
+  /** Latest output lines per task (taskId -> { runId, lines, partial }), fed by runner_log and a one-off log backfill. */
+  var podTail = {};
+  var podDirty = {};
+  var podFlush = null;
+
+  function stripAnsi(text) {
+    return String(text == null ? '' : text).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '');
+  }
+
+  /** What a terminal shows for one raw line: escapes removed, and a carriage return redraws from column 0. */
+  function cleanLine(raw) {
+    return stripAnsi(raw).replace(/\r$/, '').split('\r').pop();
+  }
+
+  /** Splits streamed output into finished lines; the unfinished tail stays raw so a CRLF or escape split across chunks survives. */
+  function pushTailText(tail, text, err) {
+    var parts = (tail.partial + String(text == null ? '' : text)).replace(/\r\n/g, '\n').split('\n');
+    tail.partial = parts.pop().slice(-400);
+    tail.partialErr = err;
+    parts.forEach(function (p) {
+      var line = cleanLine(p);
+      if (line.trim()) tail.lines.push({ text: line, err: err });
+    });
+    if (tail.lines.length > POD_TAIL) tail.lines = tail.lines.slice(-POD_TAIL);
+  }
+
+  function tailLines(taskId) {
+    var tail = podTail[taskId];
+    if (!tail) return [];
+    var lines = tail.lines.slice();
+    var current = cleanLine(tail.partial);
+    if (current.trim()) lines.push({ text: current, err: !!tail.partialErr });
+    return lines.slice(-POD_TAIL);
+  }
+
+  function feedPodTail(entry) {
+    var tail = podTail[entry.taskId];
+    if (!tail || (entry.runId && tail.runId && tail.runId !== entry.runId)) tail = podTail[entry.taskId] = { runId: entry.runId || null, lines: [], partial: '' };
+    pushTailText(tail, entry.chunk, entry.stream === 'stderr');
+    queuePodFlush(entry.taskId);
+  }
+
+  /** Streams into the visible teleprompter without repainting the whole view (batched per frame). */
+  function queuePodFlush(taskId) {
+    if (ui.view !== 'pods') return;
+    podDirty[taskId] = true;
+    if (podFlush) return;
+    var flush = function () {
+      podFlush = null;
+      Object.keys(podDirty).forEach(function (id) {
+        var el = document.querySelector('#panel-pods [data-tele="' + cssEsc(id) + '"]');
+        var lines = tailLines(id);
+        if (el && lines.length) el.innerHTML = teleLines(lines, true);
+      });
+      podDirty = {};
+    };
+    podFlush = window.requestAnimationFrame ? window.requestAnimationFrame(flush) : setTimeout(flush, 16);
+  }
+
+  /** Once per run: seed a pod that opened mid-run with the last lines already written to the log. */
+  function backfillPodTail(taskId, run) {
+    var tail = podTail[taskId];
+    if (tail && (!tail.runId || tail.runId === run.runId)) return;
+    tail = podTail[taskId] = { runId: run.runId || null, lines: [], partial: '' };
+    api('/api/pipeline/tasks/logs?taskId=' + encodeURIComponent(taskId) + '&tailLines=20').then(function (body) {
+      if (podTail[taskId] !== tail || tail.lines.length || tail.partial || !body.log) return;
+      pushTailText(tail, body.log, false);
+      queuePodFlush(taskId);
+    }, function () { /* no log yet: the pod keeps its status lines */ });
+  }
+
+  /** The task a pod is on: a live run first, then claimed, blocked, next ready, and finally its latest run. */
+  function podFocus(tasks) {
+    var pick = function (test) {
+      var found = null;
+      tasks.some(function (t) { if (test(t)) { found = t; return true; } return false; });
+      return found;
+    };
+    var latest = null;
+    (pipe.runs || []).some(function (r) {
+      return tasks.some(function (t) { if (t.id === r.taskId) { latest = t; return true; } return false; });
+    });
+    return pick(function (t) { return isRunActive(runFor(t.id)); }) ||
+      pick(function (t) { return t.status === 'in_progress'; }) ||
+      pick(function (t) { return t.status === 'blocked'; }) ||
+      pick(function (t) { return t.status === 'pending' && !unmetDeps(t).length; }) ||
+      latest ||
+      pick(function (t) { return t.status === 'pending'; });
+  }
+
+  function agentPod(pod) {
+    // Same role folding as the canvas: unknown roles (devops, flutter) land in the backend pod.
+    var tasks = allTasks().filter(function (t) { return roleClass(t.assignedSubagent) === pod.role; });
+    var task = podFocus(tasks);
+    var run = task ? runFor(task.id) : null;
+    var phase = 'IDLE';
+    if (isRunActive(run)) phase = RUN_PHASE[run.status] || 'EXECUTING';
+    else if (task && task.status === 'blocked') phase = 'BLOCKED';
+    // Claimed without a Studio runner: an agent outside Studio (or nobody yet) holds it.
+    else if (task && task.status === 'in_progress') phase = 'PLANNING';
+    return { pod: pod, tasks: tasks, task: task, run: run, phase: phase };
+  }
+
+  function strategistPod(pod) {
+    var pending = (pipe.escalations || []).filter(function (e) { return e.status === 'pending_review'; });
+    var byId = function (id) {
+      var found = null;
+      pending.some(function (e) { if (e.id === id) { found = e; return true; } return false; });
+      return found || { id: id, taskId: pipe.triageRunning[id] };
+    };
+    var triaging = Object.keys(pipe.triageRunning);
+    var waiting = awaitingDecision();
+    if (triaging.length) return { pod: pod, pending: pending, escalation: byId(triaging[0]), phase: 'EXECUTING' };
+    if (waiting.length) return { pod: pod, pending: pending, escalation: waiting[0], phase: 'BLOCKED' };
+    if (pending.length) return { pod: pod, pending: pending, escalation: pending[0], phase: 'PLANNING' };
+    return { pod: pod, pending: pending, escalation: null, phase: 'IDLE' };
+  }
+
+  function podStates() {
+    return PODS.map(function (p) { return p.role === 'tier1-strategist' ? strategistPod(p) : agentPod(p); });
+  }
+  function workingPods(states) {
+    return states.filter(function (s) { return s.phase === 'PLANNING' || s.phase === 'EXECUTING' || s.phase === 'TESTING'; }).length;
+  }
+
+  function teleLines(lines, fresh) {
+    return lines.map(function (l, i) {
+      var cls = 'tele-line' + (l.muted ? ' is-muted' : '') + (l.err ? ' is-err' : '') + (fresh && i === lines.length - 1 ? ' is-new' : '');
+      return '<div class="' + cls + '" title="' + esc(l.text) + '">' + esc(l.text) + '</div>';
+    }).join('');
+  }
+
+  function teleprompter(key, lines, live, label) {
+    return '<div class="pod-teleprompter' + (live ? ' is-live' : '') + '"' + (key ? ' data-tele="' + esc(key) + '"' : '') +
+      ' role="log" aria-live="off" aria-label="' + esc(label) + '">' + teleLines(lines, false) + '</div>';
+  }
+
+  function statusLines(texts, muted) {
+    return texts.filter(Boolean).map(function (t) { return { text: t, muted: muted }; });
+  }
+
+  function agentLines(s) {
+    var t = s.task, run = s.run;
+    var tail = t ? tailLines(t.id) : [];
+    if (tail.length) return tail;
+    if (!t) {
+      var done = s.tasks.length;
+      return statusLines(['Standing by', done ? (done === 1 ? 'Its only task is' : 'All ' + done + ' tasks are') + ' completed' : 'No ' + s.pod.name + ' tasks in the plan'], true);
+    }
+    if (isRunActive(run)) return statusLines([t.id + ': ' + (RUN_LABEL[run.status] || run.status), 'Waiting for the first line of output…'], false);
+    if (t.status === 'blocked') {
+      var attempts = attemptCount(t);
+      return statusLines([t.id + ' is blocked', attempts != null ? 'Attempts: ' + attempts + '/' + attemptLimit(t) : '', 'Open the console to review what stopped it'], false);
+    }
+    if (t.status === 'in_progress') return statusLines([t.id + ' claimed', 'No Studio runner attached', 'Dispatch it from Live Tasks to stream output here'], false);
+    if (run) return statusLines([t.id + ': ' + (RUN_LABEL[run.status] || run.status), 'No output captured'], true);
+    var deps = unmetDeps(t);
+    return statusLines(['Next up: ' + t.id, deps.length ? 'Waiting on ' + deps.join(', ') : 'Ready to dispatch'], true);
+  }
+
+  function strategistLines(s) {
+    var t = pipe.triage;
+    var e = s.escalation;
+    if (s.phase === 'EXECUTING') {
+      return statusLines(['Assessing ' + e.id + ' for ' + e.taskId, e.summary ? String(e.type || 'escalation').replace(/_/g, ' ') + ': ' + e.summary : '',
+        'Guardrail: halts on destructive database operations'], false);
+    }
+    if (s.phase === 'BLOCKED') {
+      return statusLines([e.id + ' needs your decision', e.taskId + ' is paused until you pick an option', e.triage && e.triage.reasoning], false);
+    }
+    if (s.phase === 'PLANNING') {
+      return statusLines([s.pending.length + ' escalation' + (s.pending.length === 1 ? '' : 's') + ' awaiting triage', 'Next: ' + e.id + ' (' + e.taskId + ')',
+        t && t.autoTriageEnabled ? 'Autonomous Auto-Triage is on' : 'Auto-Triage is off: run Tier 1 Triage from the console'], false);
+    }
+    var last = lastTriage();
+    var model = (t && t.model) || 'gemini-3.8-flash';
+    return statusLines(['Standing by: no escalations pending',
+      last ? 'Last evaluation ' + fmtMs(last.latencyMs) + ' · ' + modelName(last.model || model) : 'No evaluations yet',
+      !t ? '' : t.hasApiKey ? 'Model ' + model : 'No API key: offline rules engine'], true);
+  }
+
+  function budgetText(thinking) {
+    if (!thinking || thinking.budget == null) return 'Runner default';
+    var b = Number(thinking.budget) || 0;
+    if (b <= 0) return 'None';
+    return (b >= 4096 ? 'Deep' : b >= 2048 ? 'Standard' : 'Custom') + ' · ' + num(b);
+  }
+
+  function agentMeter(s) {
+    var run = s.run;
+    var thinking = run && run.thinking;
+    var budget = thinking && thinking.budget != null ? Number(thinking.budget) || 0 : 0;
+    var pct = clampPct(budget / POD_BUDGET_MAX * 100);
+    var usage = run && run.usage;
+    var burn = 'No runs yet';
+    if (usage) burn = 'Burn ' + compactNum(Number(usage.outputTokens) || 0) + ' out · ' + compactNum(Number(usage.thinkingTokens) || 0) + ' thinking · ' + usdSpend(usage.costUsd);
+    else if (run) burn = run.engine === 'cli' ? 'CLI run: token usage not reported' : 'Waiting for the first API turn';
+    var effort = thinking && thinking.effort ? ' title="Sent as effort: ' + esc(thinking.effort) + '"' : '';
+    return '<div class="pod-meter"><div class="pod-meter-head"><span>Thinking budget</span><b' + effort + '>' + esc(run ? budgetText(thinking) : '–') + '</b></div>' +
+      progressBar(pct, 'pod-budget-' + s.pod.role, s.pod.name + ' thinking budget', s.phase === 'BLOCKED' ? 'danger' : '') +
+      '<p class="pod-burn" title="' + esc(burn) + '">' + esc(burn) + '</p></div>';
+  }
+
+  function strategistMeter() {
+    var stats = (pipe.triage && pipe.triage.stats) || {};
+    var total = Number(stats.totalEvaluated) || 0, auto = Number(stats.autoResolved) || 0;
+    var pct = total ? clampPct(auto / total * 100) : 0;
+    var last = lastTriage();
+    var burn = last ? 'Last verdict in ' + fmtMs(last.latencyMs) + ' · ' + num(Number(stats.escalatedToHuman) || 0) + ' sent to you' : 'No evaluations yet';
+    return '<div class="pod-meter"><div class="pod-meter-head"><span>Auto-resolve rate</span><b>' + (total ? num(auto) + ' of ' + num(total) + ' · ' + pct + '%' : '–') + '</b></div>' +
+      progressBar(pct, 'pod-budget-tier1-strategist', 'Tier 1 auto-resolve rate', 'success') +
+      '<p class="pod-burn" title="' + esc(burn) + '">' + esc(burn) + '</p></div>';
+  }
+
+  /** "D:/repo/.worktrees/task-7" -> ".worktrees/task-7"; empty for the workspace root. */
+  function worktreeRel(p) {
+    var path = String(p || '').replace(/\\/g, '/');
+    var i = path.lastIndexOf('/.worktrees/');
+    return i === -1 ? '' : path.slice(i + 1);
+  }
+
+  function podBranch(task, run) {
+    var wt = null;
+    if (!(run && run.branch) && task) pipe.worktrees.some(function (w) { if (w.isAgentWorktree && w.taskId === task.id) { wt = w; return true; } return false; });
+    var main = mainWorktree();
+    var name = run && run.branch ? run.branch : wt ? wt.branch : main ? main.branch : null;
+    var dir = run && run.branch ? run.worktreeDir : wt ? wt.path : '';
+    var rel = worktreeRel(dir);
+    return '<div class="pod-branch">' + POD_ICON.branch + '<span class="branch-badge" title="' + esc(name || 'Branch unknown') + '">' + esc(name || (main ? 'detached' : '–')) + '</span>' +
+      '<span class="pod-path" title="' + esc(dir || (main ? main.path : '')) + '">' + esc(rel || 'workspace root') + '</span></div>';
+  }
+
+  function podFoot(stats, clockHtml, key, tab, label) {
+    return '<footer class="pod-foot"><span class="pod-stats">' + stats + clockHtml + '</span>' +
+      '<button class="btn small" type="button" data-action="run-console" data-key="' + esc(key || '') + '"' + (tab ? ' data-tab="' + tab + '"' : '') +
+      (key ? ' title="Open the runner console for ' + esc(key) + '"' : ' disabled title="' + esc(label) + '"') + '>' + POD_ICON.console + 'Inspect Console</button></footer>';
+  }
+
+  function podHead(s, meter) {
+    var pod = s.pod;
+    return '<header class="pod-head"><div class="pod-row">' +
+      '<span class="pod-role cnode-role-' + pod.role + '">' + POD_ICON[pod.role] + esc(pod.role) + '</span>' +
+      '<span class="badge badge-' + POD_PHASE[s.phase] + ' pod-phase"><span class="phase-dot" aria-hidden="true"></span><span class="sr-only">Phase: </span>' + s.phase + '</span></div>' +
+      '<div><h2 class="pod-name" id="pod-' + pod.role + '">' + esc(pod.name) + '</h2><p class="pod-focus">' + esc(pod.focus) + '</p></div>' + meter + '</header>';
+  }
+
+  function agentPodCard(s) {
+    var t = s.task, run = s.run;
+    if (t && run) backfillPodTail(t.id, run);
+    var byStatus = { completed: 0, pending: 0, blocked: 0 };
+    s.tasks.forEach(function (x) { if (byStatus[x.status] != null) byStatus[x.status]++; });
+    var stats = '<span>Done ' + byStatus.completed + '/' + s.tasks.length + '</span>' + (byStatus.pending ? '<span>' + byStatus.pending + ' queued</span>' : '') +
+      (byStatus.blocked ? '<span class="text-danger">' + byStatus.blocked + ' blocked</span>' : '');
+    var live = isRunActive(run);
+    var clockHtml = live ? '<span class="pod-clock" data-elapsed="' + esc(t.id) + '">' + clock(elapsedOf(run) || 0) + '</span>' : '';
+    var taskLine = t ? '<p class="pod-task"><code>' + esc(t.id) + '</code><span title="' + esc(t.title || '') + '">' + esc(t.title || '') + '</span></p>'
+      : '<p class="pod-task"><span class="muted">' + (s.tasks.length ? 'All tasks completed' : 'No task assigned') + '</span></p>';
+    return '<article class="card pod-card is-' + s.phase.toLowerCase() + '" aria-labelledby="pod-' + s.pod.role + '">' + podHead(s, agentMeter(s)) + taskLine +
+      teleprompter(t ? t.id : '', agentLines(s), live, 'Latest ' + s.pod.name + ' output') + podBranch(t, run) +
+      podFoot(stats, clockHtml, t && (run || t.status !== 'pending') ? t.id : '', '', 'Nothing has run in this pod yet') + '</article>';
+  }
+
+  function strategistPodCard(s) {
+    var e = s.escalation;
+    var t = pipe.triage;
+    var stats = '<span>' + s.pending.length + ' pending</span><span>Auto-Triage ' + (t && t.autoTriageEnabled ? 'ON' : 'OFF') + '</span>';
+    var taskLine = e ? '<p class="pod-task"><code>' + esc(e.id) + '</code><span title="' + esc(e.summary || e.taskId || '') + '">' + esc(e.summary || e.taskId || '') + '</span></p>'
+      : '<p class="pod-task"><span class="muted">No escalation open</span></p>';
+    return '<article class="card pod-card is-' + s.phase.toLowerCase() + '" aria-labelledby="pod-' + s.pod.role + '">' + podHead(s, strategistMeter()) + taskLine +
+      teleprompter('', strategistLines(s), s.phase === 'EXECUTING', 'Tier 1 Strategist activity') + podBranch(null, null) +
+      podFoot(stats, '', e ? e.taskId : '', 'heal', 'No escalation to inspect') + '</article>';
+  }
+
+  function renderPods() {
+    var head = panelHead('Agent Cockpits', 'One pod per sub-agent: its current task, phase, thinking budget, latest output and branch.');
+    if (!pipe.loaded.tasks) {
+      var sk = '';
+      for (var i = 0; i < PODS.length; i++) sk += '<div class="card pod-card is-skeleton"><div class="skeleton short"></div><div class="skeleton"></div><div class="skeleton tall"></div><div class="skeleton short"></div></div>';
+      return head + '<div class="pods-grid" aria-hidden="true">' + sk + '</div>';
+    }
+    if (pipe.errors.tasks && !pipe.milestones.length) return head + errorCard('agent cockpits', pipe.errors.tasks, 'tasks');
+    var empty = allTasks().length ? '' : '<div class="card state pods-empty"><div class="state-icon">' + ICON.gauge + '</div><h2>No tasks to staff yet</h2>' +
+      '<p>Pods light up once the master plan assigns tasks to a sub-agent. Plan the work with Tier 1, then refresh.</p>' +
+      '<button class="btn" type="button" data-action="retry" data-key="tasks">Refresh</button></div>';
+    return head + staleNote('tasks') + staleNote('runs') + empty + '<div class="pods-grid">' +
+      podStates().map(function (s) { return s.pod.role === 'tier1-strategist' ? strategistPodCard(s) : agentPodCard(s); }).join('') + '</div>';
+  }
+
+  // Running pods tick their clocks in place; a full repaint every second would restart the teleprompter animation.
+  setInterval(function () {
+    if (ui.view !== 'pods') return;
+    document.querySelectorAll('#panel-pods [data-elapsed]').forEach(function (el) {
+      var ms = elapsedOf(runFor(el.getAttribute('data-elapsed')));
+      if (ms != null) el.textContent = clock(ms);
+    });
+  }, 1000);
 
   // ─── View 4: Synthetic benchmarks ──────────────────────────────────────────
   var SCENARIOS = [
@@ -4498,7 +4878,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     else if (action === 'task-complete') runTaskAction('complete', key);
     else if (action === 'task-block') openBlockDialog(key);
     else if (action === 'task-dispatch') openDispatchDialog(key);
-    else if (action === 'run-console') openConsole(key);
+    else if (action === 'run-console') openConsole(key, false, el.getAttribute('data-tab') || undefined);
     else if (action === 'run-abort') confirmAbort(key);
     else if (action === 'wt-diff') openConsole(key, false, 'diff');
     else if (action === 'heal-review') openConsole(key, false, 'heal');

@@ -181,14 +181,14 @@ try {
     const expectText = (group, labels) => {
       for (const label of labels) assert.ok(searchable.includes(label.toLowerCase()), `${group}: "${label}" not rendered`);
     };
-    expectText('navigation tab', ['Overview & Status', 'Live Tasks', 'Workflow Canvas', 'Agent Worktrees', 'Benchmarks', 'Database']);
+    expectText('navigation tab', ['Overview & Status', 'Live Tasks', 'Workflow Canvas', 'Agent Worktrees', 'Agent Cockpits', 'Benchmarks', 'Database']);
     expectText('overview KPI card', ['Active Milestones', 'Task Velocity', 'Financial & Cache Telemetry', 'Specification Contracts']);
     expectText('contract checklist', ['master_plan', 'db_schema', 'api_contracts', 'ui_specs']);
     expectText('kanban', ['Pending', 'In Progress', 'Completed', 'Blocked', 'Attempts']);
     expectText('workflow canvas', ['Workflow Canvas', 'Play Simulation']);
     expectText('worktree table', ['Branch', 'Task ID', 'Commit', 'Merge to Main', 'Delete Workspace']);
     expectText('benchmarks', ['Run Benchmark', 'ops/sec']);
-    console.log('✔ Six navigation tabs with Overview KPIs, Kanban, Workflow Canvas, Worktrees and Benchmarks');
+    console.log('✔ Seven navigation tabs with Overview KPIs, Kanban, Workflow Canvas, Worktrees, Agent Cockpits and Benchmarks');
   }
 
   // 4b. Vertical sidebar architecture (ui_specs.md §2)
@@ -215,7 +215,7 @@ try {
       assert.ok(sidebarText.includes(label), `sidebar missing "${label}"`);
     }
     const tabs = [...sidebar.matchAll(/<button\b[^>]*class=["']nav-tab["'][\s\S]*?<\/button>/g)].map((m) => m[0]);
-    assert.equal(tabs.length, 6, 'sidebar must hold the six primary views');
+    assert.equal(tabs.length, 7, 'sidebar must hold the seven primary views');
     for (const tab of tabs) {
       assert.match(tab, /<svg\b/, 'every sidebar item needs an inline SVG icon');
       assert.match(tab, /class=["']count["']/, 'every sidebar item needs a count badge');
@@ -344,6 +344,82 @@ try {
     assert.match(code, /t1-pulse/, 'strategist cables carry traveling pulses');
     assert.match(code, /Tier 1 AI Strategist<\/div>/, 'the canvas shows the strategist engine node');
     console.log('✔ Tier 1 strategist chip + dropdown, 4-part decision card, auto-resolve banner and canvas strategist cables are wired');
+  }
+
+  // 4f. Concept A: Agent Cockpit pods primary view (ui_specs.md §5.5)
+  {
+    const ruleFor = (selector) => rules.filter((r) => r.selectors.includes(selector));
+    const declOf = (selector, prop) => ruleFor(selector).flatMap((r) => r.decls).filter((d) => d.prop === prop).map((d) => norm(resolve(d.value)));
+
+    const sidebar = /<aside\b[^>]*app-sidebar[\s\S]*?<\/aside>/i.exec(html)[0];
+    const pipelineGroup = sidebar.slice(sidebar.indexOf('>Pipeline<'), sidebar.indexOf('>System &amp; Data<'));
+    const tab = /<button\b[^>]*id=["']nav-pods["'][\s\S]*?<\/button>/.exec(pipelineGroup)?.[0];
+    assert.ok(tab, 'the Agent Cockpits tab sits in the Pipeline group');
+    assert.match(tab, /data-view=["']pods["']/, 'nav-pods switches to the pods view');
+    assert.match(tab, /aria-controls=["']panel-pods["']/, 'nav-pods controls #panel-pods');
+    assert.match(tab, /<svg\b/, 'nav-pods needs an inline SVG icon');
+    assert.match(tab, /id=["']ncount-pods["']/, 'nav-pods needs the active agent count badge');
+    assert.match(decodeEntities(tab), />Agent Cockpits</, 'nav-pods is labelled "Agent Cockpits"');
+    const panel = /<section\b[^>]*id=["']panel-pods["'][^>]*>/.exec(html)?.[0] ?? '';
+    assert.match(panel, /role=["']tabpanel["']/, '#panel-pods must be a tabpanel');
+    assert.match(panel, /aria-labelledby=["']nav-pods["']/, '#panel-pods is labelled by its tab');
+    assert.match(panel, /\bhidden\b/, '#panel-pods starts hidden (Overview is the default view)');
+
+    const views = [...(/var VIEWS = \[([^\]]*)\]/.exec(code)?.[1] ?? '').matchAll(/'([\w-]+)'/g)].map((m) => m[1]);
+    assert.equal(views.length, 7, 'VIEWS lists the seven primary views');
+    const domOrder = [...sidebar.matchAll(/data-view=["']([\w-]+)["']/g)].map((m) => m[1]);
+    assert.deepEqual(domOrder, views, 'VIEWS must follow sidebar order so arrow keys move to the adjacent tab');
+    assert.match(code, /var RENDERERS = \{(?:\s*\w+: function \(\) \{ return \w+\(\); \},)*\s*pods: function \(\) \{ return renderPods\(\); \}/, 'RENDERERS paints the pods view');
+    assert.match(code, /\bpods:\s*\[[^\]]*'runs'[^\]]*\]/, 'the pods view repaints when runner state changes');
+
+    for (const role of ['tier1-strategist', 'backend', 'frontend', 'qa-tester', 'database', 'security-auditor']) {
+      assert.match(code, new RegExp(`\\{ role: '${role}'`), `pods grid is missing the ${role} pod`);
+    }
+    for (const phase of ['IDLE', 'PLANNING', 'EXECUTING', 'TESTING', 'BLOCKED']) {
+      assert.match(code, new RegExp(`\\b${phase}: '`), `live phase badge missing ${phase}`);
+    }
+    for (const copy of ['Thinking budget', 'Auto-resolve rate', 'Inspect Console', 'workspace root', '/.worktrees/', 'No tasks to staff yet']) {
+      assert.ok(code.includes(copy), `pod card missing "${copy}"`);
+    }
+    assert.match(code, /'<article class="card pod-card is-'/, 'pods are cards (white surface, 1px #e2e8f0 border, 10px radius, soft shadow)');
+    assert.match(code, /data-action="run-console" data-key="/, 'Inspect Console opens the runner console drawer on the pod task');
+    assert.match(code, /openConsole\(key, false, el\.getAttribute\('data-tab'\)/, 'the strategist pod can open the drawer on its Self-Healing tab');
+    assert.match(code, /feedPodTail\(entry\)/, 'runner_log output streams into the teleprompters');
+    assert.match(code, /\/api\/pipeline\/tasks\/logs\?taskId=/, 'pods opened mid-run backfill their teleprompter from the log tail');
+
+    assert.ok(declOf('.pods-grid', 'display').includes('grid'), '.pods-grid is a CSS grid');
+    assert.ok(declOf('.pods-grid', 'grid-template-columns').includes('repeat(3,minmax(0,1fr))'), '.pods-grid lays pods out in 3 columns on wide screens');
+    assert.ok(declOf('.pods-grid', 'grid-template-columns').includes('repeat(2,minmax(0,1fr))'), '.pods-grid drops to 2 columns');
+    assert.ok(declOf('.pods-grid', 'grid-template-columns').includes('1fr'), '.pods-grid stacks on phones');
+    assert.ok(declOf('.pod-teleprompter', 'background').includes('#0f172a'), 'teleprompter is a #0f172a terminal');
+    assert.ok(declOf('.pod-teleprompter', 'color').includes('#f8fafc'), 'teleprompter text is #f8fafc');
+    assert.ok(declOf('.pod-teleprompter', 'font-size').includes('11.5px'), 'teleprompter font is 11.5px');
+    assert.ok(declOf('.pod-teleprompter', 'font-family').some((f) => f.includes('monospace')), 'teleprompter font is monospace');
+
+    // The teleprompter keeps the last 3 lines as a terminal would draw them.
+    const fnSource = (name) => {
+      const start = code.indexOf(`function ${name}(`);
+      assert.ok(start !== -1, `client function ${name} missing`);
+      let depth = 0;
+      for (let i = code.indexOf('{', start); i < code.length; i++) {
+        if (code[i] === '{') depth++;
+        else if (code[i] === '}' && --depth === 0) return code.slice(start, i + 1);
+      }
+      throw new Error(`unbalanced function ${name}`);
+    };
+    const ctx = vm.createContext({});
+    vm.runInContext(['var POD_TAIL = 3; var podTail = {};', ...['stripAnsi', 'cleanLine', 'pushTailText', 'tailLines'].map(fnSource)].join('\n'), ctx);
+    const tail = (script) => JSON.parse(vm.runInContext(`${script}; JSON.stringify(tailLines('t'))`, ctx));
+    let lines = tail(`podTail.t = { lines: [], partial: '' };
+      pushTailText(podTail.t, 'one\\ntwo\\n\\x1b[32mthree\\x1b[0m\\r\\nfour', false);
+      pushTailText(podTail.t, ' more\\rspin 1\\rspin 2', true)`);
+    assert.deepEqual(lines.map((l) => l.text), ['two', 'three', 'spin 2'], 'teleprompter shows the last 3 lines, ANSI-free, with \\r redraws applied');
+    assert.equal(lines.at(-1).err, true, 'stderr output stays marked while the line is still streaming');
+    lines = tail(`podTail.t = { lines: [], partial: '' };
+      pushTailText(podTail.t, 'hello\\r', false);
+      pushTailText(podTail.t, '\\nworld\\n', false)`);
+    assert.deepEqual(lines.map((l) => l.text), ['hello', 'world'], 'a CRLF split across two log chunks must not drop the line');
+    console.log('✔ Agent Cockpits: 7th sidebar view with 6 pods, phase badges, budget meters, streaming teleprompters, branches and Inspect Console');
   }
 
   // 5. Client script: valid JS, SSE listener and pipeline endpoint wiring
