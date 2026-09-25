@@ -176,18 +176,19 @@ try {
     console.log('✔ System/mono font stacks, 6px/10px radii, 1px #e2e8f0 borders, soft shadow, glass sticky header');
   }
 
-  // 4. Navigation tabs and the five views (ui_specs.md §2–3)
+  // 4. Navigation tabs and the primary views (ui_specs.md §2–3)
   {
     const expectText = (group, labels) => {
       for (const label of labels) assert.ok(searchable.includes(label.toLowerCase()), `${group}: "${label}" not rendered`);
     };
-    expectText('navigation tab', ['Overview & Status', 'Live Tasks', 'Agent Worktrees', 'Benchmarks', 'Database']);
+    expectText('navigation tab', ['Overview & Status', 'Live Tasks', 'Workflow Canvas', 'Agent Worktrees', 'Benchmarks', 'Database']);
     expectText('overview KPI card', ['Active Milestones', 'Task Velocity', 'Financial & Cache Telemetry', 'Specification Contracts']);
     expectText('contract checklist', ['master_plan', 'db_schema', 'api_contracts', 'ui_specs']);
     expectText('kanban', ['Pending', 'In Progress', 'Completed', 'Blocked', 'Attempts']);
+    expectText('workflow canvas', ['Workflow Canvas', 'Play Simulation']);
     expectText('worktree table', ['Branch', 'Task ID', 'Commit', 'Merge to Main', 'Delete Workspace']);
     expectText('benchmarks', ['Run Benchmark', 'ops/sec']);
-    console.log('✔ Five navigation tabs with Overview KPIs, Kanban columns, Worktree table and Benchmark views');
+    console.log('✔ Six navigation tabs with Overview KPIs, Kanban, Workflow Canvas, Worktrees and Benchmarks');
   }
 
   // 4b. Vertical sidebar architecture (ui_specs.md §2)
@@ -214,7 +215,7 @@ try {
       assert.ok(sidebarText.includes(label), `sidebar missing "${label}"`);
     }
     const tabs = [...sidebar.matchAll(/<button\b[^>]*class=["']nav-tab["'][\s\S]*?<\/button>/g)].map((m) => m[0]);
-    assert.equal(tabs.length, 5, 'sidebar must hold the five primary views');
+    assert.equal(tabs.length, 6, 'sidebar must hold the six primary views');
     for (const tab of tabs) {
       assert.match(tab, /<svg\b/, 'every sidebar item needs an inline SVG icon');
       assert.match(tab, /class=["']count["']/, 'every sidebar item needs a count badge');
@@ -318,6 +319,8 @@ try {
       '/api/pipeline/worktrees/action',
       '/api/pipeline/benchmarks',
       '/api/pipeline/benchmarks/run',
+      '/api/pipeline/simulation/start',
+      '/api/pipeline/simulation/stop',
     ];
     for (const endpoint of pipelineEndpoints) {
       assert.match(code, new RegExp(`['"]${endpoint.replace(/\//g, '\\/')}['"?]`), `client never calls ${endpoint}`);

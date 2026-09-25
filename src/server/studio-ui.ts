@@ -242,6 +242,50 @@ button.badge-media:hover { background: var(--primary-tint); }
 .step-desc { margin: 3px 0 8px; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
 .step-pct { min-width: 40px; padding-top: 4px; text-align: right; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* Workflow Canvas (n8n-Style DAG & Simulation) */
+.canvas-wrapper { position: relative; width: 100%; height: min(74vh, 760px); min-height: 500px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow); user-select: none; }
+.canvas-svg { width: 100%; height: 100%; display: block; cursor: grab; }
+.canvas-svg:active { cursor: grabbing; }
+.cable { fill: none; stroke: var(--chip-border); stroke-width: 2.5px; stroke-linecap: round; transition: stroke .3s, stroke-width .3s; }
+.cable.is-active { stroke: var(--active); stroke-width: 3px; stroke-dasharray: 6 6; animation: cable-dash 1s linear infinite; }
+.cable.is-done { stroke: var(--success); stroke-width: 2.5px; }
+.cable.is-blocked { stroke: var(--danger); stroke-width: 2.5px; stroke-dasharray: 4 4; }
+@keyframes cable-dash { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+.cable-pulse { fill: var(--active); filter: drop-shadow(0 0 6px var(--active)); }
+
+.cnode { cursor: pointer; transition: transform .2s ease, filter .2s ease; }
+.cnode:hover { filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--primary) 18%, transparent)); }
+.cnode-card { width: 100%; height: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--shadow); transition: border-color .2s, box-shadow .2s; }
+.cnode.is-running .cnode-card { border-color: var(--active); box-shadow: 0 0 0 3px color-mix(in srgb, var(--active) 18%, transparent), 0 0 20px -3px color-mix(in srgb, var(--active) 40%, transparent); }
+.cnode.is-completed .cnode-card { border-color: color-mix(in srgb, var(--success) 60%, var(--border)); }
+.cnode.is-blocked .cnode-card { border-color: var(--danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 15%, transparent); }
+
+.cnode-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.cnode-id { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.cnode-role { font-family: var(--font); font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.cnode-role-backend { color: #0284c7; background: #f0f9ff; border: 1px solid #bae6fd; }
+.cnode-role-frontend { color: #7c3aed; background: #f5f3ff; border: 1px solid #ddd6fe; }
+.cnode-role-qa-tester { color: #d97706; background: #fffbeb; border: 1px solid #fde68a; }
+.cnode-role-database { color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; }
+.cnode-role-security-auditor { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; }
+
+.cnode-title { margin: 4px 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cnode-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; padding-top: 5px; border-top: 1px solid var(--chip-border); }
+.cnode-port { width: 9px; height: 9px; border-radius: 50%; background: var(--surface); border: 2px solid var(--chip-border); }
+.cnode-port.is-active { border-color: var(--active); background: var(--active); }
+.cnode-port.is-done { border-color: var(--success); background: var(--success); }
+
+.canvas-playback-bar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 30px; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12); }
+.canvas-zoom-bar { position: absolute; top: 16px; right: 16px; z-index: 10; display: flex; flex-direction: column; gap: 4px; padding: 4px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: var(--r-control); box-shadow: var(--shadow); }
+.playback-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: all .15s; }
+.playback-btn:hover { background: var(--chip); border-color: var(--chip-border); }
+.playback-btn.primary { background: var(--primary); color: #ffffff; border-color: var(--primary); }
+.playback-btn.primary:hover { background: var(--primary-hover); }
+.playback-select { height: 32px; padding: 0 8px; font-size: 12px; font-weight: 500; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; color: var(--text); cursor: pointer; }
+.playback-speed { display: flex; align-items: center; background: var(--chip); border: 1px solid var(--chip-border); border-radius: 16px; padding: 2px; }
+.speed-chip { height: 26px; padding: 0 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: transparent; border: none; border-radius: 12px; cursor: pointer; }
+.speed-chip.is-active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+
 /* Live Tasks kanban */
 .kanban { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .kcol { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12px; min-width: 0; box-shadow: inset 0 2px 0 var(--chip-border); }
@@ -707,6 +751,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     <div class="nav" role="none">
       <button class="nav-tab" role="tab" id="nav-overview" data-view="overview" aria-controls="panel-overview" aria-selected="true"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span class="nav-label">Overview &amp; Status</span><span class="count" id="ncount-overview">&#8211;</span></button>
       <button class="nav-tab" role="tab" id="nav-tasks" data-view="tasks" aria-controls="panel-tasks" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg><span class="nav-label">Live Tasks</span><span class="count count-proposal" id="ncount-proposals" hidden>0</span><span class="count" id="ncount-tasks">&#8211;</span></button>
+      <button class="nav-tab" role="tab" id="nav-canvas" data-view="canvas" aria-controls="panel-canvas" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="3" cy="8" r="1.8"/><circle cx="13" cy="4" r="1.8"/><circle cx="13" cy="12" r="1.8"/><path d="M4.8 7.3l6.4-2.6M4.8 8.7l6.4 2.6"/></svg><span class="nav-label">Workflow Canvas</span><span class="count" id="ncount-canvas">&#8211;</span></button>
       <button class="nav-tab" role="tab" id="nav-worktrees" data-view="worktrees" aria-controls="panel-worktrees" aria-selected="false" tabindex="-1"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-4 2.5-6.2 4.6"/></svg><span class="nav-label">Agent Worktrees</span><span class="count" id="ncount-worktrees">&#8211;</span></button>
     </div>
     <div class="nav-group" aria-hidden="true">System &amp; Data</div>
@@ -737,6 +782,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
 <main class="container" id="main">
   <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="nav-overview" tabindex="0"></section>
   <section class="panel" id="panel-tasks" role="tabpanel" aria-labelledby="nav-tasks" tabindex="0" hidden></section>
+  <section class="panel" id="panel-canvas" role="tabpanel" aria-labelledby="nav-canvas" tabindex="0" hidden></section>
   <section class="panel" id="panel-worktrees" role="tabpanel" aria-labelledby="nav-worktrees" tabindex="0" hidden></section>
   <section class="panel" id="panel-benchmarks" role="tabpanel" aria-labelledby="nav-benchmarks" tabindex="0" hidden></section>
   <section class="panel" id="panel-database" role="tabpanel" aria-labelledby="nav-database" tabindex="0" hidden>
@@ -1048,6 +1094,8 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     x: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
     shield: '<svg class="icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><path d="M5.6 8.1l1.7 1.7 3.2-3.3"/></svg>',
     play: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z"/></svg>',
+    pause: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="2.5" width="3.5" height="11" rx="1"/><rect x="9.5" y="2.5" width="3.5" height="11" rx="1"/></svg>',
+    refresh: '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/><path d="M13.5 2.5v3h-3"/></svg>',
     alert: '<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>',
     branch: '<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.2 7.4"/></svg>',
     gauge: '<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/></svg>'
@@ -1193,10 +1241,11 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   }
 
   // ─── Mission Control: pipeline state ───────────────────────────────────────
-  var VIEWS = ['overview', 'tasks', 'worktrees', 'benchmarks', 'database'];
+  var VIEWS = ['overview', 'tasks', 'canvas', 'worktrees', 'benchmarks', 'database'];
   var VIEW_DEPS = {
     overview: ['status', 'tasks', 'telemetry', 'escalations'],
     tasks: ['tasks', 'runs', 'escalations'],
+    canvas: ['tasks', 'runs', 'escalations'],
     worktrees: ['worktrees', 'tasks'],
     benchmarks: ['benchmarks']
   };
@@ -1225,6 +1274,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     telemetry: null,
     /** Pending escalations, newest first; each may carry a self-healing proposedPatch. */
     escalations: [],
+    sim: { active: false, speed: 1, scenario: 'default', zoom: 1, panX: 0, panY: 0 },
     loaded: {},
     errors: {},
     busy: {},
@@ -1355,6 +1405,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     var tasksOk = pipe.loaded.tasks && !(pipe.errors.tasks && !pipe.milestones.length);
     var active = allTasks().filter(function (t) { return t.status === 'in_progress'; }).length;
     setCount('tasks', tasksOk ? String(active) : '–', 'Tasks in progress');
+    setCount('canvas', tasksOk ? String((pipe.runs || []).filter(isRunActive).length || allTasks().length) : '–', 'Workflow graph nodes');
     var proposals = proposalCount();
     var pBadge = $('ncount-proposals');
     pBadge.hidden = !proposals;
@@ -1372,6 +1423,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   var RENDERERS = {
     overview: function () { return renderOverview(); },
     tasks: function () { return renderTasks(); },
+    canvas: function () { return renderCanvas(); },
     worktrees: function () { return renderWorktrees(); },
     benchmarks: function () { return renderBenchmarks(); }
   };
@@ -2306,6 +2358,7 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
       queueConsoleDiff();
     }
     repaint('tasks');
+    repaint('canvas');
     if (!RUN_ACTIVE[run.status]) {
       var statusMsg = (RUN_LABEL[run.status] || run.status) + ': ' + run.taskId;
       if (run.error && run.status !== 'completed') {
@@ -2337,6 +2390,231 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
     $('block-error').textContent = '';
     openDialog($('block-dialog'));
     $('block-reason').focus();
+  }
+
+  // ─── View: Workflow Canvas (Interactive n8n-Style Node DAG & Simulation) ───
+  function canvasControls() {
+    var opts = '<option value="all">All milestones</option>' + (pipe.milestones || []).map(function (m) {
+      return '<option value="' + esc(m.id) + '"' + (pipe.filterMilestone === m.id ? ' selected' : '') + '>' + esc(m.id + ' · ' + m.name) + '</option>';
+    }).join('');
+    return '<label class="sr-only" for="canvas-milestone">Milestone</label><select class="input" id="canvas-milestone">' + opts + '</select>' +
+      '<button class="btn small" type="button" id="btn-fit-canvas" title="Reset view">' + ICON.refresh + 'Reset View</button>';
+  }
+
+  function roleClass(role) {
+    var r = String(role || '').toLowerCase();
+    if (r.indexOf('backend') !== -1) return 'backend';
+    if (r.indexOf('frontend') !== -1) return 'frontend';
+    if (r.indexOf('tester') !== -1 || r.indexOf('qa') !== -1) return 'qa-tester';
+    if (r.indexOf('data') !== -1 || r.indexOf('migration') !== -1) return 'database';
+    if (r.indexOf('security') !== -1 || r.indexOf('audit') !== -1) return 'security-auditor';
+    return 'backend';
+  }
+
+  function applyCanvasTransform() {
+    var stage = $('canvas-stage');
+    if (stage) {
+      stage.setAttribute('transform', 'translate(' + (pipe.sim.panX || 0) + ',' + (pipe.sim.panY || 0) + ') scale(' + (pipe.sim.zoom || 1) + ')');
+    }
+  }
+
+  function toggleSimulation() {
+    pipe.sim.active = !pipe.sim.active;
+    if (pipe.sim.active) {
+      postJson('/api/pipeline/simulation/start', {
+        scenario: pipe.sim.scenario,
+        speedMultiplier: pipe.sim.speed
+      }).then(function () {
+        toast('Simulation started (' + pipe.sim.speed + 'x speed)', 'ok');
+      }, function (e) {
+        pipe.sim.active = false;
+        toast('Could not start simulation: ' + e.message);
+      }).then(function () {
+        repaint('canvas');
+      });
+    } else {
+      postJson('/api/pipeline/simulation/stop', {}).then(function () {
+        toast('Simulation paused', 'ok');
+      }, function (e) {
+        toast('Could not stop simulation: ' + e.message);
+      }).then(function () {
+        repaint('canvas');
+      });
+    }
+  }
+
+  function resetSimulation() {
+    pipe.sim.active = false;
+    postJson('/api/pipeline/simulation/stop', {}).then(function () {
+      toast('Simulation reset');
+      return fetchPipeline(['tasks', 'runs', 'status']);
+    }).then(function () {
+      repaint('canvas');
+    });
+  }
+
+  function renderCanvas() {
+    var head = panelHead('Workflow Canvas', 'Interactive n8n-style agent DAG canvas with dependency cables and real-time execution simulation.', canvasControls());
+    if (!pipe.loaded.tasks) return head + '<div class="canvas-wrapper skeleton tall" aria-hidden="true"></div>';
+    var tasks = visibleTasks();
+    if (!tasks.length) return head + '<div class="canvas-wrapper"><p class="kcol-empty" style="margin:40px auto;max-width:320px;">No tasks found.</p></div>';
+
+    // Compute DAG levels
+    var taskMap = {};
+    tasks.forEach(function (t) { taskMap[t.id] = t; });
+
+    var levels = {};
+    var nodeLevels = {};
+    function getLevel(t, visited) {
+      if (nodeLevels[t.id] != null) return nodeLevels[t.id];
+      if (visited[t.id]) return 0;
+      visited[t.id] = true;
+      var maxL = 0;
+      (t.dependencies || []).forEach(function (dId) {
+        var dep = taskMap[dId];
+        if (dep) maxL = Math.max(maxL, getLevel(dep, visited) + 1);
+      });
+      nodeLevels[t.id] = maxL;
+      return maxL;
+    }
+
+    tasks.forEach(function (t) {
+      var l = getLevel(t, {});
+      if (!levels[l]) levels[l] = [];
+      levels[l].push(t);
+    });
+
+    var nodeW = 260, nodeH = 105, gapX = 110, gapY = 45;
+    var nodePos = {};
+    var sortedLevels = Object.keys(levels).sort(function (a, b) { return Number(a) - Number(b); });
+    var maxCols = sortedLevels.length;
+    var maxRows = 1;
+
+    sortedLevels.forEach(function (lvlStr) {
+      var l = Number(lvlStr);
+      var colTasks = levels[l];
+      maxRows = Math.max(maxRows, colTasks.length);
+      colTasks.forEach(function (t, rowIdx) {
+        var x = 50 + l * (nodeW + gapX);
+        var y = 50 + rowIdx * (nodeH + gapY);
+        nodePos[t.id] = { x: x, y: y, task: t };
+      });
+    });
+
+    var svgW = Math.max(1040, 50 + maxCols * (nodeW + gapX) + 80);
+    var svgH = Math.max(520, 50 + maxRows * (nodeH + gapY) + 80);
+
+    // Build cables (edges)
+    var cablesHtml = '';
+    var pulsesHtml = '';
+    tasks.forEach(function (t) {
+      var toPos = nodePos[t.id];
+      if (!toPos) return;
+      var toX = toPos.x;
+      var toY = toPos.y + nodeH / 2;
+
+      (t.dependencies || []).forEach(function (dId) {
+        var fromPos = nodePos[dId];
+        if (!fromPos) return;
+        var fromX = fromPos.x + nodeW;
+        var fromY = fromPos.y + nodeH / 2;
+        var dx = Math.max(40, (toX - fromX) * 0.45);
+        var d = 'M ' + fromX + ' ' + fromY + ' C ' + (fromX + dx) + ' ' + fromY + ', ' + (toX - dx) + ' ' + toY + ', ' + toX + ' ' + toY;
+
+        var fromRun = runFor(dId);
+        var toRun = runFor(t.id);
+        var fromTask = fromPos.task;
+        var isActive = (fromRun && isRunActive(fromRun)) || (toRun && isRunActive(toRun)) || t.status === 'in_progress' || fromTask.status === 'in_progress';
+        var isDone = (fromRun && fromRun.status === 'completed') || fromTask.status === 'completed';
+        var isBlocked = (fromRun && fromRun.status === 'failed') || fromTask.status === 'blocked';
+
+        var cls = 'cable' + (isActive ? ' is-active' : isDone ? ' is-done' : isBlocked ? ' is-blocked' : '');
+        cablesHtml += '<path class="' + cls + '" d="' + d + '"/>';
+        if (isActive) {
+          var dur = Math.max(0.6, 2 / (pipe.sim.speed || 1));
+          pulsesHtml += '<circle class="cable-pulse" r="4.5"><animateMotion path="' + d + '" dur="' + dur + 's" repeatCount="indefinite"/></circle>';
+        }
+      });
+    });
+
+    // Build node cards inside SVG foreignObject
+    var nodesHtml = '';
+    tasks.forEach(function (t) {
+      var pos = nodePos[t.id];
+      if (!pos) return;
+      var run = runFor(t.id);
+      var active = isRunActive(run);
+      var isDone = (run && run.status === 'completed') || t.status === 'completed';
+      var isBlocked = (run && run.status === 'failed') || t.status === 'blocked';
+      var role = roleClass(t.assignedSubagent);
+      var effectiveStatus = active ? 'in_progress' : isDone ? 'completed' : isBlocked ? 'blocked' : 'pending';
+      var stCls = active ? 'is-running' : 'is-' + effectiveStatus;
+
+      var statusText = effectiveStatus === 'completed' ? 'Done' : active ? 'Running' : effectiveStatus === 'blocked' ? 'Blocked' : 'Queued';
+      var statusTone = effectiveStatus === 'completed' ? 'success' : active ? 'active' : effectiveStatus === 'blocked' ? 'danger' : 'neutral';
+
+      nodesHtml += '<g class="cnode ' + stCls + '" data-action="run-console" data-key="' + esc(t.id) + '" transform="translate(' + pos.x + ',' + pos.y + ')">' +
+        '<foreignObject width="' + nodeW + '" height="' + nodeH + '">' +
+        '<div class="cnode-card ' + stCls + '" xmlns="http://www.w3.org/1999/xhtml">' +
+          '<div class="cnode-head">' +
+            '<span class="cnode-id">' + (effectiveStatus === 'completed' ? ICON.check : '') + esc(t.id) + '</span>' +
+            '<span class="cnode-role cnode-role-' + role + '">' + esc(t.assignedSubagent || 'agent') + '</span>' +
+          '</div>' +
+          '<div class="cnode-title" title="' + esc(t.title) + '">' + esc(t.title) + '</div>' +
+          '<div class="cnode-foot">' +
+            '<span class="cnode-port ' + (active ? 'is-active' : effectiveStatus === 'completed' ? 'is-done' : '') + '"></span>' +
+            '<span class="badge badge-' + statusTone + '">' + esc(statusText) + '</span>' +
+            '<span class="cnode-port ' + (active ? 'is-active' : effectiveStatus === 'completed' ? 'is-done' : '') + '"></span>' +
+          '</div>' +
+        '</div>' +
+        '</foreignObject></g>';
+    });
+
+    // Playback bar markup
+    var sim = pipe.sim || { active: false, speed: 1, scenario: 'default' };
+    var playLabel = sim.active ? ICON.pause + ' Pause' : ICON.play + ' Play Simulation';
+
+    var playBar = '<div class="canvas-playback-bar">' +
+      '<button class="playback-btn ' + (sim.active ? 'primary' : '') + '" type="button" id="btn-sim-toggle">' + playLabel + '</button>' +
+      '<button class="playback-btn" type="button" id="btn-sim-reset">' + ICON.refresh + ' Reset</button>' +
+      '<select class="playback-select" id="sim-scenario" title="Select simulation scenario">' +
+        '<option value="default"' + (sim.scenario === 'default' ? ' selected' : '') + '>Default Pipeline</option>' +
+        '<option value="parallel"' + (sim.scenario === 'parallel' ? ' selected' : '') + '>Parallel Agents</option>' +
+        '<option value="circuit_breaker_heal"' + (sim.scenario === 'circuit_breaker_heal' ? ' selected' : '') + '>Circuit-Breaker &amp; Self-Healing</option>' +
+      '</select>' +
+      '<div class="playback-speed" role="radiogroup" aria-label="Playback speed">' +
+        '<button type="button" class="speed-chip' + (sim.speed === 1 ? ' is-active' : '') + '" data-speed="1">1x</button>' +
+        '<button type="button" class="speed-chip' + (sim.speed === 2 ? ' is-active' : '') + '" data-speed="2">2x</button>' +
+        '<button type="button" class="speed-chip' + (sim.speed === 5 ? ' is-active' : '') + '" data-speed="5">5x</button>' +
+      '</div>' +
+    '</div>';
+
+    // Zoom bar markup
+    var zoomBar = '<div class="canvas-zoom-bar">' +
+      '<button class="rc-btn" type="button" id="btn-canvas-zoomin" title="Zoom In"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg></button>' +
+      '<button class="rc-btn" type="button" id="btn-canvas-zoomout" title="Zoom Out"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8h12"/></svg></button>' +
+      '<button class="rc-btn" type="button" id="btn-canvas-zoomreset" title="Reset View"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="10" height="10" rx="1"/></svg></button>' +
+    '</div>';
+
+    var zoom = sim.zoom || 1;
+    var panX = sim.panX || 0;
+    var panY = sim.panY || 0;
+    var transform = 'translate(' + panX + ',' + panY + ') scale(' + zoom + ')';
+
+    var svgContent = '<svg class="canvas-svg" id="canvas-svg" viewBox="0 0 ' + svgW + ' ' + svgH + '">' +
+      '<defs>' +
+        '<pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse">' +
+          '<circle cx="2" cy="2" r="1.3" fill="#cbd5e1"/>' +
+        '</pattern>' +
+      '</defs>' +
+      '<rect width="100%" height="100%" fill="url(#dot-grid)"/>' +
+      '<g id="canvas-stage" transform="' + transform + '">' +
+        '<g class="cables-layer">' + cablesHtml + pulsesHtml + '</g>' +
+        '<g class="nodes-layer">' + nodesHtml + '</g>' +
+      '</g>' +
+    '</svg>';
+
+    return head + '<div class="canvas-wrapper" id="canvas-wrapper">' + svgContent + zoomBar + playBar + '</div>';
   }
 
   // ─── View 3: Agent worktrees ───────────────────────────────────────────────
@@ -3870,6 +4148,94 @@ kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--mu
   $('panel-tasks').addEventListener('change', function (e) {
     if (e.target.id === 'task-milestone') { pipe.filterMilestone = e.target.value; paint('tasks'); }
   });
+
+  // ─── Events: Workflow Canvas ───────────────────────────────────────────────
+  $('panel-canvas').addEventListener('change', function (e) {
+    if (e.target.id === 'canvas-milestone') {
+      pipe.filterMilestone = e.target.value === 'all' ? '' : e.target.value;
+      repaint('canvas');
+    } else if (e.target.id === 'sim-scenario') {
+      pipe.sim.scenario = e.target.value;
+      if (pipe.sim.active) {
+        postJson('/api/pipeline/simulation/start', {
+          scenario: pipe.sim.scenario,
+          speedMultiplier: pipe.sim.speed
+        });
+      }
+    }
+  });
+
+  $('panel-canvas').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.id === 'btn-sim-toggle') {
+      toggleSimulation();
+    } else if (btn.id === 'btn-sim-reset') {
+      resetSimulation();
+    } else if (btn.id === 'btn-fit-canvas' || btn.id === 'btn-canvas-zoomreset') {
+      pipe.sim.zoom = 1;
+      pipe.sim.panX = 0;
+      pipe.sim.panY = 0;
+      applyCanvasTransform();
+    } else if (btn.id === 'btn-canvas-zoomin') {
+      pipe.sim.zoom = Math.min(2.5, Number(((pipe.sim.zoom || 1) * 1.2).toFixed(2)));
+      applyCanvasTransform();
+    } else if (btn.id === 'btn-canvas-zoomout') {
+      pipe.sim.zoom = Math.max(0.4, Number(((pipe.sim.zoom || 1) / 1.2).toFixed(2)));
+      applyCanvasTransform();
+    } else if (btn.hasAttribute('data-speed')) {
+      var spd = Number(btn.getAttribute('data-speed')) || 1;
+      pipe.sim.speed = spd;
+      document.querySelectorAll('#panel-canvas .speed-chip').forEach(function (c) {
+        c.classList.toggle('is-active', Number(c.getAttribute('data-speed')) === spd);
+      });
+      if (pipe.sim.active) {
+        postJson('/api/pipeline/simulation/start', {
+          scenario: pipe.sim.scenario,
+          speedMultiplier: pipe.sim.speed
+        });
+      }
+      repaint('canvas');
+    }
+  });
+
+  var isCanvasPanning = false;
+  var panStartX = 0;
+  var panStartY = 0;
+
+  $('panel-canvas').addEventListener('mousedown', function (e) {
+    if (e.target.closest('button, select, input, .cnode-card, a, [data-action]')) return;
+    var wrapper = $('canvas-wrapper');
+    if (!wrapper || !wrapper.contains(e.target)) return;
+    isCanvasPanning = true;
+    panStartX = e.clientX - (pipe.sim.panX || 0);
+    panStartY = e.clientY - (pipe.sim.panY || 0);
+    wrapper.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mousemove', function (e) {
+    if (!isCanvasPanning) return;
+    pipe.sim.panX = Math.round(e.clientX - panStartX);
+    pipe.sim.panY = Math.round(e.clientY - panStartY);
+    applyCanvasTransform();
+  });
+
+  window.addEventListener('mouseup', function () {
+    if (!isCanvasPanning) return;
+    isCanvasPanning = false;
+    var wrapper = $('canvas-wrapper');
+    if (wrapper) wrapper.style.cursor = '';
+  });
+
+  $('panel-canvas').addEventListener('wheel', function (e) {
+    var wrapper = $('canvas-wrapper');
+    if (!wrapper || !wrapper.contains(e.target)) return;
+    e.preventDefault();
+    var factor = e.deltaY < 0 ? 1.1 : 0.9;
+    pipe.sim.zoom = Math.max(0.4, Math.min(2.5, Number(((pipe.sim.zoom || 1) * factor).toFixed(2))));
+    applyCanvasTransform();
+  }, { passive: false });
+
 
   $('btn-confirm-block').addEventListener('click', function () {
     var reason = $('block-reason').value.trim();
