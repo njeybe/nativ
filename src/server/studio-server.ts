@@ -57,6 +57,8 @@ import {
 import { runTaskBlock, runTaskComplete, runTaskStart } from '../commands/task.js';
 import { runWorktreeMerge, runWorktreeRemove, type WorktreeInfo } from '../commands/worktree.js';
 import { runBench } from '../commands/bench.js';
+import { finalizeTriage, triageBlocker } from '../commands/triage.js';
+import { Tier1Liaison, type Tier1LiaisonOptions, type TriageEvaluation } from '../core/tier1-liaison.js';
 import {
   AgentSupervisor,
   SupervisorError,
@@ -93,6 +95,8 @@ export interface StudioServerOptions {
   heartbeatMs?: number;
   /** Agent supervisor tuning (runner command, timeout budget, log buffer size). `cwd` is always the project root. */
   supervisor?: Omit<AgentSupervisorOptions, 'cwd'>;
+  /** Tier 1 strategist transport (API key, model, fetch). Defaults to GEMINI_API_KEY and native fetch. */
+  triage?: Tier1LiaisonOptions;
 }
 
 export interface StudioServerHandle {
@@ -1591,6 +1595,67 @@ async function handleEscalationResolve(root: string, body: Record<string, unknow
   });
 }
 
+// ─── Tier 1 triage ─────────────────────────────────────────────────────────────
+
+/** The contract's evaluate body; the full verdict (patch, proof, guardrails) is stored on the escalation. */
+function triageView(result: TriageEvaluation) {
+  return {
+    ok: true,
+    escalationId: result.escalationId,
+    model: result.model,
+    latencyMs: result.latencyMs,
+    classification: result.classification,
+    reasoning: result.reasoning,
+    autoPatchApplied: result.autoPatchApplied,
+    ...(result.humanCard ? { humanCard: result.humanCard } : {}),
+  };
+}
+
+/**
+ * POST /api/pipeline/triage/evaluate: runs the Tier 1 strategist on one escalation. A proven additive
+ * patch is written only while auto-triage is enabled, and then unblocks the task. Concurrent requests
+ * for the same escalation share one evaluation, so a double-click cannot apply or count twice.
+ */
+function handleTriageEvaluate(
+  root: string,
+  liaison: Tier1Liaison,
+  inFlight: Map<string, Promise<ReturnType<typeof triageView>>>,
+  body: Record<string, unknown>,
+) {
+  const escalationId = typeof body.escalationId === 'string' ? body.escalationId.trim() : '';
+  if (!TASK_ID_PATTERN.test(escalationId)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"escalationId" must be an escalation id such as esc-01');
+  }
+  const running = inFlight.get(escalationId);
+  if (running) return running;
+
+  const evaluation = (async () => {
+    const blocker = triageBlocker(root, escalationId);
+    if (blocker) throw new HttpError(400, 'TRIAGE_REJECTED', blocker);
+    const result = await liaison.evaluate(escalationId);
+    if (!result.ok) throw new HttpError(400, 'TRIAGE_REJECTED', result.error);
+    await finalizeTriage(root, result);
+    return triageView(result);
+  })().finally(() => inFlight.delete(escalationId));
+  inFlight.set(escalationId, evaluation);
+  return evaluation;
+}
+
+const RISK_THRESHOLDS = ['safe_contracts_only', 'all_non_destructive'];
+
+/** POST /api/pipeline/triage/config: session-only auto-triage settings, validated before they reach the liaison. */
+function handleTriageConfig(liaison: Tier1Liaison, body: Record<string, unknown>) {
+  if (typeof body.autoTriageEnabled !== 'boolean') {
+    throw new HttpError(400, 'VALIDATION_ERROR', '"autoTriageEnabled" must be a boolean');
+  }
+  if (body.riskThreshold !== undefined && !RISK_THRESHOLDS.includes(body.riskThreshold as string)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `"riskThreshold" must be one of: ${RISK_THRESHOLDS.join(', ')}`);
+  }
+  const result = liaison.updateConfig({ autoTriageEnabled: body.autoTriageEnabled, riskThreshold: body.riskThreshold });
+  if (!result.ok) throw new HttpError(400, 'VALIDATION_ERROR', result.error);
+  return result;
+}
+
 /**
  * Fan-out for GET /api/events. Watches .ai/ only while a client is connected, coalesces write bursts
  * (tmp file + atomic rename + lock files) into one event per type, and sends heartbeats so idle
@@ -1909,6 +1974,10 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
 
   const simulation = new SimulationController(events);
 
+  // Tier 1 strategist: settings and counters live for this server session only.
+  const liaison = new Tier1Liaison(root, options.triage);
+  const triageInFlight = new Map<string, Promise<ReturnType<typeof triageView>>>();
+
   // Concurrent "Run Benchmark" requests share one in-flight run.
   let benchmarkRun: Promise<BenchmarkReport> | null = null;
   const runBenchmarkSuite = (): Promise<BenchmarkReport> => {
@@ -2011,6 +2080,12 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, simulation.start(await readJsonBody(req)));
         case 'POST /api/pipeline/simulation/stop':
           return sendJson(res, 200, simulation.stop());
+        case 'POST /api/pipeline/triage/evaluate':
+          return sendJson(res, 200, await handleTriageEvaluate(root, liaison, triageInFlight, await readJsonBody(req)));
+        case 'GET /api/pipeline/triage/status':
+          return sendJson(res, 200, liaison.getStatus());
+        case 'POST /api/pipeline/triage/config':
+          return sendJson(res, 200, handleTriageConfig(liaison, await readJsonBody(req)));
         case 'GET /favicon.ico':
           res.writeHead(204).end();
           return;
@@ -2023,7 +2098,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           '/api/pipeline/tasks/abort', '/api/pipeline/tasks/runs', '/api/pipeline/tasks/logs', '/api/pipeline/worktrees',
           '/api/pipeline/worktrees/action', '/api/pipeline/worktrees/diff', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
           '/api/pipeline/telemetry/detailed', '/api/pipeline/escalations', '/api/pipeline/escalations/resolve',
-          '/api/pipeline/simulation/start', '/api/pipeline/simulation/stop',
+          '/api/pipeline/simulation/start', '/api/pipeline/simulation/stop', '/api/pipeline/triage/evaluate',
+          '/api/pipeline/triage/status', '/api/pipeline/triage/config',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);

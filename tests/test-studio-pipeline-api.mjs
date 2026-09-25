@@ -4,12 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { Readable, Writable } from 'node:stream';
 import assert from 'node:assert/strict';
 
 // Run with `npx tsx tests/test-studio-pipeline-api.mjs`: the studio server is imported from
 // TypeScript source so the Mission Control endpoints are verified without a build step.
 import { startStudioServer } from '../src/server/studio-server.ts';
 import { ContractGovernor } from '../src/governor/index.ts';
+import { runTriage } from '../src/commands/triage.ts';
 
 console.log('--- Starting Studio Mission Control Pipeline API & SSE Verification ---');
 
@@ -21,6 +23,10 @@ setTimeout(() => {
 
 // Keep git discovery inside the fixtures so the non-git fixture is deterministic.
 process.env.GIT_CEILING_DIRECTORIES = fs.realpathSync(os.tmpdir());
+
+// The Tier 1 liaison falls back to process.env for a Gemini key; triage checks must stay offline and deterministic.
+delete process.env.GEMINI_API_KEY;
+delete process.env.GOOGLE_API_KEY;
 
 const PASSING_VERIFY = 'node -e "process.exit(0)"';
 const FAILING_VERIFY = 'node -e "process.exit(3)"';
@@ -1175,6 +1181,281 @@ try {
     assert.equal(stopRes.body.ok, true);
     assert.equal(stopRes.body.status, 'stopped');
     console.log('✔ POST /api/pipeline/simulation/start and /stop control real-time agent workflow simulation');
+  }
+
+  // 22. Tier 1 AI Strategist triage endpoints: status, config, and evaluate
+  {
+    const statusRes = await getOk(studio.url, '/api/pipeline/triage/status');
+    assert.equal(statusRes.ok, true);
+    assert.ok(statusRes.model.includes('gemini'));
+    assert.equal(typeof statusRes.autoTriageEnabled, 'boolean');
+
+    const configRes = await requestJson(studio.url, 'POST', '/api/pipeline/triage/config', {
+      autoTriageEnabled: true,
+      riskThreshold: 'all_non_destructive',
+    });
+    assert.equal(configRes.status, 200);
+    assert.equal(configRes.body.ok, true);
+    assert.equal(configRes.body.config.riskThreshold, 'all_non_destructive');
+
+    // Create an escalation to evaluate
+    const escDir = fullDir;
+    const escPath = path.join(escDir, '.ai', 'escalation.json');
+    const escData = {
+      version: '1.0.0',
+      escalations: [
+        {
+          id: 'esc-test-01',
+          taskId: 'task-a',
+          status: 'pending_review',
+          summary: 'Missing optional property in API schema',
+          details: 'contract drift detected for /api/test',
+        },
+      ],
+    };
+    fs.writeFileSync(escPath, JSON.stringify(escData, null, 2), 'utf8');
+
+    const evalRes = await requestJson(studio.url, 'POST', '/api/pipeline/triage/evaluate', {
+      escalationId: 'esc-test-01',
+    });
+    assert.equal(evalRes.status, 200, `triage/evaluate → HTTP ${evalRes.status}`);
+    assert.equal(evalRes.body.ok, true);
+    assert.equal(evalRes.body.escalationId, 'esc-test-01');
+    assert.ok(evalRes.body.classification, 'classification must be present');
+    console.log('✔ Tier 1 triage endpoints (/status, /config, /evaluate) verified');
+  }
+
+  // 23. Tier 1 triage — status/config/evaluate endpoints, auto-apply gate, persisted verdicts, and `nativ triage`
+  {
+    const triageDir = createFixture('nativ-studio-triage-', { full: true });
+    const aiDir = path.join(triageDir, '.ai');
+    const dbPath = path.join(aiDir, 'db_schema.json');
+    const bio = { name: 'bio', type: 'TEXT', nullable: true };
+    writeJsonAtomic(dbPath, {
+      tables: [
+        {
+          name: 'users',
+          columns: [
+            { name: 'id', type: 'UUID', nullable: false },
+            { name: 'legacy_flag', type: 'BOOLEAN', nullable: false },
+          ],
+          indexes: [],
+          foreignKeys: [],
+        },
+      ],
+    });
+    const escalation = (id, taskId, type, summary, extra = {}) => ({
+      id,
+      taskId,
+      type,
+      reportedBy: 'backend',
+      timestamp: new Date().toISOString(),
+      summary,
+      details: '',
+      affectedContracts: ['.ai/db_schema.json'],
+      status: 'pending_review',
+      ...extra,
+    });
+    const bioPatch = { target: 'db_schema', operation: 'ADD', path: 'tables.users.columns.bio', value: bio, reason: 'Profiles need a bio' };
+    writeJsonAtomic(path.join(aiDir, 'escalation.json'), {
+      version: '1.0.0',
+      projectName: 'studio-triage-fixture',
+      lastUpdated: new Date().toISOString(),
+      escalations: [
+        escalation('esc-01', 'task-e', 'schema_flaw', 'users table has no bio column', {
+          proposedPatch: {
+            kind: 'contract_patch',
+            proposalId: 'heal-fixture',
+            strategy: 'add_missing_target',
+            rationale: 'Add the missing column',
+            requiresHumanApproval: true,
+            candidatesEvaluated: 1,
+            verificationProof: { isolated: true, method: 'sandbox_governor_replay', passed: true, checks: [], verifiedAt: new Date().toISOString(), durationMs: 1 },
+            generatedAt: new Date().toISOString(),
+            candidate: bioPatch,
+            original: bioPatch,
+          },
+        }),
+        escalation('esc-02', 'task-g', 'architectural_ambiguity', 'Cleanup wants to DROP COLUMN legacy_flag'),
+        escalation('esc-03', 'task-h', 'schema_flaw', 'Settings page needs a theme preference'),
+        escalation('esc-04', 'task-f', 'architectural_ambiguity', 'Nightly job would TRUNCATE the audit table'),
+      ],
+    });
+
+    const triageStudio = await startStudioServer({ port: 0, cwd: triageDir, connections: { dev: null, prod: null } });
+    servers.push(triageStudio);
+    const evaluate = (payload) => requestJson(triageStudio.url, 'POST', '/api/pipeline/triage/evaluate', payload);
+    const configure = (payload) => requestJson(triageStudio.url, 'POST', '/api/pipeline/triage/config', payload);
+    const escalationRecord = async (id) =>
+      (await getOk(triageStudio.url, '/api/pipeline/escalations?status=all')).escalations.find((e) => e.id === id);
+
+    const initial = await getOk(triageStudio.url, '/api/pipeline/triage/status');
+    assert.deepEqual(Object.keys(initial).sort(), ['autoTriageEnabled', 'hasApiKey', 'model', 'ok', 'stats']);
+    assert.equal(initial.model, 'gemini-3.8-flash');
+    assert.equal(typeof initial.autoTriageEnabled, 'boolean');
+    assert.equal(initial.hasApiKey, false, 'no key in the fixture .env or the environment');
+    assert.deepEqual(initial.stats, { totalEvaluated: 0, autoResolved: 0, escalatedToHuman: 0 });
+
+    assertContractError('evaluate without escalationId', await evaluate({}));
+    assertContractError('evaluate an unknown escalation', await evaluate({ escalationId: 'esc-99' }));
+    assertContractError('config without the toggle', await configure({}));
+    assertContractError('config with a non-boolean toggle', await configure({ autoTriageEnabled: 'yes' }));
+    assertContractError('config with an unknown threshold', await configure({ autoTriageEnabled: true, riskThreshold: 'yolo' }));
+    assert.equal((await requestJson(triageStudio.url, 'GET', '/api/pipeline/triage/evaluate')).status, 405);
+    assert.equal((await requestJson(triageStudio.url, 'POST', '/api/pipeline/triage/status', {})).status, 405);
+    assert.deepEqual((await getOk(triageStudio.url, '/api/pipeline/triage/status')).stats.totalEvaluated, 0, 'rejected requests are not evaluated');
+
+    const off = await configure({ autoTriageEnabled: false });
+    assert.equal(off.status, 200);
+    assert.equal(off.body.ok, true);
+    assert.equal(off.body.config.autoTriageEnabled, false);
+    assert.equal(off.body.config.riskThreshold, 'safe_contracts_only');
+
+    // Destructive request: contract-shaped body with a 4-part card, persisted on a still-pending escalation.
+    const human = await evaluate({ escalationId: 'esc-02' });
+    assert.equal(human.status, 200, `evaluate esc-02 → HTTP ${human.status}: ${JSON.stringify(human.body)}`);
+    assert.deepEqual(Object.keys(human.body).sort(), [
+      'autoPatchApplied', 'classification', 'escalationId', 'humanCard', 'latencyMs', 'model', 'ok', 'reasoning',
+    ]);
+    assert.equal(human.body.escalationId, 'esc-02');
+    assert.equal(human.body.classification, 'REQUIRE_HUMAN_DECISION');
+    assert.equal(human.body.autoPatchApplied, false);
+    assert.equal(typeof human.body.latencyMs, 'number');
+    assert.deepEqual(Object.keys(human.body.humanCard).sort(), ['blastRadius', 'options', 'rootCause', 'symptom']);
+    assert.ok(human.body.humanCard.options.length >= 2);
+    assert.ok(human.body.humanCard.options.some((o) => o.recommended));
+    const esc02 = await escalationRecord('esc-02');
+    assert.equal(esc02.status, 'pending_review', 'a decision card leaves the escalation pending');
+    assert.equal(esc02.triage.classification, 'REQUIRE_HUMAN_DECISION');
+    assert.deepEqual(esc02.triage.humanCard, human.body.humanCard);
+
+    // Auto-triage off: the carried proposal is classified safe but not written.
+    const schemaBefore = fs.readFileSync(dbPath, 'utf8');
+    const proven = await evaluate({ escalationId: 'esc-01' });
+    assert.equal(proven.status, 200);
+    assert.equal(proven.body.classification, 'AUTO_RESOLVE');
+    assert.equal(proven.body.autoPatchApplied, false);
+    assert.equal(proven.body.humanCard, undefined);
+    assert.equal(fs.readFileSync(dbPath, 'utf8'), schemaBefore, 'auto-triage off must not touch the contract');
+    const esc01Proven = await escalationRecord('esc-01');
+    assert.equal(esc01Proven.status, 'pending_review');
+    assert.equal(esc01Proven.triage.resolution.patch.path, 'tables.users.columns.bio');
+    assert.equal(readPlanTask(triageDir, 'task-e').status, 'blocked');
+
+    // Auto-triage on: the patch is written once, the escalation closes, and the task unblocks.
+    const on = await configure({ autoTriageEnabled: true });
+    assert.equal(on.status, 200);
+    assert.equal(on.body.config.autoTriageEnabled, true);
+    const [first, second] = await Promise.all([evaluate({ escalationId: 'esc-01' }), evaluate({ escalationId: 'esc-01' })]);
+    assert.ok(
+      [first, second].some((r) => r.status === 200 && r.body.autoPatchApplied),
+      `one concurrent evaluation must apply: ${JSON.stringify([first.body, second.body])}`,
+    );
+    for (const r of [first, second]) {
+      if (r.status !== 200) assertContractError('a concurrent evaluation after the fix', r);
+      else assert.equal(r.body.autoPatchApplied, true, 'concurrent callers share the same evaluation');
+    }
+    const users = JSON.parse(fs.readFileSync(dbPath, 'utf8')).tables.find((t) => t.name === 'users');
+    assert.equal(users.columns.filter((c) => c.name === 'bio').length, 1, 'the patch is applied exactly once');
+    const esc01 = await escalationRecord('esc-01');
+    assert.equal(esc01.status, 'resolved');
+    assert.match(esc01.resolutionNotes, /^Auto-resolved by Tier 1/);
+    assert.equal(esc01.resolution.proposalApplied, true);
+    assert.equal(esc01.triage.autoPatchApplied, true);
+    assert.equal(esc01.triage.unblockedTaskId, 'task-e');
+    const taskE = readPlanTask(triageDir, 'task-e');
+    assert.equal(taskE.status, 'pending', 'auto-resolution unblocks the task');
+    assert.match(taskE.notes, /Tier 1 auto-resolution of esc-01/);
+    assertContractError('evaluating a resolved escalation', await evaluate({ escalationId: 'esc-01' }));
+
+    // Safe but nothing to apply: stays pending for the team, contract untouched.
+    const schemaAfterFix = fs.readFileSync(dbPath, 'utf8');
+    const noPatch = await evaluate({ escalationId: 'esc-03' });
+    assert.equal(noPatch.status, 200);
+    assert.equal(noPatch.body.classification, 'AUTO_RESOLVE');
+    assert.equal(noPatch.body.autoPatchApplied, false);
+    assert.equal(fs.readFileSync(dbPath, 'utf8'), schemaAfterFix);
+    assert.equal((await escalationRecord('esc-03')).status, 'pending_review');
+
+    const { stats } = await getOk(triageStudio.url, '/api/pipeline/triage/status');
+    assert.deepEqual(stats, { totalEvaluated: 4, autoResolved: 1, escalatedToHuman: 1 });
+    console.log('✔ Triage endpoints: contract bodies, validation, auto-apply gate, single application, persisted verdicts');
+
+    // `nativ triage` CLI: headless 4-part card with numbered choices.
+    const sink = () => {
+      const chunks = [];
+      const stream = new Writable({
+        write(chunk, _enc, cb) {
+          chunks.push(String(chunk));
+          cb();
+        },
+      });
+      stream.text = () => chunks.join('');
+      return stream;
+    };
+    const cli = async (id, input) => {
+      const output = sink();
+      const results = await runTriage(id, triageDir, { interactive: true, input: Readable.from([input]), output });
+      return { results, text: output.text() };
+    };
+
+    // No id: pick esc-02 from the pending list (esc-02, esc-03, esc-04), then give custom instructions.
+    const picked = await cli(undefined, '1\n3\nArchive the column instead of dropping it\n');
+    assert.equal(picked.results.length, 1);
+    assert.equal(picked.results[0].escalationId, 'esc-02');
+    for (const text of [
+      'Pending escalations', 'Human Decision Required', '1. What is happening?', '2. Why is this happening?',
+      '3. Who and what is affected?', '4. Your options', 'Recommended', '[3] Give custom instructions', 'Choose [1/2/3]',
+    ]) {
+      assert.ok(picked.text.includes(text), `CLI output is missing "${text}":\n${picked.text}`);
+    }
+    assert.ok(!/\p{Extended_Pictographic}/u.test(picked.text.replace(/\x1b\[[0-9;]*m/g, '')), 'triage CLI output is emoji-free');
+    const decided = await escalationRecord('esc-02');
+    assert.equal(decided.humanDecision.optionId, 'custom');
+    assert.equal(decided.humanDecision.instructions, 'Archive the column instead of dropping it');
+    assert.equal(decided.humanDecision.decidedVia, 'cli');
+    assert.equal(decided.status, 'pending_review', 'recording a choice does not resolve the escalation');
+
+    // Explicit id: an out-of-range number is asked again, then option 1 is recorded.
+    const numbered = await cli('esc-04', '9\n1\n');
+    assert.ok(numbered.text.includes('Enter a number from 1 to'));
+    const [option1] = (await escalationRecord('esc-04')).triage.humanCard.options;
+    assert.equal(numbered.results[0].decision.optionId, option1.id);
+    assert.equal((await escalationRecord('esc-04')).humanDecision.label, option1.label);
+
+    // Enter defers; a safe verdict without a patch asks nothing.
+    const deferred = await cli('esc-04', '\n');
+    assert.ok(deferred.text.includes('Decision deferred'));
+    assert.equal(deferred.results[0].decision, undefined);
+    const safe = await cli('esc-03', '');
+    assert.ok(safe.text.includes('Safe to proceed'));
+    assert.equal(safe.results[0].decision, undefined);
+
+    // --all --json reports every pending escalation without prompting.
+    const report = sink();
+    await runTriage(undefined, triageDir, { all: true, json: true, output: report });
+    const parsed = JSON.parse(report.text());
+    assert.equal(parsed.ok, true);
+    assert.deepEqual(parsed.evaluations.map((e) => e.escalationId).sort(), ['esc-02', 'esc-03', 'esc-04']);
+
+    // Errors set the exit code (restored so the leak check below stays meaningful).
+    const exitBefore = process.exitCode;
+    const resolvedJson = sink();
+    await runTriage('esc-01', triageDir, { json: true, output: resolvedJson });
+    const resolvedReport = JSON.parse(resolvedJson.text());
+    assert.equal(resolvedReport.ok, false);
+    assert.match(resolvedReport.evaluations[0].evaluation.error, /already resolved/);
+    assert.equal(process.exitCode, 1);
+    process.exitCode = exitBefore;
+    const usage = sink();
+    assert.deepEqual(await runTriage(undefined, triageDir, { output: usage, interactive: false }), []);
+    assert.match(usage.text(), /pass an escalation id or --all/);
+    assert.equal(process.exitCode, 1);
+    process.exitCode = exitBefore;
+    await runTriage('esc-02', triageDir, { threshold: 'yolo', output: sink() });
+    assert.equal(process.exitCode, 1);
+    process.exitCode = exitBefore;
+    console.log('✔ nativ triage: escalation picker, 4-part card, numbered and custom choices recorded, --all --json report');
   }
 
   assert.ok(

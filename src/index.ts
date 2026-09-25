@@ -24,6 +24,7 @@ import { runMcp } from './commands/mcp.js';
 import { runVerify } from './commands/verify.js';
 import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
 import { runBench } from './commands/bench.js';
+import { runTriage } from './commands/triage.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -322,6 +323,17 @@ export function createProgram(): Command {
     .option('--json', 'Output the generation result as JSON')
     .action(async (targetDir, options) => {
       await runTestGen(targetDir, options);
+    });
+
+  program
+    .command('triage [escalationId] [targetDir]')
+    .description('Run the Tier 1 AI Strategist (Gemini) on pending escalations: auto-resolve safe contract fixes or present a decision card')
+    .option('-a, --all', 'Triage every pending escalation (report only, no prompts)')
+    .option('--apply', 'Write sandbox-proven additive patches to the contracts and unblock their tasks')
+    .option('--threshold <policy>', "Risk threshold: 'safe_contracts_only' (default) or 'all_non_destructive'")
+    .option('--json', 'Output evaluations as JSON (no prompts)')
+    .action(async (escalationId, targetDir, options) => {
+      await runTriage(escalationId, targetDir, options);
     });
 
   program
