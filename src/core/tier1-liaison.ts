@@ -302,6 +302,8 @@ Respond with strictly valid JSON:
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
           }),
+          // A stalled call aborts after 15s and lands in the catch below, falling back to deterministic evaluation.
+          signal: AbortSignal.timeout(15_000),
         });
 
         if (res.ok) {
