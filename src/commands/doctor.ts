@@ -67,6 +67,11 @@ export function analyzeMcpList(text: string): DoctorCheck[] {
     checks.push({ id: 'mcp-listed', status: 'warn', message: 'Claude Code does not list a "nativ" MCP server here. Check that the project .mcp.json is approved (enabledMcpjsonServers) and the workspace is trusted.' });
   } else if (/Connected/.test(line)) {
     checks.push({ id: 'mcp-connected', status: 'ok', message: `Claude Code connects to the nativ MCP server (${line.replace(/\s+-\s+.*$/, '').trim()})` });
+  } else if (/Pending approval/i.test(line)) {
+    // A new project's .mcp.json is not started until the user approves it. That is the expected first state.
+    checks.push({ id: 'mcp-pending', status: 'warn', message: 'The nativ MCP server is waiting for your approval. Open `claude` in this folder and approve it; nothing is wrong with the setup.' });
+  } else if (/Needs authentication/i.test(line)) {
+    checks.push({ id: 'mcp-auth', status: 'warn', message: `Claude Code says the nativ MCP server needs authentication: ${line.trim()}` });
   } else {
     checks.push({ id: 'mcp-connected', status: 'fail', message: `Claude Code lists the nativ MCP server but it is not connected: ${line.trim()}` });
   }

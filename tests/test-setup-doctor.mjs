@@ -392,6 +392,15 @@ const doctorJson = async (root, options = {}) => {
   const down = analyzeMcpList('nativ: nativ mcp - ✖ Failed to connect\n');
   assert.equal(down[0].status, 'fail');
 
+  // A brand-new project's server is not started until the user approves it: expected, so a warning that says what to do
+  const pending = analyzeMcpList('nativ: nativ mcp - ⏸ Pending approval (run `claude` to approve)\n');
+  assert.deepEqual(pending.map((c) => [c.id, c.status]), [['mcp-pending', 'warn']]);
+  assert.match(pending[0].message, /open `claude`/i);
+  assert.match(pending[0].message, /nothing is wrong/i);
+  const auth = analyzeMcpList('nativ: https://example/mcp - ! Needs authentication\n');
+  assert.deepEqual(auth.map((c) => [c.id, c.status]), [['mcp-auth', 'warn']]);
+  assert.equal(analyzeMcpList('nativ: nativ mcp - ✖ Failed to connect\n').some((c) => c.status === 'fail'), true, 'a real failure still fails');
+
   const absent = analyzeMcpList('other: x - ✔ Connected\n');
   assert.equal(absent[0].id, 'mcp-listed');
   assert.equal(absent[0].status, 'warn');
@@ -414,6 +423,12 @@ const doctorJson = async (root, options = {}) => {
   assert.equal(asked, 0, 'the live check only runs when asked for');
   const failed = await doctorJson(root, { deep: true, mcpList: () => null });
   assert.equal(failed.checks.find((c) => c.id === 'mcp-listed').status, 'warn', 'a listing that cannot run is a warning');
+
+  // The first state after `nativ init`: the server waits for approval. That must not make doctor report a problem.
+  const fresh = await doctorJson(root, { deep: true, mcpList: () => 'nativ: nativ mcp - ⏸ Pending approval (run `claude` to approve)' });
+  assert.equal(fresh.checks.find((c) => c.id === 'mcp-pending').status, 'warn');
+  assert.equal(fresh.checks.some((c) => c.status === 'fail'), false, 'pending approval is not a failure');
+  assert.equal(fresh.ok, true, 'so the report is ok');
   cleanup(root);
   console.log('✔ Test 12: doctor interprets `claude mcp list`, including a shadowing scope, and only runs it on request');
 }

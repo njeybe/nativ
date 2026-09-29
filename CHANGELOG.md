@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2
+
+- **`nativ doctor` no longer reports a failure on a brand-new project.** Right after `nativ init`, Claude Code lists the project's `nativ` MCP server as "Pending approval" until you approve it, which is the expected first state. Doctor showed it as a red failure and exited 1. It is now a warning that tells you to open `claude` in the folder and approve the server; a server that genuinely fails to connect is still a failure.
+
 ## 2.0.1
 
 Documentation and package metadata only; no behaviour changes.
