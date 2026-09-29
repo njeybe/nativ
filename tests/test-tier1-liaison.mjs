@@ -11,11 +11,15 @@ import {
   DEFAULT_MODEL,
 } from '../dist/core/tier1-liaison.js';
 
-console.log('--- Starting Tier 1 AI Strategist (Gemini 3.8 Flash) Liaison Tests ---');
+console.log('--- Starting Tier 1 AI Strategist (provider chain) Liaison Tests ---');
 
-// Evaluations fall back to process.env for a key; keep them offline so results are deterministic.
+// Evaluations fall back to process.env for keys and to the local Claude login; keep them offline so results are
+// deterministic. NATIV_PROVIDER_CHILD marks this process as a provider child, which switches claude-cli off, so a
+// test that forgets to inject a fake can never spawn a real Claude or spend subscription usage.
 delete process.env.GEMINI_API_KEY;
 delete process.env.GOOGLE_API_KEY;
+delete process.env.ANTHROPIC_API_KEY;
+process.env.NATIV_PROVIDER_CHILD = '1';
 
 function createFixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-tier1-test-'));
@@ -204,8 +208,9 @@ const GOOGLE_KEY = `AIza${'x'.repeat(35)}`;
     assert.ok(init.body.includes('esc-07') && init.body.includes('postgres://admin:'), 'escalation context is still sent, minus secrets');
     assert.equal(result.ok, true);
     assert.equal(result.source, 'gemini');
+    assert.equal(result.provider, 'gemini', 'reports the provider that answered');
     assert.equal(result.classification, 'REQUIRE_HUMAN_DECISION');
-    assert.equal(result.model, DEFAULT_MODEL, 'reports the default model');
+    assert.equal(result.model, 'gemini-3.8-flash', 'reports the Gemini default model');
     assert.ok(url.endsWith(`/models/${result.model}:generateContent`), 'the model called is the model reported');
   } finally {
     globalThis.fetch = realFetch;
@@ -272,9 +277,9 @@ const GOOGLE_KEY = `AIza${'x'.repeat(35)}`;
   console.log('✔ Test 8: Auto-triage defaults to off; safe fixes apply only after opting in');
 }
 
-// Test 9: one model identifier — the contract's Gemini 3.8 Flash, or an override — is both called and reported
+// Test 9: one model identifier — the Claude triage default, or an override — is both called and reported
 {
-  assert.equal(DEFAULT_MODEL, 'gemini-3.8-flash', 'default model matches the contract');
+  assert.equal(DEFAULT_MODEL, 'haiku', 'triage defaults to the cheapest Claude tier');
   const dir = createFixture();
   fs.writeFileSync(
     path.join(dir, '.ai', 'escalation.json'),
@@ -299,6 +304,160 @@ const GOOGLE_KEY = `AIza${'x'.repeat(35)}`;
     fs.rmSync(dir, { recursive: true, force: true });
   }
   console.log('✔ Test 9: The model called matches the model reported, including overrides');
+}
+
+// ─── Provider chain: Claude first, fall-through, deterministic floor ────────────────────────────────
+
+const VERDICT = {
+  classification: 'REQUIRE_HUMAN_DECISION',
+  riskLevel: 'medium',
+  reasoning: 'A human should pick.',
+  humanCard: {
+    symptom: 'The sync job cannot log in.',
+    rootCause: 'The login is not set up here.',
+    blastRadius: 'Only the sync is paused.',
+    options: [
+      { id: 'opt-a', label: 'Add the login', outcome: 'It resumes.', recommended: true },
+      { id: 'opt-b', label: 'Skip it', outcome: 'It stays stale.', recommended: false },
+    ],
+  },
+};
+
+const cliReply = (over = {}) => JSON.stringify({ type: 'result', is_error: false, api_error_status: null, result: JSON.stringify(VERDICT), ...over });
+const geminiReply = () =>
+  new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(VERDICT) }] } }] }), { status: 200 });
+
+function escalationFixture(id, details = '') {
+  const dir = createFixture();
+  fs.writeFileSync(
+    path.join(dir, '.ai', 'escalation.json'),
+    JSON.stringify({ version: '1.0.0', escalations: [{ id, taskId: 'task-x', status: 'pending_review', summary: 'Sync job cannot reach the reporting database', details }] }, null, 2),
+    'utf8',
+  );
+  return dir;
+}
+
+function fakeDeps({ cli, gemini, binary = true, env = {} }) {
+  const calls = { spawn: [], fetch: [] };
+  return {
+    calls,
+    deps: {
+      env,
+      hasBinary: () => binary,
+      spawn: async (command, args, request) => {
+        calls.spawn.push({ command, args, request });
+        return cli ? cli() : { code: 1, stdout: '', stderr: 'unavailable', timedOut: false, notFound: true };
+      },
+      fetch: async (url, init) => {
+        calls.fetch.push({ url: String(url), init });
+        return gemini ? gemini() : new Response('{}', { status: 503 });
+      },
+    },
+  };
+}
+
+// Test 10: Claude answers first, over stdin, with secrets masked, and no other vendor is contacted
+{
+  const dir = escalationFixture('esc-10', `Connected with postgres://admin:${DB_PASSWORD}@db.local:5432/app using api_key=${INLINE_KEY}`);
+  const { deps, calls } = fakeDeps({ cli: () => ({ code: 0, stdout: cliReply(), stderr: '', timedOut: false }), env: { ANTHROPIC_API_KEY: 'sk-ant-should-never-be-sent-1234567890' } });
+  const result = await evaluateEscalation(dir, 'esc-10', { deps });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.provider, 'claude-cli', 'a Claude login is the first choice');
+  assert.equal(result.source, 'claude');
+  assert.equal(result.model, 'haiku', 'the model reported is the model called');
+  assert.equal(result.classification, 'REQUIRE_HUMAN_DECISION');
+  assert.ok(result.humanCard.options.length >= 2);
+  assert.equal(calls.spawn.length, 1, 'exactly one Claude call');
+  assert.equal(calls.fetch.length, 0, 'no other vendor is contacted');
+  const { args, request } = calls.spawn[0];
+  assert.equal(args[args.indexOf('--model') + 1], 'haiku');
+  assert.ok(!args.includes('--bare') && !args.some((a) => /dangerously/.test(a)));
+  assert.ok(request.input.includes('esc-10') && request.input.includes('postgres://admin:'), 'escalation context is sent');
+  for (const secret of [DB_PASSWORD, INLINE_KEY, 'sk-ant-should-never-be-sent-1234567890']) {
+    assert.ok(!request.input.includes(secret), `prompt sent to Claude leaked ${secret}`);
+    assert.ok(!args.join(' ').includes(secret));
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('✔ Test 10: Claude answers first over stdin with secrets masked; no other vendor is contacted');
+}
+
+// Test 11: a Claude usage limit falls through to Gemini, is remembered, and is not retried
+{
+  const dir = escalationFixture('esc-11', 'contract drift');
+  const limit = () => ({ code: 1, stdout: cliReply({ is_error: true, result: 'Claude usage limit reached' }), stderr: '', timedOut: false });
+  const { deps, calls } = fakeDeps({ cli: limit, gemini: geminiReply, env: { GEMINI_API_KEY: API_KEY } });
+
+  const first = await evaluateEscalation(dir, 'esc-11', { deps });
+  assert.equal(first.provider, 'gemini', 'Gemini takes over when Claude is limited');
+  assert.equal(first.source, 'gemini');
+  assert.equal(first.model, 'gemini-3.8-flash');
+  assert.equal(calls.spawn.length, 1);
+  assert.equal(calls.fetch.length, 1);
+  assert.ok(fs.existsSync(path.join(dir, '.nativ', 'provider-state.json')), 'the limit is remembered on disk');
+
+  const second = await evaluateEscalation(dir, 'esc-11', { deps });
+  assert.equal(second.provider, 'gemini');
+  assert.equal(calls.spawn.length, 1, 'the limited provider is skipped, not retried');
+  assert.equal(calls.fetch.length, 2);
+
+  const status = new Tier1Liaison(dir, { deps }).getStatus();
+  assert.equal(status.provider, 'gemini', 'status reflects the provider a call would use now');
+  assert.equal(status.hasApiKey, true);
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('✔ Test 11: A Claude limit falls through to Gemini and the limited provider is skipped afterwards');
+}
+
+// Test 12: every provider failing, or answering with garbage, ends at the deterministic engine
+{
+  const dir = escalationFixture('esc-12', 'API contracts schema drift: missing sort param');
+  const failing = fakeDeps({ cli: () => ({ code: 1, stdout: cliReply({ is_error: true, result: 'boom' }), stderr: '', timedOut: false }), env: { GEMINI_API_KEY: API_KEY } });
+  const down = await evaluateEscalation(dir, 'esc-12', { deps: failing.deps });
+  assert.equal(down.ok, true, 'a provider outage never fails triage');
+  assert.equal(down.provider, 'deterministic');
+  assert.equal(down.source, 'deterministic');
+  assert.equal(down.classification, 'AUTO_RESOLVE');
+  assert.equal(down.riskLevel, 'low');
+
+  const garbage = fakeDeps({ cli: () => ({ code: 0, stdout: cliReply({ result: 'I am not JSON' }), stderr: '', timedOut: false }) });
+  const bad = await evaluateEscalation(dir, 'esc-12', { deps: garbage.deps });
+  assert.equal(bad.provider, 'deterministic', 'an unparseable reply falls back instead of throwing');
+  assert.equal(bad.classification, 'AUTO_RESOLVE');
+
+  const none = fakeDeps({ binary: false });
+  const offline = await evaluateEscalation(dir, 'esc-12', { deps: none.deps });
+  assert.equal(offline.provider, 'deterministic');
+  assert.equal(none.calls.spawn.length + none.calls.fetch.length, 0, 'nothing is called when nothing is available');
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('✔ Test 12: Provider failure, garbage replies and no providers all end at the deterministic engine');
+}
+
+// Test 13: status reports the active provider and model, and model hints steer the chain
+{
+  const dir = createFixture();
+  const offline = new Tier1Liaison(dir, { deps: fakeDeps({ binary: false }).deps }).getStatus();
+  assert.equal(offline.provider, 'deterministic');
+  assert.equal(offline.hasApiKey, false);
+  assert.equal(offline.model, DEFAULT_MODEL);
+
+  const claude = new Tier1Liaison(dir, { deps: fakeDeps({}).deps }).getStatus();
+  assert.equal(claude.provider, 'claude-cli');
+  assert.equal(claude.model, 'haiku');
+  assert.equal(claude.hasApiKey, true, 'a Claude login counts as usable credentials');
+
+  const geminiOnly = new Tier1Liaison(dir, { deps: fakeDeps({ binary: false, env: { GEMINI_API_KEY: API_KEY } }).deps }).getStatus();
+  assert.equal(geminiOnly.provider, 'gemini');
+  assert.equal(geminiOnly.model, 'gemini-3.8-flash');
+
+  const pinned = new Tier1Liaison(dir, { model: 'gemini-pinned', deps: fakeDeps({ env: { GEMINI_API_KEY: API_KEY } }).deps }).getStatus();
+  assert.equal(pinned.provider, 'gemini', 'a gemini-* model pins Gemini even when Claude is available');
+  assert.equal(pinned.model, 'gemini-pinned');
+
+  const claudePinned = new Tier1Liaison(dir, { model: 'sonnet', deps: fakeDeps({ env: { GEMINI_API_KEY: API_KEY } }).deps }).getStatus();
+  assert.equal(claudePinned.provider, 'claude-cli', 'a Claude model keeps Gemini out of the chain');
+  assert.equal(claudePinned.model, 'sonnet');
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('✔ Test 13: Status reports the active provider and model; model hints steer the chain');
 }
 
 console.log('\n🎉 ALL TIER 1 LIAISON TESTS PASSED!');

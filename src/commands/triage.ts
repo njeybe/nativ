@@ -27,9 +27,10 @@ const ESCALATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_INSTRUCTIONS = 1000;
 const MAX_PROMPT_ATTEMPTS = 3;
 
-/** Latest Tier 1 verdict, stored on the escalation so Studio and Antigravity can show it after a reload. */
+/** Latest Tier 1 verdict, stored on the escalation so Studio and the architect can show it after a reload. */
 export interface TriageSnapshot {
   evaluatedAt: string;
+  provider: string;
   model: string;
   source: TriageSource;
   latencyMs: number;
@@ -123,6 +124,7 @@ export async function finalizeTriage(root: string, evaluation: TriageEvaluation)
     }
     const snapshot: TriageSnapshot = {
       evaluatedAt: new Date().toISOString(),
+      provider: evaluation.provider,
       model: evaluation.model,
       source: evaluation.source,
       latencyMs: evaluation.latencyMs,
@@ -173,7 +175,7 @@ export interface RunTriageOptions {
   apply?: boolean;
   threshold?: string;
   json?: boolean;
-  /** Streams, prompt mode and Gemini transport are injectable for tests. */
+  /** Streams, prompt mode and the provider transport are injectable for tests. */
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
   interactive?: boolean;
@@ -237,7 +239,7 @@ function pendingEscalations(root: string): TriagedEscalationRecord[] {
 
 function printEvaluation(print: (line?: string) => void, result: TriageEvaluation, taskId: string | null, unblockedTaskId: string | null): void {
   print('');
-  print(pc.bold(`Tier 1 AI Strategist`) + pc.dim(`  ${result.escalationId}${taskId ? ` / ${taskId}` : ''}  (${result.model}, ${result.latencyMs}ms)`));
+  print(pc.bold(`Tier 1 AI Strategist`) + pc.dim(`  ${result.escalationId}${taskId ? ` / ${taskId}` : ''}  (${result.provider === 'deterministic' ? 'offline rules' : `${result.provider}: ${result.model}`}, ${result.latencyMs}ms)`));
 
   if (result.classification === 'AUTO_RESOLVE' && !result.resolution) {
     print(pc.green(pc.bold('Safe to proceed')) + pc.green('  No contract change is needed and nothing was written.'));
@@ -352,7 +354,7 @@ export async function runTriage(
     }
 
     if (!options.json && !liaison.hasApiKey()) {
-      print(pc.dim('GEMINI_API_KEY is not set: using the offline heuristic instead of Gemini.'));
+      print(pc.dim('No AI provider is available (sign in to Claude Code, or set ANTHROPIC_API_KEY or GEMINI_API_KEY): using the offline rules engine.'));
     }
     if (!targets.length) {
       if (options.json) print(JSON.stringify({ ok: true, evaluations: [] }, null, 2));
@@ -386,7 +388,7 @@ export async function runTriage(
           if (recordHumanDecision(root, id, decision)) {
             result.decision = decision;
             print(pc.green(`\nRecorded your choice on ${id}: ${decision.label}.`));
-            print(pc.white(`Approve or reject it in Studio (Self-Healing tab) or in Antigravity to unblock ${taskId ?? 'the task'}.`));
+            print(pc.white(`Approve or reject it in Studio (Self-Healing tab) or with the architect agent to unblock ${taskId ?? 'the task'}.`));
           } else {
             print(pc.red(`\nCould not record the decision: ${id} is no longer in .ai/escalation.json.`));
             process.exitCode = 1;

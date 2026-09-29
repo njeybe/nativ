@@ -1,22 +1,36 @@
 /**
- * nativ-cli · Tier 1 AI Strategist Liaison (Gemini 3.8 Flash)
+ * nativ-cli · Tier 1 AI Strategist Liaison (provider-agnostic, Claude by default)
  *
  * Autonomously mediates between Tier 2 (Claude Code PM) and Tier 1 (Strategy Engine / Human).
  * Inspects .ai/ specification contracts against runtime blockers and escalations,
  * classifies risk (AUTO_RESOLVE vs REQUIRE_HUMAN_DECISION), and generates either
  * verified specification patches or zero-jargon 4-part human decision cards.
+ *
+ * The model call goes through the provider chain in src/providers/ (Claude login, Claude API key,
+ * Gemini). When no provider is reachable, or every one fails, evaluation ends at the deterministic
+ * rules engine, so a rate limit or outage never blocks the pipeline.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadEnvFiles, MASK } from '../db/env-parser.js';
+import { MASK } from '../db/env-parser.js';
 import { escalationPath, loadEscalationFile } from '../governor/store.js';
 import { applySelfHealingProposal } from '../governor/index.js';
 import type { CandidatePatch, SelfHealingEscalationRecord, SelfHealingProposal } from '../governor/circuit-breaker.js';
+import {
+  CLAUDE_CLI_DEFAULT_MODEL,
+  completeWithChain,
+  resolveAnthropicApiKey,
+  resolveGeminiApiKey as resolveGeminiKey,
+  resolveProviderChain,
+  type ProviderConfig,
+  type ProviderDeps,
+  type ProviderId,
+} from '../providers/index.js';
 
 export type RiskThreshold = 'safe_contracts_only' | 'all_non_destructive';
 export type TriageClassification = 'AUTO_RESOLVE' | 'REQUIRE_HUMAN_DECISION';
-export type TriageSource = 'gemini' | 'sandbox' | 'deterministic';
+export type TriageSource = 'claude' | 'gemini' | 'sandbox' | 'deterministic';
 
 export interface TriageOption {
   id: string;
@@ -44,6 +58,8 @@ export interface TriageEvaluation {
   ok: true;
   escalationId: string;
   taskId: string;
+  /** Provider that answered (`claude-cli`, `claude-api`, `gemini`), or `deterministic` when none did. */
+  provider: string;
   model: string;
   source: TriageSource;
   latencyMs: number;
@@ -71,8 +87,16 @@ export interface TriageConfig {
 }
 
 export interface Tier1LiaisonOptions {
+  /** Pins the model. A `gemini-*` model restricts the chain to Gemini; a Claude model or alias excludes it. */
   model?: string;
+  /** Legacy Gemini key override: implies the Gemini provider unless `provider` says otherwise. */
   apiKey?: string;
+  /** Provider id(s) to use instead of the configured chain. */
+  provider?: ProviderId | ProviderId[];
+  /** Inline provider config instead of `.nativ/config.json`. */
+  providerConfig?: ProviderConfig;
+  /** Injectable spawn, fetch, SDK client and clock for tests. */
+  deps?: ProviderDeps;
   config?: {
     autoTriageEnabled?: boolean;
     riskThreshold?: RiskThreshold;
@@ -82,6 +106,8 @@ export interface Tier1LiaisonOptions {
 
 export interface TriageStatusResponse {
   ok: true;
+  /** Provider a call would use right now, or `deterministic` when none is available. */
+  provider: string;
   model: string;
   autoTriageEnabled: boolean;
   hasApiKey: boolean;
@@ -92,24 +118,21 @@ export interface TriageStatusResponse {
   };
 }
 
-/** The model the REST call targets is the model reported in status and evaluation responses. */
-export const DEFAULT_MODEL = 'gemini-3.8-flash';
+/** Triage runs often and in the background, so it defaults to the cheapest Claude tier. */
+export const DEFAULT_MODEL = CLAUDE_CLI_DEFAULT_MODEL;
+
+/** A stalled provider aborts here and the chain moves on, so triage never hangs on one vendor. */
+const TRIAGE_TIMEOUT_MS = 20_000;
+
+const TRIAGE_SYSTEM =
+  'You are Tier 1 Macro-Architect in a 3-Tier Multi-Agent Software Development Pipeline. Respond with strictly valid JSON only.';
 
 /**
- * Resolves the Google/Gemini API key from in-memory session, .env files, or process.env.
+ * Resolves the Google/Gemini API key from .env files or process.env.
  * Zero-credential air-gap: the returned key is never stored in contracts or responses.
  */
 export function resolveGeminiApiKey(root: string = process.cwd()): string | null {
-  try {
-    const envVars = loadEnvFiles(root);
-    const key = envVars.GEMINI_API_KEY || envVars.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (typeof key === 'string' && key.trim().length > 0) {
-      return key.trim();
-    }
-  } catch {
-    // Air-gap guard: suppress file read errors
-  }
-  return null;
+  return resolveGeminiKey(root);
 }
 
 export function hasGeminiApiKey(root: string = process.cwd()): boolean {
@@ -207,16 +230,39 @@ export class Tier1Liaison {
     };
   }
 
+  /** Provider options after the legacy `apiKey` and `model` hints are folded in. */
+  private providerOptions() {
+    const { apiKey, model } = this.options;
+    let provider = this.options.provider;
+    if (!provider && model) {
+      if (/^gemini/i.test(model)) provider = 'gemini';
+      else if (/^(claude|haiku|sonnet|opus)/i.test(model)) provider = ['claude-cli', 'claude-api'];
+    }
+    if (!provider && apiKey) provider = 'gemini';
+
+    const deps: ProviderDeps | undefined = apiKey
+      ? { ...this.options.deps, env: { ...(this.options.deps?.env ?? process.env), GEMINI_API_KEY: apiKey } }
+      : this.options.deps;
+    return { provider, deps, config: this.options.providerConfig };
+  }
+
+  /** Providers that could answer right now, in order. Empty means the deterministic engine handles it. */
+  private activeChain() {
+    return resolveProviderChain('triage', this.root, this.providerOptions());
+  }
+
   hasApiKey(): boolean {
-    return hasGeminiApiKey(this.root);
+    return this.activeChain().length > 0;
   }
 
   getStatus(): TriageStatusResponse {
+    const active = this.activeChain()[0];
     return {
       ok: true,
-      model: this.config.model,
+      provider: active?.id ?? 'deterministic',
+      model: this.options.model ?? active?.defaultModel ?? this.config.model,
       autoTriageEnabled: this.config.autoTriageEnabled,
-      hasApiKey: this.hasApiKey(),
+      hasApiKey: active !== undefined,
       stats: { ...this.stats },
     };
   }
@@ -255,7 +301,6 @@ export class Tier1Liaison {
     const isDestructive = /drop\s+table|drop\s+column|delete|truncate|destructive/i.test(details);
     const isDrift = /schema\s+drift|contract\s+mismatch|unknown\s+property|api\s+contracts|syntax/i.test(details);
 
-    const apiKey = this.options.apiKey || resolveGeminiApiKey(this.root);
     let classification: TriageClassification = isDestructive ? 'REQUIRE_HUMAN_DECISION' : 'AUTO_RESOLVE';
     let riskLevel: 'low' | 'medium' | 'high' | 'critical' = isDestructive ? 'high' : isDrift ? 'low' : 'medium';
     let reasoning = isDestructive
@@ -263,15 +308,19 @@ export class Tier1Liaison {
       : 'Contract alignment evaluated. Safe additive resolution approved.';
     let humanCard: HumanDecisionCard | undefined;
     let source: TriageSource = 'deterministic';
+    let provider = 'deterministic';
+    let model = this.options.model ?? this.config.model;
 
-    // 1. If API key exists, query Gemini REST API for contextual evaluation
-    if (apiKey) {
+    // 1. If any provider is reachable, ask it for a contextual evaluation; otherwise keep the deterministic verdict.
+    const providerOptions = this.providerOptions();
+    if (resolveProviderChain('triage', this.root, providerOptions).length > 0) {
       try {
         const contracts = loadContracts(this.root);
-        // Everything below goes to an external API: mask credentials (and the key itself) first.
-        const masked = (value: unknown) => redactSecrets(JSON.stringify(value, null, 2), [apiKey]);
-        const prompt = `You are Tier 1 Macro-Architect in a 3-Tier Multi-Agent Software Development Pipeline.
-An autonomous agent escalated an issue:
+        // Everything below leaves the machine: mask credentials (and every provider key) first.
+        const env = providerOptions.deps?.env ?? process.env;
+        const secrets = [resolveGeminiKey(this.root, env), resolveAnthropicApiKey(this.root, env)].filter((k): k is string => k !== null);
+        const masked = (value: unknown) => redactSecrets(JSON.stringify(value, null, 2), secrets);
+        const prompt = `An autonomous agent escalated an issue:
 ${masked(record)}
 
 SPECIFICATION CONTRACTS:
@@ -294,39 +343,28 @@ Respond with strictly valid JSON:
   }
 }`;
 
-        // The key travels in a header, never the URL, so it cannot leak through logged or proxied URLs.
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.config.model)}:generateContent`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-          }),
-          // A stalled call aborts after 15s and lands in the catch below, falling back to deterministic evaluation.
-          signal: AbortSignal.timeout(15_000),
-        });
-
-        if (res.ok) {
-          const body = await res.json() as {
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
-          const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const parsed = JSON.parse(text) as {
-              classification?: TriageClassification;
-              riskLevel?: 'low' | 'medium' | 'high' | 'critical';
-              reasoning?: string;
-              humanCard?: HumanDecisionCard;
-            };
-            if (parsed.classification) classification = parsed.classification;
-            if (parsed.riskLevel) riskLevel = parsed.riskLevel;
-            if (parsed.reasoning) reasoning = parsed.reasoning;
-            if (parsed.humanCard) humanCard = parsed.humanCard;
-            source = 'gemini';
-          }
-        }
+        // Providers are tried in order; a rate limit puts one on cooldown and the next takes over.
+        const answer = await completeWithChain(
+          'triage',
+          this.root,
+          { system: TRIAGE_SYSTEM, prompt, json: true, timeoutMs: TRIAGE_TIMEOUT_MS, model: this.options.model },
+          providerOptions,
+        );
+        const parsed = JSON.parse(answer.text) as {
+          classification?: TriageClassification;
+          riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+          reasoning?: string;
+          humanCard?: HumanDecisionCard;
+        };
+        if (parsed.classification) classification = parsed.classification;
+        if (parsed.riskLevel) riskLevel = parsed.riskLevel;
+        if (parsed.reasoning) reasoning = parsed.reasoning;
+        if (parsed.humanCard) humanCard = parsed.humanCard;
+        provider = answer.provider;
+        model = answer.model;
+        source = answer.provider === 'gemini' ? 'gemini' : 'claude';
       } catch {
-        // Fall back to deterministic evaluation
+        // Every provider failed or the reply was not JSON: keep the deterministic evaluation
       }
     }
 
@@ -390,7 +428,8 @@ Respond with strictly valid JSON:
       ok: true,
       escalationId,
       taskId,
-      model: this.config.model,
+      provider,
+      model,
       source,
       latencyMs,
       classification,

@@ -1602,7 +1602,9 @@ function triageView(result: TriageEvaluation) {
   return {
     ok: true,
     escalationId: result.escalationId,
+    provider: result.provider,
     model: result.model,
+    source: result.source,
     latencyMs: result.latencyMs,
     classification: result.classification,
     reasoning: result.reasoning,
@@ -1957,7 +1959,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
 
   const renderHtml = () => {
     if (typeof options.html === 'function') return options.html();
-    return options.html ?? '<!doctype html><title>AgentJ DB Studio</title><p>Studio API is running. See /api/status.</p>';
+    return options.html ?? '<!doctype html><title>nativ DB Studio</title><p>Studio API is running. See /api/status.</p>';
   };
 
   // Pipeline endpoints read the project that owns .ai/ (climbing out of .worktrees/task-* when needed).

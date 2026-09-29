@@ -24,9 +24,13 @@ setTimeout(() => {
 // Keep git discovery inside the fixtures so the non-git fixture is deterministic.
 process.env.GIT_CEILING_DIRECTORIES = fs.realpathSync(os.tmpdir());
 
-// The Tier 1 liaison falls back to process.env for a Gemini key; triage checks must stay offline and deterministic.
+// The Tier 1 liaison falls back to process.env for provider keys and to the local Claude login; triage checks must stay
+// offline and deterministic. NATIV_PROVIDER_CHILD marks this process as a provider child, which switches claude-cli
+// off, so no run here can spawn a real Claude or spend subscription usage.
 delete process.env.GEMINI_API_KEY;
 delete process.env.GOOGLE_API_KEY;
+delete process.env.ANTHROPIC_API_KEY;
+process.env.NATIV_PROVIDER_CHILD = '1';
 
 const PASSING_VERIFY = 'node -e "process.exit(0)"';
 const FAILING_VERIFY = 'node -e "process.exit(3)"';
@@ -1187,7 +1191,8 @@ try {
   {
     const statusRes = await getOk(studio.url, '/api/pipeline/triage/status');
     assert.equal(statusRes.ok, true);
-    assert.ok(statusRes.model.includes('gemini'));
+    assert.equal(statusRes.provider, 'deterministic', 'no provider is reachable in the fixture');
+    assert.equal(statusRes.model, 'haiku', 'with no provider the status still names the Claude triage default');
     assert.equal(typeof statusRes.autoTriageEnabled, 'boolean');
 
     const configRes = await requestJson(studio.url, 'POST', '/api/pipeline/triage/config', {
@@ -1290,10 +1295,11 @@ try {
       (await getOk(triageStudio.url, '/api/pipeline/escalations?status=all')).escalations.find((e) => e.id === id);
 
     const initial = await getOk(triageStudio.url, '/api/pipeline/triage/status');
-    assert.deepEqual(Object.keys(initial).sort(), ['autoTriageEnabled', 'hasApiKey', 'model', 'ok', 'stats']);
-    assert.equal(initial.model, 'gemini-3.8-flash');
+    assert.deepEqual(Object.keys(initial).sort(), ['autoTriageEnabled', 'hasApiKey', 'model', 'ok', 'provider', 'stats']);
+    assert.equal(initial.provider, 'deterministic');
+    assert.equal(initial.model, 'haiku');
     assert.equal(typeof initial.autoTriageEnabled, 'boolean');
-    assert.equal(initial.hasApiKey, false, 'no key in the fixture .env or the environment');
+    assert.equal(initial.hasApiKey, false, 'no key, no Claude login and no provider in the fixture or the environment');
     assert.deepEqual(initial.stats, { totalEvaluated: 0, autoResolved: 0, escalatedToHuman: 0 });
 
     assertContractError('evaluate without escalationId', await evaluate({}));
@@ -1315,8 +1321,10 @@ try {
     const human = await evaluate({ escalationId: 'esc-02' });
     assert.equal(human.status, 200, `evaluate esc-02 → HTTP ${human.status}: ${JSON.stringify(human.body)}`);
     assert.deepEqual(Object.keys(human.body).sort(), [
-      'autoPatchApplied', 'classification', 'escalationId', 'humanCard', 'latencyMs', 'model', 'ok', 'reasoning',
+      'autoPatchApplied', 'classification', 'escalationId', 'humanCard', 'latencyMs', 'model', 'ok', 'provider', 'reasoning', 'source',
     ]);
+    assert.equal(human.body.provider, 'deterministic');
+    assert.equal(human.body.source, 'deterministic');
     assert.equal(human.body.escalationId, 'esc-02');
     assert.equal(human.body.classification, 'REQUIRE_HUMAN_DECISION');
     assert.equal(human.body.autoPatchApplied, false);
