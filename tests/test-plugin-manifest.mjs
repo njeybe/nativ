@@ -62,7 +62,8 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
   assert.match(manifest.name, /^[a-z0-9-]+$/, 'kebab-case');
   assert.equal(manifest.version, pkg.version, 'the plugin version follows package.json');
   assert.ok(manifest.description.length > 20 && manifest.author?.name && manifest.license);
-  assert.match(manifest.homepage, /^https:\/\//, 'homepage must parse as a URL or the plugin fails to load');
+  // The repository is private, so package.json has no link to give the plugin; when there is one it must parse as a URL.
+  if (manifest.homepage !== undefined) assert.match(manifest.homepage, /^https:\/\//, 'homepage must parse as a URL or the plugin fails to load');
   assert.deepEqual(Object.keys(manifest).filter((k) => ['hooks', 'mcpServers', 'agents', 'skills', 'commands'].includes(k)), [], 'components use their default locations, not manifest keys');
   console.log('✔ Test 3: plugin.json is valid, kebab-case, and versioned from package.json');
 }
@@ -191,6 +192,18 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
   }
   assert.ok(read('CHANGELOG.md').includes('@njeybe/nativ'), 'the changelog explains the rename');
   console.log('✔ Test 12: published as @njeybe/nativ (public), command still nativ, no stale nativ-cli in user-facing files');
+
+  // The source repository is private: nothing a user reads may depend on it, and the npm page must not link to it.
+  for (const key of ['repository', 'homepage', 'bugs']) assert.equal(pkg[key], undefined, `package.json must not declare ${key} while the repository is private`);
+  assert.equal(readJson('package-lock.json').version, pkg.version, 'the lockfile carries the package version');
+  assert.equal(readJson('package-lock.json').packages[''].version, pkg.version, 'and so does its root package entry');
+  for (const rel of ['README.md', 'docs/installation.md', 'templates/GEMINI.md', 'templates/AGENTS.md', 'plugin/skills/nativ/SKILL.md']) {
+    const text = read(rel);
+    assert.ok(!/github:njeybe|github\.com\/njeybe|marketplace add/i.test(text), `${rel} must not tell users to reach the private repository`);
+  }
+  const owner = readJson('.claude-plugin/marketplace.json').owner.name;
+  assert.equal(owner, pkg.author, 'the marketplace owner is the package author');
+  console.log('✔ Test 13: no install path or link depends on the private repository');
 }
 
 console.log('\n🎉 ALL PLUGIN MANIFEST TESTS PASSED!');

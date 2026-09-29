@@ -47,6 +47,7 @@ export async function renderPlugin(root = repoRoot) {
   // A plugin cannot know where nativ lives, so it always calls the bare `nativ` command (npm i -g @njeybe/nativ).
   const desired = buildDesiredConfig(resolveCliInvocation({ command: 'nativ' }));
   const repo = parseRepository(pkg);
+  const authorName = (typeof pkg.author === 'string' ? pkg.author : pkg.author?.name) || repo?.owner || null;
   const files = new Map();
 
   files.set(
@@ -56,7 +57,8 @@ export async function renderPlugin(root = repoRoot) {
       displayName: 'nativ',
       version: pkg.version,
       description: 'Role-based multi-agent workflow for Claude Code: architect, worker and verifier agents, task-scope enforcement, and the nativ MCP server.',
-      ...(pkg.author ? { author: typeof pkg.author === 'string' ? { name: pkg.author } : pkg.author } : repo ? { author: { name: repo.owner } } : {}),
+      ...(authorName ? { author: { name: authorName } } : {}),
+      // The repository may be private, in which case package.json carries no link and neither does the plugin.
       ...(repo ? { homepage: repo.url, repository: repo.url } : {}),
       license: pkg.license ?? 'MIT',
       keywords: ['multi-agent', 'workflow', 'contracts', 'orchestration'],
@@ -107,7 +109,7 @@ export async function renderPlugin(root = repoRoot) {
     json({
       name: PLUGIN_NAME,
       description: 'nativ: role-based multi-agent workflow for Claude Code',
-      owner: { name: repo?.owner ?? 'nativ' },
+      owner: { name: authorName ?? 'nativ' },
       plugins: [
         {
           name: PLUGIN_NAME,

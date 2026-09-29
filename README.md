@@ -36,17 +36,14 @@ Why it works:
 
 ### 1. Install
 
-You need Node.js 20 or newer and Git. You do **not** need a clone of this repository.
+You need Node.js 20 or newer and Git.
 
 ```bash
-# From npm
 npm install -g @njeybe/nativ
-
-# Or straight from GitHub (builds on install, about a minute)
-npm install -g github:njeybe/nativ
+nativ --version
 ```
 
-Check it with `nativ --version`. Developing nativ itself? See [docs/installation.md](docs/installation.md) for the clone and `npm link` route.
+The package is `@njeybe/nativ`; the command is `nativ`. More options, including running it without installing, are in [docs/installation.md](docs/installation.md).
 
 ### 2. Set up a project
 
@@ -69,14 +66,11 @@ Setup **merges**: it never overwrites your own settings, hooks, MCP servers or e
 
 Open Claude Code in the folder once and accept the workspace trust dialog. Until you do, Claude Code ignores the project's `permissions.allow` entries.
 
-### 3. Or install it as a Claude Code plugin
+### 3. About the Claude Code plugin
 
-```text
-/plugin marketplace add njeybe/nativ
-/plugin install nativ@nativ
-```
+You do not need the plugin. `nativ setup` writes the same agents, enforcement hook and MCP entry into your project, and also the permission rules that deny `nativ task unlock` and `nativ db sync`, block reading `.env*` files, and make Claude Code ask before any write under `.ai/`. **A plugin cannot ship permission rules**, so `nativ setup` is the complete route.
 
-The plugin brings the agents, the enforcement hooks, the MCP server and a skill that teaches the task loop. It calls the `nativ` command, so install the CLI first. **A plugin cannot ship permission rules**, so also run `nativ setup` in the project to add the rules that deny `nativ task unlock` and `nativ db sync`, block reading `.env*` files, and make Claude Code ask before any write under `.ai/`.
+The plugin files ship inside the package (`plugin/`). To try them for a single Claude Code session, point `claude --plugin-dir` at that folder under your global `node_modules` (`npm root -g` prints its location).
 
 ### 4. Work
 
@@ -96,7 +90,7 @@ Run it after updating Claude Code or nativ. It also asks Claude Code itself whet
 ### 6. Update
 
 ```bash
-npm install -g @njeybe/nativ@latest   # or: npm install -g github:njeybe/nativ
+npm install -g @njeybe/nativ@latest
 nativ update                      # in each project
 nativ doctor
 ```

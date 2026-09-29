@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.1
+
+Documentation and package metadata only; no behaviour changes.
+
+- **npm is the only install path.** The source repository is private, so the instructions for `npm install -g github:…` and for adding the plugin marketplace were removed from the README and the installation guide. `nativ setup` is the complete route: it writes the agents, the enforcement hook, the MCP entry and the permission rules, which a plugin cannot ship.
+- The plugin files still ship inside the package (`plugin/`) and can be tried for one session with `claude --plugin-dir`.
+- `package.json` no longer declares `repository`, `homepage` or `bugs`, so the npm page has no dead links.
+- The 2.0.0 entry below still mentions the plugin marketplace; that route is not available outside the private repository.
+
 ## 2.0.0
 
 nativ is now role-based and Claude-first. The roles (architect, project manager, worker, verifier) are fixed; the model behind each one is configurable, and Claude Code is the default host for all of them. Antigravity and Gemini still work as an optional architect.

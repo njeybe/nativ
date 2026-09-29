@@ -30,26 +30,17 @@ nativ --version
 
 The package is `@njeybe/nativ`; the command is `nativ`. To remove it: `npm uninstall -g @njeybe/nativ`.
 
-### From GitHub (no clone needed)
+### From a clone (maintainers)
+
+The source repository is private. With access to it, clone it and run:
 
 ```bash
-npm install -g github:njeybe/nativ
-nativ --version
-```
-
-npm downloads the repository and builds it during the install, which takes about a minute. Use this to get changes that are on `main` but not yet published to npm.
-
-### From a clone (developing nativ itself)
-
-```bash
-git clone https://github.com/njeybe/nativ.git
-cd nativ
 npm install
 npm run build
 npm link
 ```
 
-`npm link` makes `nativ` available everywhere and points it at your clone. Run `npm run watch` in a spare terminal to rebuild on change. To unlink: `npm unlink -g @njeybe/nativ`.
+`npm link` makes `nativ` available everywhere and points it at your clone. Run `npm run watch` in a spare terminal to rebuild on change. On Windows, remove the link with `cmd /c rmdir "%APPDATA%\npm\node_modules\@njeybe\nativ"` rather than `npm uninstall -g`, which can traverse the junction into your clone.
 
 ### Without installing
 
@@ -81,14 +72,11 @@ Then:
 2. Restart Claude Code (or run `/hooks`) if it was already open, so it loads the hooks.
 3. Run `nativ doctor`.
 
-### Or use the plugin
+### About the plugin
 
-```text
-/plugin marketplace add njeybe/nativ
-/plugin install nativ@nativ
-```
+`nativ setup` is the complete route: it writes the agents, the hooks, the MCP entry and the permission rules. A Claude Code plugin cannot ship permission rules, so there is nothing you need to add from it.
 
-The plugin supplies the agents, hooks, MCP server and a skill. It needs the `nativ` command on your PATH. It cannot ship permission rules, so also run `nativ setup` in each project.
+The plugin files ship inside the package under `plugin/`. To try them for one session, run `claude --plugin-dir "$(npm root -g)/@njeybe/nativ/plugin"` (PowerShell: `claude --plugin-dir "$(npm root -g)\@njeybe\nativ\plugin"`). They call the `nativ` command, so it must be on your PATH.
 
 ## Verify
 
@@ -107,7 +95,7 @@ nativ hook status
 ## Update
 
 ```bash
-npm install -g @njeybe/nativ@latest      # or: npm install -g github:njeybe/nativ
+npm install -g @njeybe/nativ@latest
 cd your-project
 nativ update
 nativ doctor
