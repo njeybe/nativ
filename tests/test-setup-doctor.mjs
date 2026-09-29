@@ -617,4 +617,49 @@ const doctorJson = async (root, options = {}) => {
   console.log('✔ Test 19: agent frontmatter has only known keys, approved models and a turn cap');
 }
 
+// Test 20: CRLF checkouts (Windows core.autocrlf) change nothing: output is identical LF and CRLF files are not "edits"
+{
+  const crlfTemplates = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-crlf-templates-'));
+  const source = path.resolve('templates');
+  const copy = (from, to) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      const a = path.join(from, entry.name);
+      const b = path.join(to, entry.name);
+      if (entry.isDirectory()) copy(a, b);
+      else fs.writeFileSync(b, fs.readFileSync(a, 'utf8').replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'), 'utf8');
+    }
+  };
+  copy(source, crlfTemplates);
+  assert.ok(fs.readFileSync(path.join(crlfTemplates, 'AGENTS.md'), 'utf8').includes('\r\n'), 'the fixture templates really are CRLF');
+
+  const lfRoot = tempProject();
+  const crlfRoot = tempProject();
+  try {
+    applySetup(lfRoot, { ...NATIV });
+    applySetup(crlfRoot, { ...NATIV, templatesDir: crlfTemplates });
+    for (const rel of ['AGENTS.md', '.claude/agents/architect.md', '.claude/agents/worker.md', '.claude/agents/verifier.md']) {
+      const out = read(crlfRoot, rel);
+      assert.ok(!out.includes('\r'), `${rel} is written with LF even from CRLF templates`);
+      assert.equal(out, read(lfRoot, rel), `${rel} is byte-identical whatever the template line endings`);
+    }
+
+    // An editor or autocrlf turns a managed file into CRLF: that is not an edit, so setup still recognises and refreshes it
+    const worker = path.join(crlfRoot, '.claude', 'agents', 'worker.md');
+    fs.writeFileSync(worker, fs.readFileSync(worker, 'utf8').replace(/\n/g, '\r\n'), 'utf8');
+    assert.equal(managedState(fs.readFileSync(worker, 'utf8')), 'pristine', 'a CRLF-converted managed file is still pristine');
+    const replan = planSetup(crlfRoot, { ...NATIV });
+    const change = replan.changes.find((c) => c.path === '.claude/agents/worker.md');
+    assert.notEqual(change.action, 'skipped', 'it is not reported as edited by hand');
+    applySetup(crlfRoot, { ...NATIV });
+    assert.equal(read(crlfRoot, '.claude/agents/worker.md'), read(lfRoot, '.claude/agents/worker.md'));
+    assert.deepEqual(planSetup(crlfRoot, { ...NATIV }).changes.filter((c) => c.action === 'created' || c.action === 'updated'), [], 'a second run changes nothing');
+  } finally {
+    cleanup(lfRoot);
+    cleanup(crlfRoot);
+    cleanup(crlfTemplates);
+  }
+  console.log('✔ Test 20: CRLF templates and CRLF managed files produce the same LF output and are not treated as edits');
+}
+
 console.log('\n🎉 ALL SETUP & DOCTOR TESTS PASSED!');

@@ -9,7 +9,8 @@ import { buildDesiredConfig, resolveCliInvocation } from '../dist/core/setup-ass
 console.log('--- Starting Plugin Manifest Tests ---');
 
 const root = path.resolve('.');
-const read = (rel) => fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8');
+// LF whatever the checkout uses: a Windows clone with core.autocrlf has CRLF on disk, which is not a difference.
+const read = (rel) => fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8').replace(/^﻿/, '').replace(/\r\n/g, '\n');
 const readJson = (rel) => JSON.parse(read(rel));
 const exists = (rel) => fs.existsSync(path.join(root, ...rel.split('/')));
 const SYNC = path.join(root, 'scripts', 'sync-plugin.mjs');
@@ -148,6 +149,36 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
     }
     console.log('✔ Test 9: `claude plugin validate --strict` accepts the plugin and the marketplace');
   }
+}
+
+// Test 10: one version everywhere, and the publishing metadata is complete
+{
+  const pkg = readJson('package.json');
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/, 'package.json has a plain semver version');
+  const cli = spawnSync(process.execPath, [path.join(root, 'bin', 'cli.js'), '--version'], { encoding: 'utf8' });
+  assert.equal(cli.stdout.trim(), pkg.version, '`nativ --version` reports the package.json version');
+  assert.equal(readJson('plugin/.claude-plugin/plugin.json').version, pkg.version, 'plugin.json version');
+  assert.equal(readJson('.claude-plugin/marketplace.json').plugins[0].version, pkg.version, 'marketplace version');
+  assert.ok(pkg.author && typeof pkg.author === 'string', 'package.json names an author');
+  assert.equal(pkg.license, 'MIT');
+  assert.match(pkg.engines?.node ?? '', /^>=\d+/, 'package.json declares the supported Node version');
+  assert.match(pkg.scripts.prepublishOnly, /build/, 'publishing rebuilds first');
+  assert.match(pkg.scripts.prepublishOnly, /sync-plugin\.mjs --check/, 'publishing fails if the plugin is out of sync');
+  const license = read('LICENSE');
+  assert.match(license, /^MIT License/);
+  assert.ok(license.includes(pkg.author), 'the LICENSE names the package author');
+  assert.match(read('CHANGELOG.md'), new RegExp(`^## ${pkg.version.replace(/\./g, '\\.')}\\b`, 'm'), 'the changelog has an entry for this version');
+  console.log('✔ Test 10: one version across CLI, plugin and marketplace; license, author, engines and changelog are in place');
+
+  // What npm would actually publish
+  const pack = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8', shell: process.platform === 'win32' });
+  assert.equal(pack.status, 0, `npm pack --dry-run failed: ${pack.stderr}`);
+  const packed = JSON.parse(pack.stdout)[0].files.map((f) => f.path);
+  for (const required of ['LICENSE', 'CHANGELOG.md', 'README.md', 'package.json', 'bin/cli.js', 'plugin/.claude-plugin/plugin.json', 'templates/AGENTS.md', 'templates/claude-agents/worker.md', 'dist/index.js']) {
+    assert.ok(packed.includes(required), `the published package includes ${required}`);
+  }
+  assert.ok(!packed.some((f) => /^(tests|\.ai|\.nativ|\.claude|\.worktrees)\//.test(f) || f === '.env'), 'no tests, project state or secrets are published');
+  console.log('✔ Test 11: the npm package contains the license, changelog, plugin and templates, and no project state');
 }
 
 console.log('\n🎉 ALL PLUGIN MANIFEST TESTS PASSED!');

@@ -1,6 +1,6 @@
 {
   "name": "nativ-cli",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Role-based multi-agent workflow harness: Claude Code by default, other AI agents pluggable",
   "type": "module",
   "main": "dist/index.js",
@@ -12,15 +12,17 @@
     "dist",
     "bin",
     "templates",
-    "plugin"
+    "plugin",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
     "sync-plugin": "node scripts/sync-plugin.mjs",
     "watch": "tsc -w",
     "prepare": "npm run build",
+    "prepublishOnly": "npm run build && node scripts/sync-plugin.mjs --check",
     "start": "node bin/cli.js",
-    "test": "node tests/test-task-router.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs && node tests/test-contract-governor.mjs && node tests/test-worktree-lifecycle.mjs && node tests/test-agent-supervisor.mjs && node tests/test-concurrency-locks.mjs && node tests/test-telemetry-engine.mjs && node tests/test-benchmark-suite.mjs && node tests/test-providers.mjs && node tests/test-tier1-liaison.mjs && node tests/test-enforcement.mjs && node tests/test-setup-doctor.mjs && node tests/test-update.mjs && node tests/test-plugin-manifest.mjs && node tests/test-v2-e2e.mjs && npx tsx tests/test-studio-pipeline-api.mjs && npx tsx tests/test-studio-light-ui.mjs"
+    "test": "node tests/test-task-router.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs && node tests/test-contract-governor.mjs && node tests/test-worktree-lifecycle.mjs && node tests/test-agent-supervisor.mjs && node tests/test-concurrency-locks.mjs && node tests/test-telemetry-engine.mjs && node tests/test-benchmark-suite.mjs && node tests/test-providers.mjs && node tests/test-tier1-liaison.mjs && node tests/test-enforcement.mjs && node tests/test-setup-doctor.mjs && node tests/test-update.mjs && node tests/test-validate.mjs && node tests/test-plugin-manifest.mjs && node tests/test-v2-e2e.mjs && npx tsx tests/test-studio-pipeline-api.mjs && npx tsx tests/test-studio-light-ui.mjs"
   },
   "repository": {
     "type": "git",
@@ -39,8 +41,11 @@
     "orchestration",
     "cli"
   ],
-  "author": "",
+  "author": "JB Natividad",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "@google-cloud/firestore": "^9.2.0",

@@ -237,18 +237,23 @@ export function mergeMcpConfig(existing: Json, desired: DesiredClaudeConfig): { 
 
 const shortHash = (text: string) => crypto.createHash('sha256').update(text).digest('hex').slice(0, 12);
 
+/** CRLF and a leading BOM to plain LF. */
+export const toLf = (text: string): string => text.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+
 /** Appends the marker that lets a later run tell "nativ wrote this, untouched" from "a person edited this". */
 export function stampManaged(content: string): string {
-  const body = content.replace(/\s+$/, '');
+  // Always LF: a Windows checkout (core.autocrlf) or an editor may hand us CRLF, and neither is an edit.
+  const body = toLf(content).replace(/\s+$/, '');
   return `${body}\n\n${MANAGED_PREFIX}${shortHash(body)} -->\n`;
 }
 
 export type ManagedState = 'pristine' | 'modified' | 'unmanaged';
 
 export function managedState(content: string): ManagedState {
-  const match = MANAGED_PATTERN.exec(content);
+  const lf = toLf(content);
+  const match = MANAGED_PATTERN.exec(lf);
   if (!match) return 'unmanaged';
-  const body = content.slice(0, match.index).replace(/\s+$/, '');
+  const body = lf.slice(0, match.index).replace(/\s+$/, '');
   return shortHash(body) === match[1] ? 'pristine' : 'modified';
 }
 

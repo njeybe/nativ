@@ -36,11 +36,17 @@ Why it works:
 
 ### 1. Install
 
+You need Node.js 20 or newer and Git. You do **not** need a clone of this repository.
+
 ```bash
+# From npm
 npm install -g nativ-cli
+
+# Or straight from GitHub (builds on install, about a minute)
+npm install -g github:njeybe/nativ
 ```
 
-Working from a clone instead? See [docs/installation.md](docs/installation.md).
+Check it with `nativ --version`. Developing nativ itself? See [docs/installation.md](docs/installation.md) for the clone and `npm link` route.
 
 ### 2. Set up a project
 
@@ -86,6 +92,16 @@ nativ doctor --fix    # repairs what it can, idempotently
 ```
 
 Run it after updating Claude Code or nativ. It also asks Claude Code itself whether the `nativ` server connects, and warns when a `nativ` server registered in your user or local scope is shadowing the project's.
+
+### 6. Update
+
+```bash
+npm install -g nativ-cli@latest   # or: npm install -g github:njeybe/nativ
+nativ update                      # in each project
+nativ doctor
+```
+
+`nativ update` refreshes the directives, role guides, agents and hooks that nativ wrote and you have not edited. Anything you edited is kept and reported; `nativ update --force` replaces it. It never touches your contracts (`.ai/db_schema.json`, `.ai/api_contracts.json`, `.ai/ui_specs.md`, `.ai/master_plan.json`, `.ai/context.md`). See [CHANGELOG.md](CHANGELOG.md) before upgrading across a major version.
 
 ---
 
@@ -315,4 +331,4 @@ Changed a template or the setup generator? Run `npm run sync-plugin`; a test fai
 
 ## License
 
-MIT (c) [njeybe](https://github.com/njeybe)
+MIT (c) JB Natividad. See [LICENSE](LICENSE).

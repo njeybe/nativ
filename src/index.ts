@@ -30,6 +30,7 @@ import { runVerify } from './commands/verify.js';
 import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
 import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
+import { packageVersion } from './core/version.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -37,7 +38,7 @@ export function createProgram(): Command {
   program
     .name('nativ')
     .description('Role-based multi-agent workflow harness: Claude Code by default, other AI agents pluggable')
-    .version('1.0.0');
+    .version(packageVersion());
 
   program
     .command('init [targetDir]')

@@ -28,6 +28,10 @@ const AGENT_FILES = ['architect.md', 'worker.md', 'verifier.md'];
 
 const json = (value) => JSON.stringify(value, null, 2) + '\n';
 
+/** Generated files are always LF. A Windows checkout with core.autocrlf hands us CRLF, which is not a change. */
+const toLf = (text) => text.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+const readLf = (file) => toLf(fs.readFileSync(file, 'utf8'));
+
 /** `git+https://github.com/owner/repo.git` -> { url: 'https://github.com/owner/repo', owner: 'owner' } */
 function parseRepository(pkg) {
   const raw = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
@@ -74,12 +78,12 @@ export async function renderPlugin(root = repoRoot) {
   // Inside a plugin, Claude Code names the MCP server's tools mcp__plugin_<plugin>_<server>__*, not mcp__<server>__*
   // (verified against Claude Code 2.1.284), so the agents' tool lists must use the plugin form.
   for (const file of AGENT_FILES) {
-    const template = fs.readFileSync(path.join(root, 'templates', 'claude-agents', file), 'utf8');
+    const template = readLf(path.join(root, 'templates', 'claude-agents', file));
     files.set(`${PLUGIN_DIR}/agents/${file}`, template.replace(/\bmcp__nativ\b/g, `mcp__plugin_${PLUGIN_NAME}_${PLUGIN_NAME}`));
   }
 
   // The skill is the canonical directive, so an installed plugin and `nativ setup` teach the same rules.
-  const directive = fs.readFileSync(path.join(root, 'templates', 'AGENTS.md'), 'utf8').replace(/^# .*\n+/, '');
+  const directive = readLf(path.join(root, 'templates', 'AGENTS.md')).replace(/^# .*\n+/, '');
   files.set(
     `${PLUGIN_DIR}/skills/nativ/SKILL.md`,
     [
@@ -146,6 +150,7 @@ async function main() {
   const drift = [];
   for (const [rel, content] of files) {
     const target = path.join(outRoot, ...rel.split('/'));
+    // Compared byte for byte: Claude Code cannot parse CRLF frontmatter, so a CRLF file on disk is drift.
     const current = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
     if (current === content) continue;
     drift.push(rel);

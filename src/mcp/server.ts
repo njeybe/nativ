@@ -29,6 +29,7 @@ import { runVerify } from '../commands/verify.js';
 import { runTestGen } from '../commands/test-gen.js';
 import { runBench } from '../commands/bench.js';
 import { TEST_FRAMEWORKS } from '../core/test-generator-types.js';
+import { packageVersion } from '../core/version.js';
 
 /**
  * Native MCP (Model Context Protocol) server for Nativ over stdio.
@@ -57,15 +58,6 @@ const RESOURCES = [
   { name: 'escalation', uris: ['nativ://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
   { name: 'telemetry', uris: ['nativ://telemetry'], file: 'telemetry.json', mimeType: 'application/json', description: 'Execution duration, token usage and cost telemetry (.ai/telemetry.json)' },
 ] as const;
-
-function packageVersion(): string {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: string };
-    return pkg.version ?? '1.0.0';
-  } catch {
-    return '1.0.0';
-  }
-}
 
 // Handlers share global console/process.exitCode state, so captured runs are serialized.
 let captureQueue: Promise<unknown> = Promise.resolve();

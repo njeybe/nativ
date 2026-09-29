@@ -1,2 +1,2 @@
-* text=auto
-bin/* text eol=lf
+# Keep line endings identical on every machine. Templates, generated plugin files and hashes depend on it.
+* text=auto eol=lf

@@ -35,9 +35,13 @@ export async function runValidate(targetDirArg?: string) {
     return content;
   }
 
+  // Directives tell agents how to work; they are guidance, not contracts, and GEMINI.md is only an optional adapter guide.
   console.log(pc.bold('1. Directives:'));
-  checkFile('CLAUDE.md');
-  checkFile('GEMINI.md');
+  const directives = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].filter((f) => fs.existsSync(path.join(targetDir, f)));
+  for (const file of directives) checkFile(file);
+  if (!directives.length) {
+    console.log(pc.yellow('  ⚠ No directive file (AGENTS.md, CLAUDE.md). Agents will not be told the workflow; run `nativ setup` to add them.'));
+  }
 
   console.log(pc.bold('\n2. Core Specification Contracts:'));
   checkFile('.ai/context.md');

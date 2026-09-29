@@ -30,7 +30,16 @@ nativ --version
 
 The package is `nativ-cli`; the command is `nativ`. To remove it: `npm uninstall -g nativ-cli`.
 
-### From a clone (contributors)
+### From GitHub (no clone needed)
+
+```bash
+npm install -g github:njeybe/nativ
+nativ --version
+```
+
+npm downloads the repository and builds it during the install, which takes about a minute. Use this to get changes that are on `main` but not yet published to npm.
+
+### From a clone (developing nativ itself)
 
 ```bash
 git clone https://github.com/njeybe/nativ.git
@@ -94,6 +103,19 @@ Check what the enforcement hook will do:
 ```bash
 nativ hook status
 ```
+
+## Update
+
+```bash
+npm install -g nativ-cli@latest      # or: npm install -g github:njeybe/nativ
+cd your-project
+nativ update
+nativ doctor
+```
+
+`nativ update` refreshes what nativ wrote and you have not touched: the directives, the role guides, the agents, the hooks and the MCP entry. Files you edited are kept and listed; add `--force` to replace them. Your contracts and plan in `.ai/` are never modified. If the tools list in Claude Code looks stale after an update, restart the session, then run `nativ doctor`.
+
+Upgrading from 1.x? Read [CHANGELOG.md](../CHANGELOG.md): the `agentj_*` tools and `agentj://` resources were removed, so any config that still calls them must use the `nativ_*` names.
 
 ## Other MCP hosts
 

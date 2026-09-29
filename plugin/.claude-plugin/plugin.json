@@ -1,10 +1,10 @@
 {
   "name": "nativ",
   "displayName": "nativ",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Role-based multi-agent workflow for Claude Code: architect, worker and verifier agents, task-scope enforcement, and the nativ MCP server.",
   "author": {
-    "name": "njeybe"
+    "name": "JB Natividad"
   },
   "homepage": "https://github.com/njeybe/nativ",
   "repository": "https://github.com/njeybe/nativ",
