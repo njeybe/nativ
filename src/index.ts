@@ -11,7 +11,12 @@ import {
   runTaskEscalate,
   runTaskAdd,
   runTaskProposePatch,
+  runTaskUnlock,
 } from './commands/task.js';
+import { runHookCheck, runHookStatus } from './commands/hook.js';
+import { runSetup } from './commands/setup.js';
+import { runDoctor } from './commands/doctor.js';
+import { runSessionContext } from './core/setup-assets.js';
 import {
   runWorktreeCreate,
   runWorktreeList,
@@ -31,22 +36,46 @@ export function createProgram(): Command {
 
   program
     .name('nativ')
-    .description('Multi-tier AI agent workflow harness connecting Antigravity, Claude Code, and autonomous sub-agents')
+    .description('Role-based multi-agent workflow harness: Claude Code by default, other AI agents pluggable')
     .version('1.0.0');
 
   program
     .command('init [targetDir]')
-    .description('Scaffold the multi-tier agent architecture (.ai/, CLAUDE.md, GEMINI.md) in the target directory')
+    .description('Scaffold the workflow (.ai/, AGENTS.md, directives) and the Claude Code configuration in the target directory')
     .option('-f, --force', 'Overwrite existing specification and directive files')
     .action(async (targetDir, options) => {
       await runInit(targetDir, options);
     });
 
   program
+    .command('setup [targetDir]')
+    .description('Write the Claude Code configuration (.mcp.json, .claude/settings.json, agents, AGENTS.md), merging without overwriting your own settings')
+    .option('--command <cli>', 'How Claude Code should start nativ, e.g. "npx -y nativ-cli" (default: nativ when installed globally)')
+    .option('--enforcement <mode>', 'Role enforcement mode: warn (default), block or off')
+    .option('--dry-run', 'Show what would change without writing anything')
+    .option('-f, --force', 'Also overwrite agent and directive files that were edited by hand')
+    .option('--json', 'Output the result as JSON')
+    .action(async (targetDir, options) => {
+      await runSetup(targetDir, { command: options.command, enforcement: options.enforcement, dryRun: options.dryRun, force: options.force, json: options.json });
+    });
+
+  program
+    .command('doctor [targetDir]')
+    .description('Check the Claude Code integration for drift (MCP server, hooks, permissions, agents, providers) and repair it with --fix')
+    .option('--fix', 'Repair missing or out-of-date files (runs setup)')
+    .option('--command <cli>', 'How Claude Code should start nativ (see setup)')
+    .option('--no-deep', 'Skip asking Claude Code itself (`claude mcp list`, a few seconds) whether the MCP server connects')
+    .option('--json', 'Output the report as JSON')
+    .action((targetDir, options) => {
+      runDoctor(targetDir, { fix: options.fix, command: options.command, json: options.json, deep: options.deep !== false });
+    });
+
+  program
     .command('update [targetDir]')
-    .description('Safely synchronize directives and sub-agents to the latest framework standards without touching project data')
-    .action(async (targetDir) => {
-      await runUpdate(targetDir);
+    .description('Refresh directives, role guides and the Claude Code configuration to the latest templates. Files you edited are kept; contracts and the plan are never touched')
+    .option('-f, --force', 'Also replace directive and role-guide files that were edited by hand')
+    .action(async (targetDir, options) => {
+      await runUpdate(targetDir, { force: options.force });
     });
 
   program
@@ -180,7 +209,7 @@ export function createProgram(): Command {
 
   task
     .command('escalate <taskId> [targetDir]')
-    .description('Escalate an architectural/contract blocker back to Antigravity (.ai/escalation.json)')
+    .description('Escalate an architectural/contract blocker to the Architect role (.ai/escalation.json)')
     .option('-t, --type <type>', 'Escalation type (contract_drift, schema_flaw, missing_credential, dependency_conflict, architectural_ambiguity)')
     .option('-d, --details <details>', 'Detailed explanation of the blocker')
     .option('-a, --affected <contracts>', 'Comma-separated affected contracts')
@@ -209,6 +238,41 @@ export function createProgram(): Command {
         baseHash: options.baseHash,
         json: options.json,
       });
+    });
+
+  task
+    .command('unlock <taskId> [targetDir]')
+    .description('Emergency override: let the task edit files outside its targetFiles (contracts and secrets stay protected)')
+    .option('-r, --reason <reason>', 'Why enforcement is being lifted')
+    .option('--revoke', 'Re-lock the task to its target files')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
+    });
+
+  const hook = program
+    .command('hook')
+    .description('Claude Code hook entry points for role enforcement');
+
+  hook
+    .command('check [targetDir]')
+    .description('PreToolUse hook: read the tool call from stdin and warn or deny writes outside the active task scope')
+    .action(async (targetDir) => {
+      await runHookCheck(targetDir);
+    });
+
+  hook
+    .command('context [targetDir]')
+    .description('SessionStart hook: print a short orientation for a new Claude Code session')
+    .action((targetDir) => {
+      runSessionContext(targetDir);
+    });
+
+  hook
+    .command('status [targetDir]')
+    .description('Show the enforcement mode, role and active task scope')
+    .option('--json', 'Output status as JSON')
+    .action((targetDir, options) => {
+      runHookStatus(targetDir, { json: options.json });
     });
 
   const worktree = program
@@ -327,7 +391,7 @@ export function createProgram(): Command {
 
   program
     .command('triage [escalationId] [targetDir]')
-    .description('Run the Tier 1 AI Strategist (Gemini) on pending escalations: auto-resolve safe contract fixes or present a decision card')
+    .description('Run the Tier 1 AI Strategist (Claude by default, Gemini optional) on pending escalations: auto-resolve safe contract fixes or present a decision card')
     .option('-a, --all', 'Triage every pending escalation (report only, no prompts)')
     .option('--apply', 'Write sandbox-proven additive patches to the contracts and unblock their tasks')
     .option('--threshold <policy>', "Risk threshold: 'safe_contracts_only' (default) or 'all_non_destructive'")

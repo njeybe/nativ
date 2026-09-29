@@ -8,7 +8,7 @@ export function detectProject(targetDir: string): ProjectInfo {
 
   let projectName = baseName;
   let projectType = 'Generic Application';
-  let projectGoal = 'Awaiting specification from Antigravity intake interview';
+  let projectGoal = 'Awaiting specification from the architect intake interview';
   let runtime = 'Unknown / Greenfield';
   let framework = 'None detected';
   let databaseOrm = 'None detected';

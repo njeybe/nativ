@@ -212,7 +212,7 @@ function printDiff(diff: SchemaDiff, targetLabel: string): void {
   console.log('');
 }
 
-// ─── agentj db status ─────────────────────────────────────────────────────────
+// ─── nativ db status ─────────────────────────────────────────────────────────
 
 export async function runDbStatus(targetDirArg?: string, options: { json?: boolean } = {}): Promise<void> {
   const targetDir = resolveDir(targetDirArg);
@@ -223,14 +223,14 @@ export async function runDbStatus(targetDirArg?: string, options: { json?: boole
     return;
   }
 
-  console.log(pc.bold(pc.cyan('\nAgentJ Database Telemetry')));
+  console.log(pc.bold(pc.cyan('\nnativ Database Telemetry')));
   printStatusLine('dev', dev.status);
   printStatusLine('prod', prod.status);
   console.log('');
   if (!dev.status.connected && !prod.status.connected) process.exitCode = 1;
 }
 
-// ─── agentj db inspect ────────────────────────────────────────────────────────
+// ─── nativ db inspect ────────────────────────────────────────────────────────
 
 export async function runDbInspect(
   targetDirArg?: string,
@@ -295,7 +295,7 @@ export async function runDbInspect(
   console.log('');
 }
 
-// ─── agentj db diff ───────────────────────────────────────────────────────────
+// ─── nativ db diff ───────────────────────────────────────────────────────────
 
 export async function runDbDiff(
   targetDirArg?: string,
@@ -341,7 +341,7 @@ export async function runDbDiff(
   if (options.exitCode && s.addedTablesCount + s.alteredTablesCount + s.droppedTablesCount > 0) process.exitCode = 1;
 }
 
-// ─── agentj db sync ───────────────────────────────────────────────────────────
+// ─── nativ db sync ───────────────────────────────────────────────────────────
 
 /** Exports a live schema into .ai/db_schema.json. Previews unless --yes is passed. */
 export async function runDbSync(targetDirArg?: string, options: { source?: string; yes?: boolean } = {}): Promise<void> {
@@ -379,7 +379,7 @@ export async function runDbSync(targetDirArg?: string, options: { source?: strin
   console.log(pc.green(`✔ Wrote ${count} ${entityWord} (structure only, no credentials) to ${path.relative(targetDir, filePath)}\n`));
 }
 
-// ─── agentj db ui ─────────────────────────────────────────────────────────────
+// ─── nativ db ui ─────────────────────────────────────────────────────────────
 
 function openBrowser(url: string): void {
   const [cmd, args] =

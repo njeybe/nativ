@@ -13,7 +13,7 @@ import type {
 
 /**
  * Safe environment parser.
- * Reads .env files locally so connection strings stay in-memory inside the agentj
+ * Reads .env files locally so connection strings stay in-memory inside the nativ
  * process. Nothing returned here for display purposes contains credentials —
  * always pass URLs through maskConnectionString() before rendering them.
  */

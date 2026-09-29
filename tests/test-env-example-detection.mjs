@@ -40,7 +40,7 @@ function requestJson(url, options = {}) {
 }
 
 // 1. Create a sandbox directory
-const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentj-test-env-'));
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-test-env-'));
 
 try {
   // Write a multi-engine .env.example file

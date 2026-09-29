@@ -13,25 +13,25 @@ const cliPath = path.join(repoRoot, 'bin', 'cli.js');
 const SECRET = 'mcp-air-gap-secret';
 
 const EXPECTED_TOOLS = [
-  'agentj_task_next',
-  'agentj_task_list',
-  'agentj_task_start',
-  'agentj_task_complete',
-  'agentj_task_block',
-  'agentj_task_escalate',
-  'agentj_init',
-  'agentj_status',
-  'agentj_db_status',
-  'agentj_db_diff',
-  'agentj_db_inspect',
+  'nativ_task_next',
+  'nativ_task_list',
+  'nativ_task_start',
+  'nativ_task_complete',
+  'nativ_task_block',
+  'nativ_task_escalate',
+  'nativ_init',
+  'nativ_status',
+  'nativ_db_status',
+  'nativ_db_diff',
+  'nativ_db_inspect',
 ];
 
 const EXPECTED_RESOURCES = [
-  'agentj://context',
-  'agentj://master-plan',
-  'agentj://db-schema',
-  'agentj://api-contracts',
-  'agentj://escalation',
+  'nativ://context',
+  'nativ://master-plan',
+  'nativ://db-schema',
+  'nativ://api-contracts',
+  'nativ://escalation',
 ];
 
 /** A loopback port with nothing listening, so connections are refused quickly. */
@@ -44,7 +44,7 @@ async function closedPort() {
 }
 
 function createFixtureProject() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentj-mcp-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-mcp-'));
   const aiDir = path.join(dir, '.ai');
   fs.mkdirSync(aiDir, { recursive: true });
   fs.writeFileSync(path.join(aiDir, 'context.md'), '# Fixture Context\n', 'utf8');
@@ -164,7 +164,7 @@ try {
     clientInfo: { name: 'nativ-test', version: '0.0.0' },
   });
   assert.equal(init.jsonrpc, '2.0');
-  assert.ok(['nativ', 'agentj'].includes(init.result.serverInfo.name), `unexpected serverInfo name ${init.result.serverInfo.name}`);
+  assert.equal(init.result.serverInfo.name, 'nativ', `unexpected serverInfo name ${init.result.serverInfo.name}`);
   assert.ok(init.result.capabilities.tools, 'server advertises tools capability');
   assert.ok(init.result.capabilities.resources, 'server advertises resources capability');
   server.notify('notifications/initialized');
@@ -173,69 +173,69 @@ try {
   // 2. Tool discovery
   const tools = await server.request('tools/list');
   const toolNames = tools.result.tools.map((t) => t.name);
-  for (const name of EXPECTED_TOOLS) assert.ok(toolNames.includes(name), `missing legacy tool ${name}`);
-  for (const name of EXPECTED_TOOLS) {
-    const nativName = name.replace('agentj_', 'nativ_');
-    assert.ok(toolNames.includes(nativName), `missing nativ tool ${nativName}`);
-  }
-  assert.ok(!toolNames.some((n) => /sync|ui|studio/.test(n)), 'contract-writing / studio tools must not be exposed');
-  const escalate = tools.result.tools.find((t) => t.name === 'nativ_task_escalate' || t.name === 'agentj_task_escalate');
+  for (const name of EXPECTED_TOOLS) assert.ok(toolNames.includes(name), `missing tool ${name}`);
+  assert.ok(toolNames.every((n) => n.startsWith('nativ_')), `every tool is namespaced nativ_: ${toolNames.filter((n) => !n.startsWith('nativ_')).join(', ')}`);
+  assert.ok(!toolNames.some((n) => n.startsWith('agentj_')), 'the retired agentj_ aliases must not be exposed');
+  assert.equal(new Set(toolNames).size, toolNames.length, 'no tool is registered twice');
+  assert.ok(toolNames.includes('nativ_doctor'), 'the read-only doctor tool is exposed');
+  assert.ok(!toolNames.some((n) => /sync|ui|studio|unlock|setup|fix/.test(n)), 'contract-writing, studio, unlock and repair tools must not be exposed');
+  const escalate = tools.result.tools.find((t) => t.name === 'nativ_task_escalate');
   assert.deepEqual([...escalate.inputSchema.required].sort(), ['details', 'taskId', 'type']);
-  check(`tools/list exposes both nativ_* and legacy agentj_* tools with input schemas`);
+  check(`tools/list exposes ${toolNames.length} nativ_* tools with input schemas and no legacy aliases`);
 
   // 3. Resource listing & reads
   const resources = await server.request('resources/list');
   const uris = resources.result.resources.map((r) => r.uri);
-  for (const uri of EXPECTED_RESOURCES) assert.ok(uris.includes(uri), `missing legacy resource ${uri}`);
-  for (const uri of EXPECTED_RESOURCES) {
-    const nativUri = uri.replace('agentj://', 'nativ://');
-    assert.ok(uris.includes(nativUri), `missing nativ resource ${nativUri}`);
-  }
-  check(`resources/list exposes both nativ:// and legacy agentj:// resources`);
+  for (const uri of EXPECTED_RESOURCES) assert.ok(uris.includes(uri), `missing resource ${uri}`);
+  assert.ok(uris.every((u) => u.startsWith('nativ://')), `every resource is nativ://: ${uris.join(', ')}`);
+  assert.ok(!uris.some((u) => u.startsWith('agentj://')), 'the retired agentj:// aliases must not be exposed');
+  const legacyRead = await server.request('resources/read', { uri: 'agentj://master-plan' });
+  assert.ok(legacyRead.error, 'reading a retired agentj:// URI is an error');
+  check(`resources/list exposes ${uris.length} nativ:// resources and no legacy aliases`);
 
-  const planRes = await server.request('resources/read', { uri: 'agentj://master-plan' });
+  const planRes = await server.request('resources/read', { uri: 'nativ://master-plan' });
   const planContent = planRes.result.contents[0];
   assert.equal(planContent.mimeType, 'application/json');
   assert.equal(JSON.parse(planContent.text).projectName, 'mcp-fixture');
-  const ctxRes = await server.request('resources/read', { uri: 'agentj://context' });
+  const ctxRes = await server.request('resources/read', { uri: 'nativ://context' });
   assert.match(ctxRes.result.contents[0].text, /Fixture Context/);
-  const escRes = await server.request('resources/read', { uri: 'agentj://escalation' });
+  const escRes = await server.request('resources/read', { uri: 'nativ://escalation' });
   assert.deepEqual(JSON.parse(escRes.result.contents[0].text), { escalations: [] });
   check('resources/read returns .ai/ file contents (escalation defaults to empty)');
 
-  // 4. agentj_task_next
-  const next = await server.callTool('agentj_task_next');
+  // 4. nativ_task_next
+  const next = await server.callTool('nativ_task_next');
   assert.notEqual(next.result.isError, true);
   const nextJson = JSON.parse(toolText(next));
   assert.equal(nextJson.status, 'ready');
   assert.equal(nextJson.task.id, 'task-1');
   assert.equal(nextJson.task.roleGuide, '.ai/subagents/backend.md');
-  check('agentj_task_next returns the ready task as JSON with its role guide');
+  check('nativ_task_next returns the ready task as JSON with its role guide');
 
   // 5. Lifecycle mutation round-trip
-  const start = await server.callTool('agentj_task_start', { taskId: 'task-1' });
+  const start = await server.callTool('nativ_task_start', { taskId: 'task-1' });
   assert.notEqual(start.result.isError, true);
   assert.match(toolText(start), /in_progress/);
   assert.doesNotMatch(toolText(start), /\x1b\[/, 'ANSI color codes must be stripped');
-  const complete = await server.callTool('agentj_task_complete', { taskId: 'task-1', notes: 'done via MCP' });
+  const complete = await server.callTool('nativ_task_complete', { taskId: 'task-1', notes: 'done via MCP' });
   assert.notEqual(complete.result.isError, true);
   const onDisk = JSON.parse(fs.readFileSync(path.join(projectDir, '.ai', 'master_plan.json'), 'utf8'));
   assert.equal(onDisk.milestones[0].tasks[0].status, 'completed');
   assert.equal(onDisk.milestones[0].tasks[0].notes, 'done via MCP');
-  const next2 = JSON.parse(toolText(await server.callTool('agentj_task_next')));
+  const next2 = JSON.parse(toolText(await server.callTool('nativ_task_next')));
   assert.equal(next2.task.id, 'task-2');
-  check('agentj_task_start / agentj_task_complete update master_plan.json and advance task_next');
+  check('nativ_task_start / nativ_task_complete update master_plan.json and advance task_next');
 
   // 6. Error reporting
-  const missing = await server.callTool('agentj_task_start', { taskId: 'task-404' });
+  const missing = await server.callTool('nativ_task_start', { taskId: 'task-404' });
   assert.equal(missing.result.isError, true);
   assert.match(toolText(missing), /not found/);
-  const badArgs = await server.callTool('agentj_task_block', { taskId: 'task-2' });
+  const badArgs = await server.callTool('nativ_task_block', { taskId: 'task-2' });
   assert.ok(badArgs.error || badArgs.result?.isError, 'missing required "reason" must be rejected');
   check('unknown task IDs and invalid arguments are reported as tool errors');
 
-  // 7. agentj_db_status (air-gap)
-  const dbStatus = await server.callTool('agentj_db_status');
+  // 7. nativ_db_status (air-gap)
+  const dbStatus = await server.callTool('nativ_db_status');
   assert.notEqual(dbStatus.result.isError, true, 'an offline database is a status report, not a tool failure');
   const dbText = toolText(dbStatus);
   const dbJson = JSON.parse(dbText);
@@ -243,7 +243,7 @@ try {
   assert.equal(dbJson.prod.connected, false);
   assert.ok(!dbText.includes(SECRET), 'db status output must never contain the raw password');
   assert.ok(!server.stderr().includes(SECRET), 'server stderr must never contain the raw password');
-  check('agentj_db_status reports offline databases as JSON with masked credentials');
+  check('nativ_db_status reports offline databases as JSON with masked credentials');
 
   // 8. stdout carries JSON-RPC frames only
   for (const line of server.rawStdoutLines) {

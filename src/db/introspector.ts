@@ -791,7 +791,7 @@ async function createFirestoreDriver(url: string): Promise<Driver> {
   const config = parseFirestoreUrl(url);
   const { Firestore } = await import('@google-cloud/firestore');
   // Emulator: plain-text gRPC with the emulator's owner token. Real projects: Application
-  // Default Credentials resolved by the SDK — agentj never reads or stores key files.
+  // Default Credentials resolved by the SDK — nativ never reads or stores key files.
   const firestore = new Firestore({
     projectId: config.projectId,
     ...(config.databaseId ? { databaseId: config.databaseId } : {}),

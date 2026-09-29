@@ -113,7 +113,7 @@ async function closedPort() {
 }
 
 // ─── 2. Filesystem resolution from an XAMPP / Laravel project ───────────────
-const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentj-test-fragmented-'));
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-test-fragmented-'));
 const refusedPort = await closedPort();
 
 try {

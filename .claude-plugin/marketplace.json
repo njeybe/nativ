@@ -1,0 +1,15 @@
+{
+  "name": "nativ",
+  "description": "nativ: role-based multi-agent workflow for Claude Code",
+  "owner": {
+    "name": "njeybe"
+  },
+  "plugins": [
+    {
+      "name": "nativ",
+      "source": "./plugin",
+      "description": "Architect, worker and verifier agents, task-scope enforcement hooks, the nativ MCP server and the task-loop skill.",
+      "version": "1.0.0"
+    }
+  ]
+}

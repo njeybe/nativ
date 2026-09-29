@@ -239,7 +239,8 @@ try {
     assert.match(checkbox('dispatch-worktree'), /\bchecked\b/, 'Isolated Worktree defaults on');
     assert.match(checkbox('dispatch-verify-gate'), /\bchecked\b/, 'Auto-verify Gatekeeper defaults on');
     assert.ok(checkbox('dispatch-merge') && !/\bchecked\b/.test(checkbox('dispatch-merge')), 'Auto-merge on Pass defaults off');
-    assert.match(code, /--dangerously-skip-permissions/, 'dispatch modal must preview the headless claude command');
+    assert.match(code, /--permission-mode acceptEdits --settings "\.nativ\/runs\/permissions\//, 'dispatch modal must preview the headless claude command with its allowlist file');
+    assert.doesNotMatch(code, /dangerously-skip-permissions/, 'the preview must not offer a permission bypass');
     assert.match(code, /ctrlKey/, 'Ctrl+Enter must launch the agent');
     assert.match(code, /['"]\/api\/pipeline\/tasks\/dispatch['"]/, 'dispatch modal must POST /api/pipeline/tasks/dispatch');
     for (const field of ['useWorktree', 'verify', 'autoMerge']) assert.match(code, new RegExp(`\\b${field}\\s*:`), `dispatch payload must send ${field}`);

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "nativ": {
+      "command": "nativ",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

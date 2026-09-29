@@ -1,25 +1,39 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
 import { detectProject } from '../scanner/detector.js';
+import { applySetup, getTemplatesDir, planTemplateFile, type AssetChange } from '../core/setup-assets.js';
+import { printSetupResult } from './setup.js';
 import { runValidate } from './validate.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-function getTemplatesDir(): string {
-  const candidate = path.resolve(__dirname, '../../templates');
-  if (fs.existsSync(candidate)) return candidate;
-  return path.resolve(__dirname, '../templates');
+export interface UpdateOptions {
+  /** Also replace directive and role-guide files that were edited by hand. */
+  force?: boolean;
 }
 
-export async function runUpdate(targetDirArg?: string) {
+const ICON: Record<string, string> = { created: '+', updated: '~', unchanged: '=', skipped: '!' };
+
+function printChange(change: AssetChange): void {
+  const paint = change.action === 'created' ? pc.green : change.action === 'updated' ? pc.cyan : change.action === 'skipped' ? pc.yellow : pc.dim;
+  const verb = change.action === 'skipped' ? 'kept' : change.action;
+  console.log(paint(`  ${ICON[change.action]} ${change.path}`) + pc.dim(`  ${verb}${change.detail ? `: ${change.detail}` : ''}`));
+}
+
+/**
+ * `nativ update`: brings a project up to the current templates without destroying its own work.
+ *
+ * - Directives (CLAUDE.md, GEMINI.md) and role guides (.ai/subagents/) are refreshed only when nativ wrote them
+ *   and nobody edited them; anything edited is kept and reported. `--force` replaces those too.
+ * - AGENTS.md, .claude/agents/, settings and the MCP entry follow the same merge rules as `nativ setup`,
+ *   keeping the command already configured.
+ * - Contracts, the plan and the project context are never touched. Missing contracts are backfilled.
+ */
+export async function runUpdate(targetDirArg?: string, options: UpdateOptions = {}) {
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const templatesDir = getTemplatesDir();
   const aiDir = path.join(targetDir, '.ai');
 
-  console.log(pc.bold(pc.cyan(`\n🔄 Nativ: Synchronizing Framework & Directives in: ${targetDir}\n`)));
+  console.log(pc.bold(pc.cyan(`\nnativ update: synchronizing directives and agents in ${targetDir}\n`)));
 
   if (!fs.existsSync(aiDir)) {
     console.error(pc.red(`✖ No .ai/ directory found in: ${targetDir}`));
@@ -31,40 +45,42 @@ export async function runUpdate(targetDirArg?: string) {
   const projectInfo = detectProject(targetDir);
   const timestamp = new Date().toISOString();
 
-  // 1. Update CLAUDE.md directive
-  const claudeSrc = path.join(templatesDir, 'CLAUDE.md');
-  const claudeDest = path.join(targetDir, 'CLAUDE.md');
-  if (fs.existsSync(claudeSrc)) {
-    fs.copyFileSync(claudeSrc, claudeDest);
-    console.log(pc.green('✔ Updated CLAUDE.md (Project Manager Directive)'));
-  }
-
-  // 2. Update GEMINI.md directive
-  const geminiSrc = path.join(templatesDir, 'GEMINI.md');
-  const geminiDest = path.join(targetDir, 'GEMINI.md');
-  if (fs.existsSync(geminiSrc)) {
-    fs.copyFileSync(geminiSrc, geminiDest);
-    console.log(pc.green('✔ Updated GEMINI.md (Antigravity Mission Control Directive)'));
-  }
-
-  // 3. Update Sub-agent specifications
-  const subagentsDir = path.join(aiDir, 'subagents');
-  fs.mkdirSync(subagentsDir, { recursive: true });
-
-  const templatesSubagentDir = path.join(templatesDir, 'dot-ai/subagents');
+  // 1. Directives and role guides: refresh what nativ wrote, keep what a person edited
+  const derived: Array<{ rel: string; template: string; dest: string; key: string }> = [
+    { rel: 'CLAUDE.md', template: path.join(templatesDir, 'CLAUDE.md'), dest: path.join(targetDir, 'CLAUDE.md'), key: 'CLAUDE.md' },
+    { rel: 'GEMINI.md', template: path.join(templatesDir, 'GEMINI.md'), dest: path.join(targetDir, 'GEMINI.md'), key: 'GEMINI.md' },
+  ];
+  const templatesSubagentDir = path.join(templatesDir, 'dot-ai', 'subagents');
   if (fs.existsSync(templatesSubagentDir)) {
-    const files = fs.readdirSync(templatesSubagentDir);
-    for (const file of files) {
+    for (const file of fs.readdirSync(templatesSubagentDir).sort()) {
       const src = path.join(templatesSubagentDir, file);
-      const dest = path.join(subagentsDir, file);
       if (fs.statSync(src).isFile()) {
-        fs.copyFileSync(src, dest);
-        console.log(pc.green(`✔ Updated .ai/subagents/${file}`));
+        derived.push({ rel: `.ai/subagents/${file}`, template: src, dest: path.join(aiDir, 'subagents', file), key: `subagents/${file}` });
       }
     }
   }
 
-  // 4. Backfill missing core contracts safely (NEVER overwrite existing project state)
+  console.log(pc.bold('Directives and role guides'));
+  let kept = 0;
+  for (const item of derived) {
+    if (!fs.existsSync(item.template)) continue;
+    const existing = fs.existsSync(item.dest) ? fs.readFileSync(item.dest, 'utf8') : null;
+    const plan = planTemplateFile(existing, fs.readFileSync(item.template, 'utf8'), item.key, options.force === true);
+    if (plan.content !== undefined) {
+      fs.mkdirSync(path.dirname(item.dest), { recursive: true });
+      fs.writeFileSync(item.dest, plan.content, 'utf8');
+    }
+    if (plan.action === 'skipped') kept++;
+    printChange({ path: item.rel, action: plan.action, detail: plan.detail });
+  }
+
+  // 2. Everything `nativ setup` manages: AGENTS.md, .claude/agents/, settings, MCP server
+  console.log(pc.bold('\nClaude Code configuration'));
+  const setup = applySetup(targetDir, { force: options.force });
+  printSetupResult(setup);
+
+  // 3. Backfill missing core contracts safely (NEVER overwrite existing project state)
+  console.log(pc.bold('\nContracts'));
   const apiContractsPath = path.join(aiDir, 'api_contracts.json');
   if (!fs.existsSync(apiContractsPath)) {
     const apiTemplate = fs.readFileSync(path.join(templatesDir, 'dot-ai/api_contracts.json'), 'utf8');
@@ -102,6 +118,9 @@ export async function runUpdate(targetDirArg?: string) {
   console.log(pc.dim('  • Preserved existing .ai/master_plan.json (active milestones intact)'));
   console.log(pc.dim('  • Preserved existing .ai/context.md (project context intact)'));
 
+  if (kept > 0) {
+    console.log(pc.yellow(`\n! ${kept} file(s) were kept because they were edited by hand. Compare them with the templates in the nativ package, or run \`nativ update --force\` to replace them.`));
+  }
   console.log(pc.bold(pc.green('\n✨ Framework sync complete! Verifying updated project...\n')));
   await runValidate(targetDir);
 }

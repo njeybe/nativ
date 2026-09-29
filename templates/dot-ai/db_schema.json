@@ -7,7 +7,7 @@
   "tables": [
     {
       "name": "example_entity",
-      "description": "Demonstration table definition. Antigravity updates this during Phase 1A.",
+      "description": "Demonstration table definition. The architect updates this during Phase 1A.",
       "columns": [
         {
           "name": "id",

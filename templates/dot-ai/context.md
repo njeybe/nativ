@@ -23,7 +23,7 @@
 {{KEY_DIRECTORIES}}
 
 ## 4. Engineering Guardrails & Constraints
-1. **Strict 3-Tier Pipeline:** Antigravity (Tier 1 Macro-Architect) -> Claude Code CLI (Tier 2 Project Manager) -> Autonomous Sub-agents (Tier 3 Specialized Workers).
+1. **Strict Role Pipeline (provider-agnostic):** Architect (designs contracts and resolves escalations) -> Project Manager (orchestrates the task loop) -> Workers (specialized sub-agents) -> Verifier (independent checks). Roles are fixed; the model or vendor behind a role is configurable. Claude Code is the default host for every role, and other agents can be plugged in.
 2. **Zero Breaking Changes:** Avoid breaking existing public interfaces, CLI options, or database contracts without explicit migration strategies.
 3. **Schema Authority:** Database modifications must strictly align with `.ai/db_schema.json`.
 4. **UI Fidelity:** User interface components must strictly match `.ai/ui_specs.md`.

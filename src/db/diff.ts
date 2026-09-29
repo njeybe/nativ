@@ -270,7 +270,7 @@ function generateSql(d: SchemaDiff, dialect: 'postgresql' | 'mysql' | 'sqlite', 
   const dropIdx = (t: string, i: IndexSchema) => (dialect === 'mysql' ? `DROP INDEX ${q(i.name)} ON ${q(t)};` : `DROP INDEX ${q(i.name)};`);
   const label = dialect === 'postgresql' ? 'PostgreSQL' : dialect === 'mysql' ? 'MySQL' : 'SQLite';
   const out = [
-    `-- AgentJ migration preview: Dev → ${targetLabel} (${label} dialect)`,
+    `-- nativ migration preview: Dev → ${targetLabel} (${label} dialect)`,
     '-- Generated from structural metadata only. Review carefully; nothing is executed automatically.',
     '',
   ];
@@ -332,7 +332,7 @@ function generateMongo(d: SchemaDiff, targetLabel: string): string {
   const createIdx = (t: string, i: IndexSchema) =>
     `${coll(t)}.createIndex(${keySpec(i)}, { name: ${JSON.stringify(i.name)}${i.unique ? ', unique: true' : ''} });`;
   const out = [
-    `// AgentJ migration preview: Dev → ${targetLabel} (MongoDB shell)`,
+    `// nativ migration preview: Dev → ${targetLabel} (MongoDB shell)`,
     '// Generated from structural metadata only. Review carefully; nothing is executed automatically.',
     '',
   ];

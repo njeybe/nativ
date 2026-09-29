@@ -22,6 +22,7 @@ import {
   safeUnlinkWorktreeNodeModules,
 } from '../core/root-resolver.js';
 import type { MasterPlanTask } from '../scanner/types.js';
+import { buildDesiredConfig, cliString, configuredInvocation, resolveCliInvocation } from '../core/setup-assets.js';
 
 /**
  * Lifecycle phases broadcast on the `runner_status` channel. These mirror the
@@ -138,6 +139,8 @@ export interface DispatchOptions {
   autoMerge?: boolean;
   /** Extra environment variables handed to the child (never logged or persisted). */
   env?: Record<string, string>;
+  /** Extra permission rules for the default cli runner, e.g. `Bash(pnpm test *)`. Added to the per-task allowlist. */
+  allowedTools?: string[];
 }
 
 export interface AbortResult {
@@ -357,10 +360,95 @@ export function isExecutableInPath(cmd: string): boolean {
 }
 
 /**
+ * What a dispatched agent may run without asking. `claude -p` cannot prompt, so anything not listed here is
+ * denied and the agent blocks or escalates instead of running it.
+ */
+const RUNNER_BASE_ALLOWED_TOOLS = [
+  'Bash(nativ *)',
+  'Bash(git status *)',
+  'Bash(git diff *)',
+  'Bash(git log *)',
+  'Bash(git add *)',
+  'Bash(git commit *)',
+  'Bash(git checkout -- *)',
+];
+
+/** The pieces of a compound command as Claude Code matches them: each must satisfy an allow rule on its own. */
+export function splitCompoundCommand(command: string): string[] {
+  return [...new Set(command.split(/&&|\|\||[;|\n]/).map((part) => part.trim()).filter(Boolean))];
+}
+
+/** Operator-supplied extra rules from NATIV_RUNNER_ALLOW, comma separated, e.g. `Bash(pnpm test *),Bash(cargo test *)`. */
+export function parseRunnerAllowList(raw: string | undefined): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map((rule) => rule.trim())
+    .filter((rule) => /^[A-Za-z_][A-Za-z0-9_]*(\(.*\))?$/.test(rule));
+}
+
+export interface RunnerPermissions {
+  permissions: { allow: string[]; deny: string[]; ask: string[] };
+  /** Omitted when the project's own settings already run the enforcement hook, so it never runs (and logs) twice. */
+  hooks?: { PreToolUse: Array<{ matcher: string; hooks: Array<{ type: 'command'; command: string; timeout: number }> }> };
+}
+
+/** True when `.claude/settings.json` already registers a nativ `hook check` command. */
+function projectHasEnforcementHook(rootDir: string): boolean {
+  try {
+    const text = fs.readFileSync(path.join(rootDir, '.claude', 'settings.json'), 'utf8');
+    return /"command"\s*:\s*"[^"]*\bhook check\b/.test(text);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Settings handed to a dispatched agent with `--settings`. The deny and ask rules and the enforcement hook come
+ * from the same source as `nativ setup`, so a dispatched agent is guarded even in a project where setup never ran.
+ */
+export function buildRunnerPermissions(
+  task: Pick<MasterPlanTask, 'verificationCommand'>,
+  rootDir: string,
+  extraAllowed: readonly string[] = [],
+): RunnerPermissions {
+  const invocation = configuredInvocation(rootDir) ?? resolveCliInvocation({});
+  const desired = buildDesiredConfig(invocation);
+  const cli = cliString(invocation);
+
+  const allow = [
+    ...RUNNER_BASE_ALLOWED_TOOLS,
+    ...(cli === 'nativ' ? [] : [`Bash(${cli} *)`]),
+    ...splitCompoundCommand(task.verificationCommand ?? '').map((command) => `Bash(${command})`),
+    ...extraAllowed,
+  ];
+  return {
+    permissions: { allow: [...new Set(allow)], deny: desired.deny, ask: desired.ask },
+    ...(projectHasEnforcementHook(rootDir)
+      ? {}
+      : { hooks: { PreToolUse: [{ matcher: desired.preToolUse.matcher, hooks: [{ type: 'command' as const, command: desired.preToolUse.command, timeout: desired.preToolUse.timeout }] }] } }),
+  };
+}
+
+/** Where a task's runner settings live: a subdirectory, because run history parses every top-level .json in runs/. */
+export function runnerSettingsPath(runsDir: string, taskId: string): string {
+  return path.join(runsDir, 'permissions', `${taskId}.json`).replace(/\\/g, '/');
+}
+
+export function writeRunnerSettings(runsDir: string, taskId: string, settings: RunnerPermissions): string {
+  const file = runnerSettingsPath(runsDir, taskId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  return file;
+}
+
+/**
  * Builds the autonomous prompt and arguments required by Claude Code CLI
  * to execute non-interactively in a headless child process.
+ *
+ * It runs in `acceptEdits` mode with the rules in `settingsFile` (see buildRunnerPermissions); it does not bypass
+ * permissions. Without a settings file only the file-edit tools and read-only commands are pre-approved.
  */
-export function buildDefaultClaudeCommand(task: MasterPlanTask, model?: string | null): string {
+export function buildDefaultClaudeCommand(task: MasterPlanTask, model?: string | null, settingsFile?: string): string {
   const parts = [
     `Execute task ${task.id} (${task.title}).`,
     task.description ? `Description: ${task.description}.` : '',
@@ -374,7 +462,8 @@ export function buildDefaultClaudeCommand(task: MasterPlanTask, model?: string |
   const escapedPrompt = parts.replace(/"/g, '\\"');
   const modelFlag = model ? ` --model ${model}` : '';
   // Plain `claude -p` prints nothing until it finishes; stream-json emits every message and tool call as it happens.
-  return `claude -p "${escapedPrompt}"${modelFlag} --output-format stream-json --verbose --dangerously-skip-permissions`;
+  const settingsFlag = settingsFile ? ` --settings "${settingsFile}"` : '';
+  return `claude -p "${escapedPrompt}"${modelFlag} --output-format stream-json --verbose --permission-mode acceptEdits${settingsFlag}`;
 }
 
 /** True when a runner command asks Claude Code for its line-delimited JSON event stream. */
@@ -626,8 +715,9 @@ const CLAUDE_CODE_AUTH_ENV = /^(ANTHROPIC_(API_KEY|AUTH_TOKEN|BASE_URL|MODEL|SMA
 const AWS_ENV = /^AWS_[A-Z0-9_]+$/;
 
 /**
- * Environment for cli runners. The agent inside runs with --dangerously-skip-permissions and can
- * print anything it inherits, so credential-looking variables are withheld, except the ones Claude
+ * Environment for cli runners. The agent inside can run the commands its allowlist permits (and any custom
+ * runner command runs unrestricted), so it can print anything it inherits: credential-looking variables are
+ * withheld, except the ones Claude
  * Code itself authenticates with (and AWS credentials when it is configured for Bedrock).
  * NATIV_RUNNER_PASS_ENV="NAME1,NAME2" passes extra variables through deliberately; variables an
  * operator hands to dispatch() explicitly are also passed as-is.
@@ -996,7 +1086,9 @@ export class AgentSupervisor extends EventEmitter {
             "The 'claude' CLI executable was not found in PATH. Install Claude Code (npm install -g @anthropic-ai/claude-code), configure runnerCommand / NATIV_RUNNER_COMMAND, or dispatch with runnerEngine 'native'.",
           );
         }
-        rawCommand = buildDefaultClaudeCommand(task, requestedModel);
+        const extraAllowed = [...parseRunnerAllowList(process.env.NATIV_RUNNER_ALLOW), ...(options.allowedTools ?? [])];
+        const settingsFile = writeRunnerSettings(this.runsDir, taskId, buildRunnerPermissions(task, this.rootDir, extraAllowed));
+        rawCommand = buildDefaultClaudeCommand(task, requestedModel, settingsFile);
       }
       command = rawCommand
         .replace(/\{taskId\}/g, taskId)

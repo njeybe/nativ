@@ -88,11 +88,11 @@ async function runTests() {
       console.log('✔ Test 7: formatBenchmarkReport renders clean, high-readability report');
     }
 
-    // 8. MCP Server exposes nativ_bench and agentj_bench tools
+    // 8. MCP Server exposes the nativ_bench tool
     {
       const server = createMcpServer(tmpDir);
       assert.ok(server, 'MCP server instance created');
-      console.log('✔ Test 8: nativ_bench and agentj_bench tools registered in native MCP server');
+      console.log('✔ Test 8: nativ_bench tool registered in native MCP server');
     }
 
     console.log('\n--- All Synthetic Benchmark Suite Tests Passed! ---\n');

@@ -341,6 +341,11 @@ const {
   DEFAULT_IDLE_TIMEOUT_SECONDS,
   DEFAULT_NATIVE_ALLOWED_COMMANDS,
   buildDefaultClaudeCommand,
+  buildRunnerPermissions,
+  writeRunnerSettings,
+  runnerSettingsPath,
+  parseRunnerAllowList,
+  splitCompoundCommand,
   buildRunnerEnv,
   checkNativeBashCommand,
   formatClaudeStreamLine,
@@ -905,7 +910,10 @@ try {
   assert.match(cliCommand, /--model claude-opus-5-5/);
   assert.match(cliCommand, /--output-format stream-json --verbose/, 'the default runner streams events instead of printing only at exit');
   assert.ok(usesClaudeStreamJson(cliCommand));
-  assert.match(cliCommand, /--dangerously-skip-permissions$/);
+  assert.ok(!/dangerously-skip-permissions|bypassPermissions/.test(cliCommand), 'the default runner never bypasses permissions');
+  assert.match(cliCommand, /--permission-mode acceptEdits$/, 'without a settings file it still runs in acceptEdits, nothing broader');
+  const cliWithRules = buildDefaultClaudeCommand({ id: 'task-x', title: 'X', description: '', verificationCommand: '' }, null, 'C:/proj/.nativ/runs/permissions/task-x.json');
+  assert.match(cliWithRules, /--permission-mode acceptEdits --settings "C:\/proj\/\.nativ\/runs\/permissions\/task-x\.json"$/, 'the per-task rules file is passed with --settings');
   const cliSup = new AgentSupervisor({ cwd: dir });
   const cliDone = waitForStatus(cliSup, 'task-cli-flags', 'completed');
   const cliRecord = await cliSup.dispatch({
@@ -1067,6 +1075,110 @@ try {
   assert.equal(streamUsage.length, 1, 'cli runs report usage once, from the result event');
   streamSup.shutdown();
   console.log('✔ stream-json events became readable log lines and grounded usage for the cli run.');
+
+  // ── 24. Dispatched agents get an allowlist, never a permission bypass ─────
+  console.log('24. Testing the per-task permission allowlist...');
+  {
+    assert.deepEqual(
+      splitCompoundCommand('npm run build && node tests/a.mjs | tee out.txt; echo done\nnode -e 0 || true'),
+      ['npm run build', 'node tests/a.mjs', 'tee out.txt', 'echo done', 'node -e 0', 'true'],
+      'a compound command is split the way Claude Code matches it: every part needs its own rule',
+    );
+    assert.deepEqual(splitCompoundCommand('  '), []);
+    assert.deepEqual(
+      parseRunnerAllowList('Bash(pnpm test *), Bash(cargo test *) ,not a rule, Read, ;rm -rf'),
+      ['Bash(pnpm test *)', 'Bash(cargo test *)', 'Read'],
+      'operator extras must look like permission rules; anything else is dropped',
+    );
+    assert.deepEqual(parseRunnerAllowList(undefined), []);
+
+    const perms = buildRunnerPermissions({ verificationCommand: 'npm run build && node tests/a.mjs' }, dir, ['Bash(pnpm test *)']);
+    for (const rule of ['Bash(nativ *)', 'Bash(git add *)', 'Bash(git commit *)', 'Bash(git checkout -- *)', 'Bash(npm run build)', 'Bash(node tests/a.mjs)', 'Bash(pnpm test *)']) {
+      assert.ok(perms.permissions.allow.includes(rule), `allow must include ${rule}`);
+    }
+    for (const broad of ['Bash', 'Bash(*)', 'Bash(node *)', 'Bash(npx *)', 'Bash(npm *)', 'Bash(git push *)', 'Bash(rm *)', 'Bash(curl *)']) {
+      assert.ok(!perms.permissions.allow.includes(broad), `allow must not include the broad rule ${broad}`);
+    }
+    for (const rule of ['Bash(nativ task unlock *)', 'Bash(nativ db sync *)', 'Bash(nativ task complete * --no-verify)', 'Read(./.env)', 'Read(./**/*.pem)']) {
+      assert.ok(perms.permissions.deny.includes(rule), `deny must include ${rule}, even where nativ setup never ran`);
+    }
+    assert.deepEqual(perms.permissions.ask, ['Edit(./.ai/**)', 'Write(./.ai/**)'], 'contract writes are asked for (and so denied when nothing can answer)');
+    assert.equal(perms.hooks.PreToolUse[0].hooks[0].type, 'command');
+    assert.match(perms.hooks.PreToolUse[0].hooks[0].command, /hook check$/, 'scope enforcement runs for dispatched agents too');
+    assert.equal(new Set(perms.permissions.allow).size, perms.permissions.allow.length, 'no duplicate rules');
+
+    // A project that already runs the hook is not given a second copy (it would run and log every violation twice)
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, '.claude', 'settings.json'),
+      JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Write|Edit', hooks: [{ type: 'command', command: 'nativ hook check', timeout: 10 }] }] } }),
+      'utf8',
+    );
+    assert.equal(buildRunnerPermissions({ verificationCommand: '' }, dir).hooks, undefined, 'no duplicate hook when the project has it');
+    assert.ok(buildRunnerPermissions({ verificationCommand: '' }, dir).permissions.deny.includes('Bash(nativ task unlock *)'), 'the deny rules are still added');
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo unrelated' }] }] } }), 'utf8');
+    assert.ok(buildRunnerPermissions({ verificationCommand: '' }, dir).hooks, 'an unrelated hook does not count');
+    fs.rmSync(path.join(dir, '.claude'), { recursive: true, force: true });
+
+    // The project's configured nativ command is allowed and its guardrails are denied under the same spelling
+    fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { nativ: { command: 'npx', args: ['-y', 'nativ-cli', 'mcp'] } } }), 'utf8');
+    const npxPerms = buildRunnerPermissions({ verificationCommand: '' }, dir);
+    assert.ok(npxPerms.permissions.allow.includes('Bash(npx -y nativ-cli *)'), 'the configured command is allowed');
+    assert.ok(npxPerms.permissions.deny.includes('Bash(npx -y nativ-cli task unlock *)'), 'and its guardrail commands are denied');
+    assert.ok(npxPerms.permissions.deny.includes('Bash(nativ task unlock *)'), 'the bare spelling stays denied');
+    fs.rmSync(path.join(dir, '.mcp.json'));
+
+    // The rules file lives in a subdirectory: run history parses every top-level .json in runs/ as a record
+    const runsDir = path.join(dir, '.nativ', 'runs');
+    const file = writeRunnerSettings(runsDir, 'task-perm', perms);
+    assert.equal(file, runnerSettingsPath(runsDir, 'task-perm'));
+    assert.ok(file.includes('/permissions/task-perm.json') && !file.includes('\\'), 'forward slashes and a permissions/ subdirectory');
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), perms);
+    assert.ok(!fs.readdirSync(runsDir).includes('task-perm.json'), 'nothing is written where restoreHistory would parse it as a run');
+    const restored = new AgentSupervisor({ cwd: dir });
+    assert.ok(!restored.listRuns?.().some?.((r) => r.taskId === 'task-perm'), 'a rules file is never mistaken for a run record');
+    restored.shutdown();
+
+    // A real dispatch through the default runner: a fake `claude` on PATH records the arguments it was given
+    const fakeBin = path.join(dir, 'fake-bin');
+    fs.mkdirSync(fakeBin, { recursive: true });
+    fs.writeFileSync(path.join(fakeBin, 'claude-mock.mjs'), "process.stdout.write('ARGS:' + JSON.stringify(process.argv.slice(2)) + '\\n');\n", 'utf8');
+    fs.writeFileSync(path.join(fakeBin, 'claude.cmd'), `@echo off\r\n"${process.execPath}" "${path.join(fakeBin, 'claude-mock.mjs')}" %*\r\n`, 'utf8');
+    fs.writeFileSync(path.join(fakeBin, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "${path.join(fakeBin, 'claude-mock.mjs')}" "$@"\n`, { encoding: 'utf8', mode: 0o755 });
+
+    const savedPath = process.env.PATH;
+    const savedAllow = process.env.NATIV_RUNNER_ALLOW;
+    process.env.PATH = `${fakeBin}${path.delimiter}${savedPath}`;
+    process.env.NATIV_RUNNER_ALLOW = 'Bash(pnpm test *)';
+    const permSup = new AgentSupervisor({ cwd: dir });
+    try {
+      const done = waitForStatus(permSup, 'task-verify', 'completed');
+      await permSup.dispatch({ taskId: 'task-verify', useWorktree: false, timeoutSeconds: 30, allowedTools: ['Bash(make lint *)'] });
+      await done;
+      const log = permSup.getLogs('task-verify', 50).log;
+      const argsLine = log.split('\n').find((l) => l.includes('ARGS:'));
+      assert.ok(argsLine, `the fake claude must have run:\n${log}`);
+      const args = JSON.parse(argsLine.slice(argsLine.indexOf('ARGS:') + 5));
+      assert.ok(!args.some((a) => /dangerously-skip-permissions|bypassPermissions/.test(a)), 'dispatch never bypasses permissions');
+      assert.equal(args[args.indexOf('--permission-mode') + 1], 'acceptEdits');
+      const settingsFile = args[args.indexOf('--settings') + 1];
+      assert.equal(settingsFile, runnerSettingsPath(runsDir, 'task-verify'), 'the rules file is the per-task one');
+      const written = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      assert.ok(written.permissions.allow.includes('Bash(node --version)'), "the task's own verification command is allowed");
+      assert.ok(written.permissions.allow.includes('Bash(pnpm test *)'), 'NATIV_RUNNER_ALLOW extras are added');
+      assert.ok(written.permissions.allow.includes('Bash(make lint *)'), 'dispatch options can add rules');
+      assert.ok(written.permissions.deny.includes('Bash(nativ task unlock *)'));
+      assert.ok(written.hooks?.PreToolUse, 'a project with no hook of its own gets the enforcement hook through the rules file');
+    } finally {
+      permSup.shutdown();
+      process.env.PATH = savedPath;
+      if (savedAllow === undefined) delete process.env.NATIV_RUNNER_ALLOW;
+      else process.env.NATIV_RUNNER_ALLOW = savedAllow;
+    }
+    // An explicit runner command is the operator's own responsibility: no rules file is written for it
+    assert.ok(!fs.existsSync(runnerSettingsPath(runsDir, 'task-echo')), 'a custom runner command gets no generated rules');
+    console.log('✔ Dispatch uses acceptEdits with a per-task allowlist, denies the guardrail commands, and never bypasses permissions.');
+  }
 
   console.log('\n🎉 ALL AGENT SUPERVISOR TESTS PASSED!');
 } finally {

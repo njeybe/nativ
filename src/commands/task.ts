@@ -24,6 +24,7 @@ import {
 } from '../governor/index.js';
 import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
+import { addTaskUnlock, removeTaskUnlock } from '../core/enforcement.js';
 
 export { loadPlan, savePlan, withPlanLock };
 
@@ -151,7 +152,7 @@ export async function runTaskList(
     return;
   }
 
-  console.log(pc.bold(pc.cyan(`\n📋 AgentJ Tasks: ${plan.projectName}`)));
+  console.log(pc.bold(pc.cyan(`\n📋 nativ Tasks: ${plan.projectName}`)));
   console.log(pc.dim(`Overall Status: ${plan.overallStatus.toUpperCase()} | Active Milestone: ${plan.activeMilestoneId}\n`));
 
   if (results.length === 0) {
@@ -394,6 +395,41 @@ export async function runTaskStart(taskId: string, targetDirArg?: string) {
     }
     console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] marked as `) + pc.yellow('▶ in_progress') + '\n');
   });
+}
+
+export interface TaskUnlockOptions {
+  /** Why scope enforcement is being lifted; kept in .nativ/unlocks.json. */
+  reason?: string;
+  /** Re-locks the task instead. */
+  revoke?: boolean;
+}
+
+/**
+ * Lifts role enforcement's target-file scope for one task (emergency escape hatch), or restores it with
+ * --revoke. Contract and secret paths stay protected either way. Deliberately CLI-only and not an MCP
+ * tool: an agent must not be able to remove its own guardrail.
+ */
+export async function runTaskUnlock(taskId: string, targetDirArg?: string, options: TaskUnlockOptions = {}) {
+  const { targetDir, planPath } = getPlanPath(targetDirArg);
+  const plan = loadPlan(planPath);
+  if (!plan) {
+    process.exitCode = 1;
+    return;
+  }
+  if (!plan.milestones.some((m) => m.tasks.some((t) => t.id === taskId))) {
+    console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.revoke) {
+    const removed = removeTaskUnlock(targetDir, taskId);
+    console.log(removed ? pc.green(`\n✔ Task [${taskId}] re-locked to its target files.\n`) : pc.dim(`\nTask [${taskId}] was not unlocked.\n`));
+    return;
+  }
+  addTaskUnlock(targetDir, taskId, options.reason?.trim() || undefined);
+  console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] unlocked: its agent may edit files outside targetFiles.`));
+  console.log(pc.dim('  .ai/ contracts and secret files stay protected. Re-lock with `nativ task unlock ' + taskId + ' --revoke`.\n'));
 }
 
 export interface TaskCompleteOptions {
@@ -674,14 +710,14 @@ export async function runTaskEscalate(
     foundTask.status = 'blocked';
     foundTask.notes = `Escalated [${escId}]: ${summary}`;
 
-    console.log(pc.bold(pc.yellow(`\n🚨 Task [${pc.bold(taskId)}] Escalated to Tier 1 (Antigravity)!`)));
+    console.log(pc.bold(pc.yellow(`\n🚨 Task [${pc.bold(taskId)}] Escalated to the Architect!`)));
     console.log(pc.dim('  Escalation ID:      ') + pc.cyan(escId));
     console.log(pc.dim('  Type:               ') + pc.white(escType));
     console.log(pc.dim('  Reported By:        ') + pc.magenta(`[${foundTask.assignedSubagent}]`));
     console.log(pc.dim('  Affected Contracts: ') + pc.white(affectedContracts.join(', ')));
     console.log(pc.dim('  Details:            ') + pc.yellow(summary));
-    console.log(pc.dim('\nNext Step for Macro-Architect:'));
-    console.log(pc.white(`  Open Antigravity to review .ai/escalation.json, update the affected contracts, and unblock the task.\n`));
+    console.log(pc.dim('\nNext Step for the Architect:'));
+    console.log(pc.white(`  Ask the architect agent (Claude Code, or Antigravity if that is your host) to review .ai/escalation.json, update the affected contracts, and unblock the task. \`nativ triage\` can assess it first.\n`));
   });
 }
 

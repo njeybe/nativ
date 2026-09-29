@@ -33,7 +33,7 @@
       "id": "example-entity-list",
       "path": "/entities",
       "method": "GET",
-      "description": "Demonstration collection endpoint. Antigravity updates this during Phase 1 API design.",
+      "description": "Demonstration collection endpoint. The architect updates this during Phase 1 API design.",
       "auth": true,
       "request": {
         "headers": {

@@ -235,7 +235,7 @@ export class CircuitBreaker {
     const proposal = buildProposal(proposalFactory);
     const recommendedAction = proposal
       ? describeProposal(proposal)
-      : `Review ${context.affected.join(', ')} and decide whether the change is intended; if so, have Tier 1 update the task and unblock ${taskId}.`;
+      : `Review ${context.affected.join(', ')} and decide whether the change is intended; if so, have the architect update the task and unblock ${taskId}.`;
 
     const escalationId = fileEscalation(targetDir, (id) => ({
       id,
@@ -295,7 +295,7 @@ export class CircuitBreaker {
 
     const recommendedActions = [
       `Review contract at .ai/${contractFileName} and either adjust schema or approve migration.`,
-      `If the operation is required, have Tier 1 (Antigravity) apply the change and unblock ${taskId}.`,
+      `If the operation is required, have the architect apply the change and unblock ${taskId}.`,
       `If the operation is invalid, instruct the agent to use an alternative backward-compatible approach.`,
     ];
     if (proposal) recommendedActions.unshift(describeProposal(proposal));

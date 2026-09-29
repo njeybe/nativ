@@ -17,6 +17,7 @@ import {
 import { SUBAGENT_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
 import { runStatus } from '../commands/status.js';
+import { runDoctor } from '../commands/doctor.js';
 import {
   runWorktreeCreate,
   runWorktreeList,
@@ -49,12 +50,12 @@ const ESCALATION_TYPES = [
 ] as const;
 
 const RESOURCES = [
-  { name: 'context', uris: ['nativ://context', 'agentj://context'], file: 'context.md', mimeType: 'text/markdown', description: 'Project context, tech stack and guardrails (.ai/context.md)' },
-  { name: 'master-plan', uris: ['nativ://master-plan', 'agentj://master-plan'], file: 'master_plan.json', mimeType: 'application/json', description: 'Milestones, tasks and their status (.ai/master_plan.json)' },
-  { name: 'db-schema', uris: ['nativ://db-schema', 'agentj://db-schema'], file: 'db_schema.json', mimeType: 'application/json', description: 'Database schema contract (.ai/db_schema.json)' },
-  { name: 'api-contracts', uris: ['nativ://api-contracts', 'agentj://api-contracts'], file: 'api_contracts.json', mimeType: 'application/json', description: 'API route and schema contracts (.ai/api_contracts.json)' },
-  { name: 'escalation', uris: ['nativ://escalation', 'agentj://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
-  { name: 'telemetry', uris: ['nativ://telemetry', 'agentj://telemetry'], file: 'telemetry.json', mimeType: 'application/json', description: 'Execution duration, token usage and cost telemetry (.ai/telemetry.json)' },
+  { name: 'context', uris: ['nativ://context'], file: 'context.md', mimeType: 'text/markdown', description: 'Project context, tech stack and guardrails (.ai/context.md)' },
+  { name: 'master-plan', uris: ['nativ://master-plan'], file: 'master_plan.json', mimeType: 'application/json', description: 'Milestones, tasks and their status (.ai/master_plan.json)' },
+  { name: 'db-schema', uris: ['nativ://db-schema'], file: 'db_schema.json', mimeType: 'application/json', description: 'Database schema contract (.ai/db_schema.json)' },
+  { name: 'api-contracts', uris: ['nativ://api-contracts'], file: 'api_contracts.json', mimeType: 'application/json', description: 'API route and schema contracts (.ai/api_contracts.json)' },
+  { name: 'escalation', uris: ['nativ://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
+  { name: 'telemetry', uris: ['nativ://telemetry'], file: 'telemetry.json', mimeType: 'application/json', description: 'Execution duration, token usage and cost telemetry (.ai/telemetry.json)' },
 ] as const;
 
 function packageVersion(): string {
@@ -105,18 +106,17 @@ export function createMcpServer(targetDirArg?: string): McpServer {
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const server = new McpServer({ name: 'nativ', version: packageVersion() });
 
-  function registerDualTool(
+  function registerNativTool(
     baseName: string,
     meta: { description: string; inputSchema: Record<string, z.ZodTypeAny> },
     handler: (args: any) => Promise<CallToolResult>,
   ) {
     server.registerTool(`nativ_${baseName}`, meta as any, handler);
-    server.registerTool(`agentj_${baseName}`, meta as any, handler);
   }
 
   // ─── Task lifecycle tools ──────────────────────────────────────────────────
 
-  registerDualTool(
+  registerNativTool(
     'task_next',
     {
       description: 'Get the next executable task in the active milestone, with its role guide and JIT contract slice (JSON).',
@@ -125,7 +125,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     () => captureOutput(() => runTaskNext(targetDir, { json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_list',
     {
       description: 'List project tasks from .ai/master_plan.json with optional filters (JSON).',
@@ -140,7 +140,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_add',
     {
       description:
@@ -172,7 +172,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       ),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_start',
     {
       description: 'Mark a task as in_progress.',
@@ -181,7 +181,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ taskId }) => captureOutput(() => runTaskStart(taskId, targetDir)),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_complete',
     {
       description: "Mark a task as completed (automatically executes its verificationCommand unless skipVerify is true). Advances the milestone when all its tasks are done.",
@@ -194,7 +194,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ taskId, notes, skipVerify }) => captureOutput(() => runTaskComplete(taskId, targetDir, { notes, skipVerify })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'verify',
     {
       description: "Run verification commands on demand for a task, milestone, or all completed tasks without changing task status.",
@@ -207,7 +207,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ taskId, milestone, all }) => captureOutput(() => runVerify(taskId, targetDir, { milestone, all, json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_block',
     {
       description: 'Mark a task as blocked with a required reason (e.g. verification failed after 3 attempts).',
@@ -219,10 +219,10 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ taskId, reason }) => captureOutput(() => runTaskBlock(taskId, reason, targetDir)),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_escalate',
     {
-      description: 'Escalate a contract or architectural blocker to Tier 1 (writes .ai/escalation.json and blocks the task).',
+      description: 'Escalate a contract or architectural blocker to the Architect (writes .ai/escalation.json and blocks the task).',
       inputSchema: {
         taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
         type: z.enum(ESCALATION_TYPES).describe('Escalation type'),
@@ -234,7 +234,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       captureOutput(() => runTaskEscalate(taskId, targetDir, { type, details, affected: affected?.join(',') })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'task_propose_patch',
     {
       description:
@@ -268,7 +268,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
 
   // ─── Worktree lifecycle tools ──────────────────────────────────────────────
 
-  registerDualTool(
+  registerNativTool(
     'worktree_create',
     {
       description: 'Create an isolated Git worktree branch for a task with mounted .ai/ contracts (JSON).',
@@ -279,7 +279,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ taskId }) => captureOutput(() => runWorktreeCreate(taskId, targetDir, { json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'worktree_list',
     {
       description: 'List active agent Git worktrees and their branch mapping (JSON).',
@@ -288,7 +288,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     () => captureOutput(() => runWorktreeList(targetDir, { json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'worktree_merge',
     {
       description: 'Merge an agent worktree branch into the base branch (enforces Safe Merge Gatekeeper unless force is true).',
@@ -300,7 +300,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ taskId, force }) => captureOutput(() => runWorktreeMerge(taskId, targetDir, { force, json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'worktree_remove',
     {
       description: 'Safely remove an agent worktree and discard its branch without merging.',
@@ -314,7 +314,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
 
   // ─── Workspace tools ───────────────────────────────────────────────────────
 
-  registerDualTool(
+  registerNativTool(
     'init',
     {
       description: 'Scaffold the .ai/ workflow (contracts, master plan, sub-agents, directives). Never overwrites existing files.',
@@ -323,7 +323,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     () => captureOutput(() => runInit(targetDir, { force: false })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'status',
     {
       description: 'Summarize execution progress across all milestones and tasks.',
@@ -332,9 +332,21 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     () => captureOutput(() => runStatus(targetDir)),
   );
 
+  registerNativTool(
+    'doctor',
+    {
+      description:
+        'Read-only health check of the Claude Code integration: MCP server, hooks, permissions, agents, enforcement mode and provider availability (JSON). ' +
+        'Reports drift but never repairs it; repairing is `nativ doctor --fix` in a terminal.',
+      inputSchema: {},
+    },
+    // A report that lists problems is still a successful report, not a tool failure.
+    () => captureOutput(async () => runDoctor(targetDir, { json: true }), { errorOnExitCode: false }),
+  );
+
   // ─── Database telemetry tools (masked, structure-only) ─────────────────────
 
-  registerDualTool(
+  registerNativTool(
     'db_status',
     {
       description: 'Dev/Prod database connection health, engine, latency and table count. URLs are masked; no credentials are returned.',
@@ -344,7 +356,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     () => captureOutput(() => runDbStatus(targetDir, { json: true }), { errorOnExitCode: false }),
   );
 
-  registerDualTool(
+  registerNativTool(
     'db_inspect',
     {
       description: 'Introspect live database structure (tables, columns, types, keys, indexes). Structure only; never reads row data.',
@@ -356,7 +368,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     ({ env, table }) => captureOutput(() => runDbInspect(targetDir, { env: env ?? 'dev', table, json: true })),
   );
 
-  registerDualTool(
+  registerNativTool(
     'db_diff',
     {
       description: 'Compute schema drift from the Dev database to .ai/db_schema.json (target "contract", default) or to Prod.',
@@ -369,7 +381,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
 
   // ─── Test generation ─────────────────────────────────────────────────────
 
-  registerDualTool(
+  registerNativTool(
     'test_gen',
     {
       description:
@@ -395,7 +407,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
 
   // ─── Synthetic Benchmark Matrix ──────────────────────────────────────────
 
-  registerDualTool(
+  registerNativTool(
     'bench',
     {
       description:

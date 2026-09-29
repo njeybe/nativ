@@ -441,11 +441,12 @@ try {
   await mcp.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'nativ-test', version: '0.0.0' } });
   mcp.notify('notifications/initialized');
   const tools = (await mcp.request('tools/list')).result.tools;
-  for (const name of ['nativ_test_gen', 'agentj_test_gen']) {
+  for (const name of ['nativ_test_gen']) {
     const tool = tools.find((t) => t.name === name);
     assert.ok(tool, `missing ${name}`);
     assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), ['baseUrl', 'dryRun', 'framework', 'output']);
   }
+  assert.ok(!tools.some((t) => t.name === 'agentj_test_gen'), 'the retired agentj_ alias is gone');
   const mcpDry = await mcp.request('tools/call', { name: 'nativ_test_gen', arguments: { dryRun: true, framework: 'vitest' } });
   assert.notEqual(mcpDry.result.isError, true);
   const mcpJson = JSON.parse(mcpDry.result.content[0].text);
@@ -455,10 +456,10 @@ try {
   assert.equal(mcpEscape.result.isError, true);
   const mcpBadFw = await mcp.request('tools/call', { name: 'nativ_test_gen', arguments: { framework: 'mocha' } });
   assert.ok(mcpBadFw.error || mcpBadFw.result?.isError, 'framework enum must be enforced');
-  const mcpWrite = await mcp.request('tools/call', { name: 'agentj_test_gen', arguments: { output: 'generated/mcp', framework: 'node:test' } });
+  const mcpWrite = await mcp.request('tools/call', { name: 'nativ_test_gen', arguments: { output: 'generated/mcp', framework: 'node:test' } });
   assert.notEqual(mcpWrite.result.isError, true);
   assert.ok(fs.existsSync(path.join(project, 'generated', 'mcp', 'nativ-contract-support.mjs')));
-  check('nativ_test_gen / agentj_test_gen over MCP: schema, dry run, writes, and output containment');
+  check('nativ_test_gen over MCP: schema, dry run, writes, and output containment');
 
   console.log(`\n✔ All ${passed} contract generator checks passed.`);
 } catch (err) {

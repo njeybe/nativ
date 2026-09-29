@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import pc from 'picocolors';
 import { detectProject } from '../scanner/detector.js';
 import { buildContextContent } from '../scanner/context-builder.js';
+import { runSetup, printSetupResult } from './setup.js';
+import { stampManaged } from '../core/setup-assets.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,7 +122,8 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
     const src = path.join(templatesDir, 'dot-ai/subagents', file);
     const dest = path.join(subagentsDir, file);
     if (fs.existsSync(src) && (!fs.existsSync(dest) || options.force)) {
-      fs.copyFileSync(src, dest);
+      // Stamped so a later `nativ update` can tell an untouched guide from one a person edited.
+      fs.writeFileSync(dest, stampManaged(fs.readFileSync(src, 'utf8')), 'utf8');
       console.log(pc.green(`✔ Created .ai/subagents/${file}`));
     }
   }
@@ -129,7 +132,7 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   const claudeSrc = path.join(templatesDir, 'CLAUDE.md');
   const claudeDest = path.join(targetDir, 'CLAUDE.md');
   if (fs.existsSync(claudeSrc) && (!fs.existsSync(claudeDest) || options.force)) {
-    fs.copyFileSync(claudeSrc, claudeDest);
+    fs.writeFileSync(claudeDest, stampManaged(fs.readFileSync(claudeSrc, 'utf8')), 'utf8');
     console.log(pc.green('✔ Created CLAUDE.md (Project Manager Directive)'));
   }
 
@@ -137,13 +140,21 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   const geminiSrc = path.join(templatesDir, 'GEMINI.md');
   const geminiDest = path.join(targetDir, 'GEMINI.md');
   if (fs.existsSync(geminiSrc) && (!fs.existsSync(geminiDest) || options.force)) {
-    fs.copyFileSync(geminiSrc, geminiDest);
-    console.log(pc.green('✔ Created GEMINI.md (Antigravity Mission Control Directive)'));
+    fs.writeFileSync(geminiDest, stampManaged(fs.readFileSync(geminiSrc, 'utf8')), 'utf8');
+    console.log(pc.green('✔ Created GEMINI.md (optional Gemini/Antigravity architect adapter)'));
+  }
+
+  // 10. Claude Code configuration: MCP server, hooks, permissions, agents, AGENTS.md. Merges; never overwrites.
+  console.log(pc.yellow('Configuring Claude Code (MCP server, hooks, agents)...'));
+  const setup = await runSetup(targetDir, { quiet: true });
+  if (setup) {
+    printSetupResult(setup);
   }
 
   console.log(pc.bold(pc.cyan('\n✨ Pipeline Scaffolding Completed Successfully!\n')));
-  console.log(pc.bold('Next Steps in the 3-Tier Workflow:'));
-  console.log(pc.white(` 1. Open ${pc.magenta('Antigravity')} (Tier 1 Macro-Architect) to conduct feature intake & design checkpoints.`));
-  console.log(pc.white(` 2. Antigravity finalizes ${pc.cyan('.ai/db_schema.json')}, ${pc.cyan('.ai/api_contracts.json')}, ${pc.cyan('.ai/ui_specs.md')}, and ${pc.cyan('.ai/master_plan.json')}.`));
-  console.log(pc.white(` 3. Run ${pc.green('claude')} in this directory to let the Middle-Tier PM autonomously execute tasks with sub-agents!\n`));
+  console.log(pc.bold('Next Steps:'));
+  console.log(pc.white(` 1. Run ${pc.green('claude')} in this directory and ask the ${pc.magenta('architect')} agent to design your contracts (database, API, UI). You approve each step.`));
+  console.log(pc.white(` 2. The architect writes ${pc.cyan('.ai/db_schema.json')}, ${pc.cyan('.ai/api_contracts.json')}, ${pc.cyan('.ai/ui_specs.md')}, and ${pc.cyan('.ai/master_plan.json')}.`));
+  console.log(pc.white(` 3. Ask Claude to run ${pc.green('nativ task next')} and delegate each task to a ${pc.magenta('worker')} agent; use ${pc.magenta('verifier')} for an independent check.`));
+  console.log(pc.dim(` Run ${pc.white('nativ doctor')} any time, and after updating Claude Code, to confirm the integration is intact.\n`));
 }

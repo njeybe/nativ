@@ -57,6 +57,8 @@ export interface TelemetrySummary {
   totalVerificationsRun: number;
   totalVerificationsPassed: number;
   circuitBreakerTrips: number;
+  /** Total role-enforcement violations recorded, including ones that aged out of `violations`. */
+  roleViolations?: number;
   /** Grounded spend across all native runs, including failed ones (billing is billing). */
   actualSpendUsd?: number;
   actualInputTokens?: number;
@@ -68,6 +70,21 @@ export interface TelemetrySummary {
   cacheHitRate?: number;
 }
 
+/** One write that left its role: an out-of-scope edit, a contract edit by a non-architect, or a secret file. */
+export interface RoleViolationRecord {
+  at: string;
+  rule: 'protected_path' | 'secret_path' | 'out_of_scope';
+  /** `warn` was logged and allowed; `block` was denied. */
+  mode: 'warn' | 'block';
+  tool: string;
+  /** Project-relative path with forward slashes. */
+  path: string;
+  taskIds: string[];
+}
+
+/** Oldest entries are dropped past this, so a chatty agent cannot grow telemetry.json without bound. */
+export const MAX_ROLE_VIOLATIONS = 200;
+
 export interface ProjectTelemetry {
   $schema?: string;
   version: string;
@@ -76,6 +93,7 @@ export interface ProjectTelemetry {
   modelTierDefault: string;
   summary: TelemetrySummary;
   tasks: TaskTelemetryRecord[];
+  violations?: RoleViolationRecord[];
 }
 
 /** Model whose rates price heuristic estimates; matches the native engine's default model. */
@@ -467,6 +485,26 @@ export async function recordRunnerUsage(
     saveTelemetry(telemetryPath, telemetry);
     return record;
   });
+}
+
+/**
+ * Logs a role-enforcement violation to .ai/telemetry.json. Best effort: it never throws, because the
+ * hook that calls it must not fail an agent's tool call over bookkeeping.
+ */
+export async function recordRoleViolation(targetDir: string, violation: Omit<RoleViolationRecord, 'at'>): Promise<void> {
+  try {
+    const telemetryPath = path.join(targetDir, '.ai', 'telemetry.json');
+    await withFileLock(telemetryPath, () => {
+      const telemetry = loadTelemetry(telemetryPath, path.basename(targetDir));
+      const violations = telemetry.violations ?? [];
+      violations.push({ at: new Date().toISOString(), ...violation });
+      telemetry.violations = violations.slice(-MAX_ROLE_VIOLATIONS);
+      telemetry.summary.roleViolations = (telemetry.summary.roleViolations ?? 0) + 1;
+      saveTelemetry(telemetryPath, telemetry);
+    });
+  } catch {
+    // Bookkeeping only.
+  }
 }
 
 /**

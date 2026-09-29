@@ -207,7 +207,8 @@ try {
   await mcp.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'nativ-test', version: '0.0.0' } });
   mcp.notify('notifications/initialized');
   const tools = (await mcp.request('tools/list')).result.tools;
-  for (const name of ['nativ_task_add', 'agentj_task_add']) {
+  assert.ok(!tools.some((t) => t.name === 'agentj_task_add'), 'the retired agentj_ alias is gone');
+  for (const name of ['nativ_task_add']) {
     const tool = tools.find((t) => t.name === name);
     assert.ok(tool, `missing ${name}`);
     assert.deepEqual(tool.inputSchema.required, ['title']);
@@ -224,15 +225,17 @@ try {
   assert.equal(mcpJson.task.id, 'task-12');
   assert.equal(mcpJson.milestoneId, 'm4');
   assert.deepEqual(mcpJson.task.targetFiles, ['tests/a.mjs']);
-  const legacy = await mcp.request('tools/call', { name: 'agentj_task_add', arguments: { title: 'Legacy planned task', milestone: 'm3', dependencies: ['task-05'] } });
-  assert.equal(JSON.parse(legacy.result.content[0].text).task.id, 'task-13');
+  const plannedOverMcp = await mcp.request('tools/call', { name: 'nativ_task_add', arguments: { title: 'Planned task', milestone: 'm3', dependencies: ['task-05'] } });
+  assert.equal(JSON.parse(plannedOverMcp.result.content[0].text).task.id, 'task-13');
+  const retired = await mcp.request('tools/call', { name: 'agentj_task_add', arguments: { title: 'x' } });
+  assert.ok(retired.error || retired.result?.isError, 'calling a retired agentj_ tool is an error');
   const mcpBad = await mcp.request('tools/call', { name: 'nativ_task_add', arguments: { title: 'x', dependencies: ['task-404'] } });
   assert.equal(mcpBad.result.isError, true);
   const mcpBadAgent = await mcp.request('tools/call', { name: 'nativ_task_add', arguments: { title: 'x', assignedSubagent: 'wizard' } });
   assert.ok(mcpBadAgent.error || mcpBadAgent.result?.isError, 'sub-agent enum enforced');
   const mcpList = await mcp.request('tools/call', { name: 'nativ_task_list', arguments: { fastPath: true } });
   assert.deepEqual(JSON.parse(mcpList.result.content[0].text).map((t) => t.id), ['task-09', 'task-10', 'task-11', 'task-12']);
-  check('nativ_task_add / agentj_task_add over MCP: schema, fast-path routing, errors, task_list fastPath filter');
+  check('nativ_task_add over MCP: schema, fast-path routing, errors, task_list fastPath filter');
 
   console.log(`\n✔ All ${passed} task router checks passed.`);
 } catch (err) {
