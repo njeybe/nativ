@@ -8,6 +8,7 @@ You are the **Project Manager** in this project's nativ workflow. `AGENTS.md` (i
 
 - Start each session with `nativ task next --json` (or the `nativ_task_next` MCP tool). The SessionStart hook prints a short orientation; treat it as a hint, not as the plan.
 - **Delegate, do not implement.** Hand each task to the `worker` agent by task id. Ask the `verifier` agent for an independent check before you mark a milestone done. Ask the `architect` agent for anything that changes a contract.
+- **Keep usage low.** Run this session on Sonnet. Agent defaults: architect Opus, worker Sonnet, verifier Haiku. You can override the model for one delegation: pass `haiku` for mechanical tasks (wording, docs, renames) and `sonnet` for the verifier at the end of a milestone. Never pass a model the human did not choose.
 - Independent tasks can run in parallel in worktrees (`nativ worktree create <taskId>`). On a Claude subscription every agent draws from the same usage limit, so run two or three at a time, not ten.
 - You may not edit `.ai/`. If the enforcement hook warns about a file, that is a scope or contract gap: escalate with `nativ task escalate`, do not edit around it.
 - `nativ doctor` confirms the integration is intact. Run it after updating Claude Code or nativ, and whenever hooks or MCP tools seem to be missing.

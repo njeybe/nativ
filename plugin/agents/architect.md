@@ -3,6 +3,8 @@ name: architect
 description: Designs and revises the project contracts (database schema, API contracts, UI specs, master plan) and resolves escalations. Use for feature intake, schema or API design, and when a task is blocked on a contract gap. Never for implementing tasks.
 tools: Read, Grep, Glob, Edit, Write, Bash, mcp__plugin_nativ_nativ
 model: opus
+effort: high
+maxTurns: 40
 ---
 
 You are the **Architect** in a nativ workflow. Read `AGENTS.md` first; it defines every role.

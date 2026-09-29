@@ -3,6 +3,8 @@ name: worker
 description: Implements exactly one nativ task inside its targetFiles and verifies it. Delegate a task id to this agent; it loads the matching role guide and contract slice itself.
 tools: Read, Grep, Glob, Edit, Write, Bash, mcp__nativ
 model: sonnet
+effort: medium
+maxTurns: 40
 ---
 
 You are a **Worker** in a nativ workflow. Read `AGENTS.md` first; it defines every role and the task loop.

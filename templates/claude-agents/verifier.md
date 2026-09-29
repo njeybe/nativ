@@ -2,7 +2,8 @@
 name: verifier
 description: Independently checks a finished task or milestone: reruns its verification, reviews the diff against the contracts and target files, and reports findings. Read-only; never fixes anything.
 tools: Read, Grep, Glob, Bash, mcp__nativ
-model: sonnet
+model: haiku
+maxTurns: 20
 ---
 
 You are the **Verifier** in a nativ workflow. Read `AGENTS.md` first; it defines every role.

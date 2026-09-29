@@ -592,4 +592,29 @@ const doctorJson = async (root, options = {}) => {
   console.log('✔ Test 18: setup and doctor keep the configured command; --command changes it everywhere at once');
 }
 
+// Test 19: agent frontmatter uses only known keys and the approved models, so a typo cannot be silently ignored
+{
+  const dir = path.resolve('templates', 'claude-agents');
+  const KNOWN = new Set(['name', 'description', 'tools', 'disallowedTools', 'model', 'permissionMode', 'maxTurns', 'skills', 'mcpServers', 'hooks', 'memory', 'background', 'effort', 'isolation', 'color']);
+  const EXPECTED = { architect: 'opus', worker: 'sonnet', verifier: 'haiku' };
+  for (const [agent, model] of Object.entries(EXPECTED)) {
+    const text = fs.readFileSync(path.join(dir, `${agent}.md`), 'utf8').replace(/\r\n/g, '\n');
+    const front = /^---\n([\s\S]*?)\n---/.exec(text);
+    assert.ok(front, `${agent}.md has frontmatter`);
+    const fields = Object.fromEntries(
+      front[1].split('\n').filter((l) => /^\S/.test(l)).map((l) => {
+        const i = l.indexOf(':');
+        assert.ok(i > 0, `${agent}.md: "${l}" is not key: value`);
+        return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
+      }),
+    );
+    for (const key of Object.keys(fields)) assert.ok(KNOWN.has(key), `${agent}.md has unknown frontmatter key "${key}"`);
+    assert.equal(fields.model, model, `${agent} model`);
+    assert.ok(['opus', 'sonnet', 'haiku'].includes(fields.model), 'only opus, sonnet and haiku are used');
+    assert.ok(Number.isInteger(Number(fields.maxTurns)) && Number(fields.maxTurns) > 0, `${agent} has a positive maxTurns`);
+    if (fields.effort !== undefined) assert.ok(['low', 'medium', 'high', 'xhigh', 'max'].includes(fields.effort), `${agent} effort`);
+  }
+  console.log('✔ Test 19: agent frontmatter has only known keys, approved models and a turn cap');
+}
+
 console.log('\n🎉 ALL SETUP & DOCTOR TESTS PASSED!');
