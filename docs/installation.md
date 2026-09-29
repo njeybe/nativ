@@ -24,11 +24,11 @@ claude --version
 ### From npm
 
 ```bash
-npm install -g nativ-cli
+npm install -g @njeybe/nativ
 nativ --version
 ```
 
-The package is `nativ-cli`; the command is `nativ`. To remove it: `npm uninstall -g nativ-cli`.
+The package is `@njeybe/nativ`; the command is `nativ`. To remove it: `npm uninstall -g @njeybe/nativ`.
 
 ### From GitHub (no clone needed)
 
@@ -49,16 +49,16 @@ npm run build
 npm link
 ```
 
-`npm link` makes `nativ` available everywhere and points it at your clone. Run `npm run watch` in a spare terminal to rebuild on change. To unlink: `npm unlink -g nativ-cli`.
+`npm link` makes `nativ` available everywhere and points it at your clone. Run `npm run watch` in a spare terminal to rebuild on change. To unlink: `npm unlink -g @njeybe/nativ`.
 
 ### Without installing
 
 ```bash
-npx nativ-cli init
-npx nativ-cli doctor
+npx @njeybe/nativ init
+npx @njeybe/nativ doctor
 ```
 
-If you go this way, generate the configuration with `nativ setup --command "npx -y nativ-cli"` so the hooks and MCP server use `npx` too. Note that `npx` starts more slowly, and the enforcement hook runs before every file write, so a global install is better for daily use.
+If you go this way, generate the configuration with `nativ setup --command "npx -y @njeybe/nativ"` so the hooks and MCP server use `npx` too. Note that `npx` starts more slowly, and the enforcement hook runs before every file write, so a global install is better for daily use.
 
 ## Connect a project to Claude Code
 
@@ -107,7 +107,7 @@ nativ hook status
 ## Update
 
 ```bash
-npm install -g nativ-cli@latest      # or: npm install -g github:njeybe/nativ
+npm install -g @njeybe/nativ@latest      # or: npm install -g github:njeybe/nativ
 cd your-project
 nativ update
 nativ doctor
@@ -126,7 +126,7 @@ The same server works with any MCP host. Cursor, Claude Desktop and Antigravity 
   "mcpServers": {
     "nativ": {
       "command": "npx",
-      "args": ["-y", "nativ-cli", "mcp", "/absolute/path/to/your/project"]
+      "args": ["-y", "@njeybe/nativ", "mcp", "/absolute/path/to/your/project"]
     }
   }
 }

@@ -44,7 +44,7 @@ export async function renderPlugin(root = repoRoot) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const { buildDesiredConfig, resolveCliInvocation } = await import(pathToFileURL(path.join(root, 'dist', 'core', 'setup-assets.js')).href);
 
-  // A plugin cannot know where nativ lives, so it always calls the bare `nativ` command (npm i -g nativ-cli).
+  // A plugin cannot know where nativ lives, so it always calls the bare `nativ` command (npm i -g @njeybe/nativ).
   const desired = buildDesiredConfig(resolveCliInvocation({ command: 'nativ' }));
   const repo = parseRepository(pkg);
   const files = new Map();
@@ -94,7 +94,7 @@ export async function renderPlugin(root = repoRoot) {
       '',
       '# nativ workflow',
       '',
-      '> This plugin supplies the agents, the enforcement hooks, the MCP server and this guide. It calls the `nativ` command, so install it once with `npm i -g nativ-cli`.',
+      '> This plugin supplies the agents, the enforcement hooks, the MCP server and this guide. It calls the `nativ` command, so install it once with `npm i -g @njeybe/nativ`.',
       '> A plugin cannot ship permission rules. Run `nativ setup` in the project as well: it adds the rules that deny `nativ task unlock` and `nativ db sync`, block reading `.env*` files, and make Claude Code ask before any write under `.ai/`. `nativ doctor` checks both.',
       '',
       directive.trimEnd(),

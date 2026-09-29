@@ -1121,10 +1121,10 @@ try {
     fs.rmSync(path.join(dir, '.claude'), { recursive: true, force: true });
 
     // The project's configured nativ command is allowed and its guardrails are denied under the same spelling
-    fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { nativ: { command: 'npx', args: ['-y', 'nativ-cli', 'mcp'] } } }), 'utf8');
+    fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { nativ: { command: 'npx', args: ['-y', '@njeybe/nativ', 'mcp'] } } }), 'utf8');
     const npxPerms = buildRunnerPermissions({ verificationCommand: '' }, dir);
-    assert.ok(npxPerms.permissions.allow.includes('Bash(npx -y nativ-cli *)'), 'the configured command is allowed');
-    assert.ok(npxPerms.permissions.deny.includes('Bash(npx -y nativ-cli task unlock *)'), 'and its guardrail commands are denied');
+    assert.ok(npxPerms.permissions.allow.includes('Bash(npx -y @njeybe/nativ *)'), 'the configured command is allowed');
+    assert.ok(npxPerms.permissions.deny.includes('Bash(npx -y @njeybe/nativ task unlock *)'), 'and its guardrail commands are denied');
     assert.ok(npxPerms.permissions.deny.includes('Bash(nativ task unlock *)'), 'the bare spelling stays denied');
     fs.rmSync(path.join(dir, '.mcp.json'));
 

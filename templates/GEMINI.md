@@ -49,7 +49,7 @@ In Antigravity: Agent panel, MCP Servers, Manage MCP Servers, View raw config (`
   "mcpServers": {
     "nativ": {
       "command": "npx",
-      "args": ["-y", "nativ-cli", "mcp", "/absolute/path/to/your/project"]
+      "args": ["-y", "@njeybe/nativ", "mcp", "/absolute/path/to/your/project"]
     }
   }
 }

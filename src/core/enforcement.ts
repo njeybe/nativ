@@ -1,5 +1,5 @@
 /**
- * nativ-cli · Role enforcement core.
+ * nativ · Role enforcement core.
  *
  * Decides whether a file write by an agent stays inside its role: the active task's `targetFiles`,
  * never a protected contract, never a secret. Claude Code calls this through the `nativ hook check`

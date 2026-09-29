@@ -1,5 +1,5 @@
 {
-  "name": "nativ-cli",
+  "name": "@njeybe/nativ",
   "version": "2.0.0",
   "description": "Role-based multi-agent workflow harness: Claude Code by default, other AI agents pluggable",
   "type": "module",
@@ -45,6 +45,9 @@
   "license": "MIT",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

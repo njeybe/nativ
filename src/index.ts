@@ -51,7 +51,7 @@ export function createProgram(): Command {
   program
     .command('setup [targetDir]')
     .description('Write the Claude Code configuration (.mcp.json, .claude/settings.json, agents, AGENTS.md), merging without overwriting your own settings')
-    .option('--command <cli>', 'How Claude Code should start nativ, e.g. "npx -y nativ-cli" (default: nativ when installed globally)')
+    .option('--command <cli>', 'How Claude Code should start nativ, e.g. "npx -y @njeybe/nativ" (default: nativ when installed globally)')
     .option('--enforcement <mode>', 'Role enforcement mode: warn (default), block or off')
     .option('--dry-run', 'Show what would change without writing anything')
     .option('-f, --force', 'Also overwrite agent and directive files that were edited by hand')

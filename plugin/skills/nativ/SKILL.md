@@ -5,7 +5,7 @@ description: Use in any project that has a .ai/ folder or uses nativ: run the ro
 
 # nativ workflow
 
-> This plugin supplies the agents, the enforcement hooks, the MCP server and this guide. It calls the `nativ` command, so install it once with `npm i -g nativ-cli`.
+> This plugin supplies the agents, the enforcement hooks, the MCP server and this guide. It calls the `nativ` command, so install it once with `npm i -g @njeybe/nativ`.
 > A plugin cannot ship permission rules. Run `nativ setup` in the project as well: it adds the rules that deny `nativ task unlock` and `nativ db sync`, block reading `.env*` files, and make Claude Code ask before any write under `.ai/`. `nativ doctor` checks both.
 
 This project uses the **nativ** role-based workflow. Every agent, whatever tool or model it runs on, follows this file. The state lives in `.ai/`; the `nativ` CLI and its MCP tools are the only supported way to change it.

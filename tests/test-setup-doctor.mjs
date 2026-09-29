@@ -254,7 +254,7 @@ const doctorJson = async (root, options = {}) => {
   const root = tempProject();
   applySetup(root, NATIV);
   const mcp = readJson(root, '.mcp.json');
-  mcp.mcpServers.nativ = { command: 'npx', args: ['nativ-cli', 'mcp'], env: { KEEP: '1' } };
+  mcp.mcpServers.nativ = { command: 'npx', args: ['@njeybe/nativ', 'mcp'], env: { KEEP: '1' } };
   fs.writeFileSync(path.join(root, '.mcp.json'), JSON.stringify(mcp), 'utf8');
   const settings = readJson(root, '.claude/settings.json');
   settings.hooks.PreToolUse[0].matcher = 'Bash';
@@ -282,17 +282,17 @@ const doctorJson = async (root, options = {}) => {
 // Test 8: CLI invocation choices
 {
   assert.deepEqual(resolveCliInvocation({ hasBinary: () => true }), { command: 'nativ', prefixArgs: [], portable: true });
-  assert.deepEqual(resolveCliInvocation({ command: 'npx -y nativ-cli' }), { command: 'npx', prefixArgs: ['-y', 'nativ-cli'], portable: true });
+  assert.deepEqual(resolveCliInvocation({ command: 'npx -y @njeybe/nativ' }), { command: 'npx', prefixArgs: ['-y', '@njeybe/nativ'], portable: true });
   const fallback = resolveCliInvocation({ hasBinary: () => false });
   assert.equal(fallback.command, 'node');
   assert.equal(fallback.portable, false, 'an install-local path is not portable');
   assert.ok(fallback.prefixArgs[0].endsWith('bin/cli.js') && !fallback.prefixArgs[0].includes('\\'), 'forward slashes, so a shell cannot mangle it');
 
-  const npx = buildDesiredConfig(resolveCliInvocation({ command: 'npx -y nativ-cli' }));
-  assert.deepEqual(npx.mcpServer, { command: 'npx', args: ['-y', 'nativ-cli', 'mcp'] });
-  assert.equal(npx.preToolUse.command, 'npx -y nativ-cli hook check');
-  assert.ok(npx.allow.includes('Bash(npx -y nativ-cli *)'));
-  assert.ok(npx.deny.includes('Bash(npx -y nativ-cli task unlock *)') && npx.deny.includes('Bash(nativ task unlock *)'), 'both spellings of unlock are denied');
+  const npx = buildDesiredConfig(resolveCliInvocation({ command: 'npx -y @njeybe/nativ' }));
+  assert.deepEqual(npx.mcpServer, { command: 'npx', args: ['-y', '@njeybe/nativ', 'mcp'] });
+  assert.equal(npx.preToolUse.command, 'npx -y @njeybe/nativ hook check');
+  assert.ok(npx.allow.includes('Bash(npx -y @njeybe/nativ *)'));
+  assert.ok(npx.deny.includes('Bash(npx -y @njeybe/nativ task unlock *)') && npx.deny.includes('Bash(nativ task unlock *)'), 'both spellings of unlock are denied');
 
   const root = tempProject();
   const plan = planSetup(root, { hasBinary: () => false });
@@ -397,7 +397,7 @@ const doctorJson = async (root, options = {}) => {
   assert.equal(absent[0].status, 'warn');
 
   const shadowed = analyzeMcpList(
-    'nativ: npx nativ-cli mcp - ✔ Connected\n\n[Conflicting scopes]\n├ Server "nativ" is defined in multiple scopes with different endpoints: project (nativ mcp), local (npx nativ-cli mcp). OAuth tokens are stored per endpoint.\n',
+    'nativ: npx @njeybe/nativ mcp - ✔ Connected\n\n[Conflicting scopes]\n├ Server "nativ" is defined in multiple scopes with different endpoints: project (nativ mcp), local (npx @njeybe/nativ mcp). OAuth tokens are stored per endpoint.\n',
   );
   const conflict = shadowed.find((c) => c.id === 'mcp-scope-conflict');
   assert.equal(conflict.status, 'warn');
@@ -549,17 +549,17 @@ const doctorJson = async (root, options = {}) => {
 // Test 18: the configured command is kept unless --command says otherwise
 {
   const root = tempProject();
-  const NPX = { command: 'npx -y nativ-cli', hasBinary: () => true };
+  const NPX = { command: 'npx -y @njeybe/nativ', hasBinary: () => true };
   const noHint = { hasBinary: () => true };
 
   applySetup(root, NPX);
-  assert.deepEqual(readJson(root, '.mcp.json').mcpServers.nativ, { command: 'npx', args: ['-y', 'nativ-cli', 'mcp'] });
+  assert.deepEqual(readJson(root, '.mcp.json').mcpServers.nativ, { command: 'npx', args: ['-y', '@njeybe/nativ', 'mcp'] });
 
   // A plain run, even where a global nativ exists, keeps the project's choice and changes nothing
   const plain = applySetup(root, noHint);
   assert.ok(plain.changes.every((c) => c.action === 'unchanged'), `a plain setup must be a no-op: ${JSON.stringify(actions(plain))}`);
   assert.equal(plain.invocation.command, 'npx');
-  assert.equal(readJson(root, '.claude/settings.json').hooks.PreToolUse[0].hooks[0].command, 'npx -y nativ-cli hook check');
+  assert.equal(readJson(root, '.claude/settings.json').hooks.PreToolUse[0].hooks[0].command, 'npx -y @njeybe/nativ hook check');
 
   // A plain doctor sees no drift, and --fix does not swap the command back to `nativ`
   const report = await doctorJson(root, { command: undefined, hasBinary: () => true });

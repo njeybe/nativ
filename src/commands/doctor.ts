@@ -116,7 +116,7 @@ export function collectChecks(root: string, options: DoctorOptions = {}): Doctor
   const invocation = plan.invocation;
   const cli = [invocation.command, ...invocation.prefixArgs];
   if (!invocation.portable) {
-    add('cli-portable', 'warn', 'The nativ command points at an absolute path on this machine. Install nativ globally or run `nativ setup --command "npx -y nativ-cli"`.');
+    add('cli-portable', 'warn', 'The nativ command points at an absolute path on this machine. Install nativ globally or run `nativ setup --command "npx -y @njeybe/nativ"`.');
   }
   const version = runVersion(invocation.command, invocation.prefixArgs);
   add('cli-runs', version.ok ? 'ok' : 'fail', version.ok ? `\`${cli.join(' ')}\` runs (${version.output})` : `\`${cli.join(' ')}\` does not run: ${version.output || 'no output'}. The hooks and MCP server would fail.`);

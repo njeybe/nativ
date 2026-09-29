@@ -1,5 +1,5 @@
 /**
- * nativ-cli · Fingerprints of directive and role-guide templates that shipped before files carried a
+ * nativ · Fingerprints of directive and role-guide templates that shipped before files carried a
  * managed marker.
  *
  * `nativ update` refreshes a file nativ wrote earlier, and keeps one a person edited. Files written since the

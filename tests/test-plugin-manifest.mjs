@@ -105,7 +105,7 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
   assert.equal(fm.name, 'nativ');
   assert.ok(fm.description.length > 40, 'a skill description drives when Claude loads it');
   for (const marker of ['## Roles', '## Task loop', '## When the contract is wrong', '## Air-gap (critical)']) assert.ok(skill.includes(marker), `skill includes ${marker} from AGENTS.md`);
-  assert.match(skill, /npm i -g nativ-cli/, 'says the plugin needs nativ installed');
+  assert.match(skill, /npm i -g @njeybe\/nativ/, 'says the plugin needs nativ installed');
   assert.match(skill, /A plugin cannot ship permission rules\. Run `nativ setup`/, 'says permissions come from nativ setup');
   assert.equal(skill.split('# nativ Agent Directive').length, 1, 'the directive title is not duplicated');
   assert.ok(!exists(`${PLUGIN_DIR}/settings.json`), 'a plugin cannot carry permission rules, so none are pretended');
@@ -179,6 +179,18 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
   }
   assert.ok(!packed.some((f) => /^(tests|\.ai|\.nativ|\.claude|\.worktrees)\//.test(f) || f === '.env'), 'no tests, project state or secrets are published');
   console.log('✔ Test 11: the npm package contains the license, changelog, plugin and templates, and no project state');
+
+  // The package is published under the author's scope; the unscoped name belongs to someone else.
+  assert.equal(pkg.name, '@njeybe/nativ', 'package name');
+  assert.equal(pkg.publishConfig?.access, 'public', 'a scoped package is restricted unless publishConfig.access is public');
+  assert.deepEqual(Object.keys(pkg.bin), ['nativ'], 'the command stays nativ whatever the package is called');
+  assert.equal(readJson('package-lock.json').name, pkg.name, 'the lockfile names the same package');
+  for (const rel of ['README.md', 'docs/installation.md', 'templates/GEMINI.md', 'plugin/skills/nativ/SKILL.md']) {
+    assert.ok(read(rel).includes('@njeybe/nativ') || rel === 'templates/GEMINI.md' || rel === 'plugin/skills/nativ/SKILL.md', `${rel} names the package`);
+    assert.ok(!/\bnativ-cli\b/.test(read(rel)), `${rel} must not point users at the old nativ-cli package`);
+  }
+  assert.ok(read('CHANGELOG.md').includes('@njeybe/nativ'), 'the changelog explains the rename');
+  console.log('✔ Test 12: published as @njeybe/nativ (public), command still nativ, no stale nativ-cli in user-facing files');
 }
 
 console.log('\n🎉 ALL PLUGIN MANIFEST TESTS PASSED!');

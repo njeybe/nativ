@@ -16,6 +16,7 @@ nativ is now role-based and Claude-first. The roles (architect, project manager,
 
 ### Changed
 
+- **The npm package is now `@njeybe/nativ`** (it was `nativ-cli`). The command is still `nativ`. `nativ-cli` stays on npm and is deprecated in favour of the new name.
 - **`nativ update` no longer overwrites files you edited.** It refreshes only files nativ wrote and you have not touched, keeps the rest and reports them, and `--force` replaces them. It also restores `AGENTS.md`, the agents and the hooks. It never touches your contracts.
 - **Dispatched agents no longer run with `--dangerously-skip-permissions`.** The runner and Studio use `acceptEdits` plus a per-task allowlist, so the deny and ask rules and the enforcement hook apply. A task that needs another command is denied instead of run; widen the list with `NATIV_RUNNER_ALLOW`.
 - Claude is the default architect and triage provider. Wording across the CLI, templates and docs names roles instead of one vendor.
@@ -27,7 +28,7 @@ nativ is now role-based and Claude-first. The roles (architect, project manager,
 
 ### Migrating from 1.x
 
-1. Update the CLI: `npm install -g nativ-cli@latest`.
+1. Switch to the new package: `npm uninstall -g nativ-cli`, then `npm install -g @njeybe/nativ`. If your own MCP configs or `nativ setup --command` use `npx -y nativ-cli`, change that to `npx -y @njeybe/nativ`.
 2. Rename any `agentj_*` tool or `agentj://` resource in your own configs to `nativ_*` and `nativ://`.
 3. In each project run `nativ update`, then `nativ doctor` (add `--fix` if it reports drift).
 4. Open Claude Code in the project once and accept the trust dialog; until then it ignores the project's permission rules.

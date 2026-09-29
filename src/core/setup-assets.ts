@@ -1,5 +1,5 @@
 /**
- * nativ-cli · Single source for every file `nativ setup` generates.
+ * nativ · Single source for every file `nativ setup` generates.
  *
  * `planSetup` computes what each asset should contain and whether that differs from disk; `applySetup`
  * writes the differences; `nativ doctor` reuses the same plan to detect drift. Everything merges into
@@ -44,7 +44,7 @@ export interface CliInvocation {
 }
 
 export interface SetupOptions {
-  /** How Claude Code should invoke nativ, e.g. `npx -y nativ-cli`. Defaults to `nativ` when it is on PATH. */
+  /** How Claude Code should invoke nativ, e.g. `npx -y @njeybe/nativ`. Defaults to `nativ` when it is on PATH. */
   command?: string;
   enforcement?: EnforcementMode;
   /** Also overwrite agent files that were edited by hand or are not nativ's. */
@@ -88,7 +88,7 @@ export function resolveCliInvocation(options: { command?: string; hasBinary?: (n
   return { command: 'node', prefixArgs: [self], portable: false };
 }
 
-/** The invocation as a shell string, e.g. `npx -y nativ-cli`, quoting parts that need it. */
+/** The invocation as a shell string, e.g. `npx -y @njeybe/nativ`, quoting parts that need it. */
 export function cliString(invocation: CliInvocation): string {
   return [invocation.command, ...invocation.prefixArgs].map(quoteIfNeeded).join(' ');
 }
@@ -346,7 +346,7 @@ export function planSetup(rootArg: string, options: SetupOptions = {}): SetupPla
   if (!invocation.portable) {
     warnings.push(
       'nativ is not on PATH, so the generated config points at this machine\'s install. ' +
-        'Install it globally (npm i -g nativ-cli) or pass --command "npx -y nativ-cli" so the config works for your team.',
+        'Install it globally (npm i -g @njeybe/nativ) or pass --command "npx -y @njeybe/nativ" so the config works for your team.',
     );
   }
 

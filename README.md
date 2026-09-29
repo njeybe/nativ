@@ -2,7 +2,7 @@
 
 A role-based multi-agent workflow for AI coding agents. **Claude Code is the default**; other agents plug in. `nativ` keeps the design contracts, the task plan and the guardrails in your repository, so the same rules hold whichever tool or model does the work.
 
-> **Package:** `nativ-cli` | **Command:** `nativ`
+> **Package:** `@njeybe/nativ` | **Command:** `nativ`
 
 ---
 
@@ -40,7 +40,7 @@ You need Node.js 20 or newer and Git. You do **not** need a clone of this reposi
 
 ```bash
 # From npm
-npm install -g nativ-cli
+npm install -g @njeybe/nativ
 
 # Or straight from GitHub (builds on install, about a minute)
 npm install -g github:njeybe/nativ
@@ -96,7 +96,7 @@ Run it after updating Claude Code or nativ. It also asks Claude Code itself whet
 ### 6. Update
 
 ```bash
-npm install -g nativ-cli@latest   # or: npm install -g github:njeybe/nativ
+npm install -g @njeybe/nativ@latest   # or: npm install -g github:njeybe/nativ
 nativ update                      # in each project
 nativ doctor
 ```
@@ -165,7 +165,7 @@ Roles are `architect`, `pm`, `worker`, `verifier` and `triage`. Adding a vendor 
 
 ```bash
 nativ init                       # scaffold .ai/ and run setup
-nativ setup [--dry-run] [--enforcement warn|block|off] [--command "npx -y nativ-cli"] [--force]
+nativ setup [--dry-run] [--enforcement warn|block|off] [--command "npx -y @njeybe/nativ"] [--force]
 nativ doctor [--fix] [--no-deep] [--json]
 nativ hook status [--json]       # enforcement mode, role, active task scope
 ```
@@ -296,7 +296,7 @@ claude mcp add nativ -- nativ mcp
 ```json
 {
   "mcpServers": {
-    "nativ": { "command": "npx", "args": ["-y", "nativ-cli", "mcp", "/absolute/path/to/project"] }
+    "nativ": { "command": "npx", "args": ["-y", "@njeybe/nativ", "mcp", "/absolute/path/to/project"] }
   }
 }
 ```

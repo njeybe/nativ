@@ -1,5 +1,5 @@
 /**
- * nativ-cli · Provider adapter contract.
+ * nativ · Provider adapter contract.
  *
  * Every LLM call made by nativ itself goes through a `Provider`. Adding a vendor means adding one
  * file in this directory and one entry in registry.ts; nothing outside src/providers/ changes.

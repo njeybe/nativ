@@ -1,5 +1,5 @@
 /**
- * nativ-cli · Tier 1 AI Strategist Liaison (provider-agnostic, Claude by default)
+ * nativ · Tier 1 AI Strategist Liaison (provider-agnostic, Claude by default)
  *
  * Autonomously mediates between Tier 2 (Claude Code PM) and Tier 1 (Strategy Engine / Human).
  * Inspects .ai/ specification contracts against runtime blockers and escalations,
