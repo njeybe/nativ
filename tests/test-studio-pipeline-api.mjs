@@ -1166,25 +1166,12 @@ try {
     console.log('✔ Sparse non-git project: missing contracts flagged, telemetry zeroed, report null, worktrees []');
   }
 
-  // 21. POST /api/pipeline/simulation/start & /stop — interactive agent simulation lifecycle
+  // 21. The removed simulation endpoints now fall through to 404
   {
-    const startRes = await requestJson(studio.url, 'POST', '/api/pipeline/simulation/start', {
-      scenario: 'default',
-      speedMultiplier: 5,
-    });
-    assert.equal(startRes.status, 200, `simulation/start → HTTP ${startRes.status}`);
-    assert.equal(startRes.body.ok, true);
-    assert.equal(startRes.body.status, 'running');
-    assert.ok(startRes.body.simulationId.startsWith('sim-'));
-
-    // Allow synthetic simulation step emission over SSE
-    await delay(200);
-
+    const startRes = await requestJson(studio.url, 'POST', '/api/pipeline/simulation/start', {});
     const stopRes = await requestJson(studio.url, 'POST', '/api/pipeline/simulation/stop', {});
-    assert.equal(stopRes.status, 200, `simulation/stop → HTTP ${stopRes.status}`);
-    assert.equal(stopRes.body.ok, true);
-    assert.equal(stopRes.body.status, 'stopped');
-    console.log('✔ POST /api/pipeline/simulation/start and /stop control real-time agent workflow simulation');
+    assert.deepEqual([startRes.status, stopRes.status], [404, 404], 'simulation endpoints are gone');
+    console.log('✔ POST /api/pipeline/simulation/start and /stop return 404');
   }
 
   // 22. Tier 1 AI Strategist triage endpoints: status, config, and evaluate

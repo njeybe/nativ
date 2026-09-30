@@ -1786,146 +1786,6 @@ class PipelineEventHub {
   }
 }
 
-/**
- * Interactive simulation engine for Mission Control Studio.
- * Broadcasts realistic multi-agent execution steps over the SSE stream
- * without modifying workspace files or invoking external model APIs.
- */
-class SimulationController {
-  private activeTimer: NodeJS.Timeout | null = null;
-  private running = false;
-  private currentId: string | null = null;
-
-  constructor(private readonly events: PipelineEventHub) {}
-
-  start(body: Record<string, unknown> = {}) {
-    this.stop();
-    const id = `sim-${Date.now()}`;
-    this.currentId = id;
-    this.running = true;
-    const speed = Math.max(1, Math.min(5, Number(body.speedMultiplier) || 1));
-    const scenario = String(body.scenario || 'default');
-
-    type Step = {
-      taskId: string;
-      phase: RunnerStatus;
-      stream?: 'stdout' | 'stderr';
-      log?: string;
-      delay: number;
-    };
-
-    const steps: Step[] = [
-      // Step 1: Foundation task (qa-tester)
-      { taskId: 'task-01', phase: 'spawning_worktree', log: '[qa-tester] Provisioning isolated worktree branch for task-01...\n', delay: 400 },
-      { taskId: 'task-01', phase: 'running', log: '[qa-tester] Validating dependencies, project manifest and baseline checks...\n', delay: 600 },
-      { taskId: 'task-01', phase: 'verifying', log: '[gatekeeper] Running verification command: npm test\n✔ Baseline contracts validated\n', delay: 600 },
-      { taskId: 'task-01', phase: 'completed', log: '[qa-tester] Task task-01 passed verification and merged.\n', delay: 400 },
-
-      // Step 2: Parallel execution (backend & frontend)
-      { taskId: 'task-studio-sse-api', phase: 'spawning_worktree', log: '[backend] Initializing git worktree .nativ/worktrees/task-studio-sse-api...\n', delay: 300 },
-      { taskId: 'task-studio-light-ui', phase: 'spawning_worktree', log: '[frontend] Initializing git worktree .nativ/worktrees/task-studio-light-ui...\n', delay: 300 },
-      { taskId: 'task-studio-sse-api', phase: 'running', log: '[backend] Implementing real-time event pipeline fanout & simulation endpoints in studio-server.ts...\n', delay: 700 },
-      { taskId: 'task-studio-light-ui', phase: 'running', log: '[frontend] Constructing SVG Workflow Canvas with Bezier cables and floating playback bar...\n', delay: 700 },
-      { taskId: 'task-studio-sse-api', phase: 'verifying', log: '[gatekeeper] Executing test-studio-pipeline-api.mjs...\n✔ All API endpoints passed\n', delay: 600 },
-      { taskId: 'task-studio-sse-api', phase: 'merging', log: '[backend] Merging worktree branch to main...\n', delay: 300 },
-      { taskId: 'task-studio-sse-api', phase: 'completed', log: '[backend] SSE pipeline stream online.\n', delay: 400 },
-
-      { taskId: 'task-studio-light-ui', phase: 'verifying', log: '[gatekeeper] Executing test-studio-light-ui.mjs...\n✔ Zero-emoji compliance and Canvas DOM validated\n', delay: 600 },
-      { taskId: 'task-studio-light-ui', phase: 'merging', log: '[frontend] Merging worktree branch to main...\n', delay: 300 },
-      { taskId: 'task-studio-light-ui', phase: 'completed', log: '[frontend] Workflow Canvas ready.\n', delay: 400 },
-
-      // Step 3: End-to-end integration & verification
-      { taskId: 'task-studio-e2e-verify', phase: 'spawning_worktree', log: '[qa-tester] Spawning E2E integration test runner...\n', delay: 300 },
-      { taskId: 'task-studio-e2e-verify', phase: 'running', log: '[qa-tester] Running comprehensive integration test matrix...\n', delay: 800 },
-      ...(scenario === 'circuit_breaker_heal'
-        ? [
-            { taskId: 'task-studio-e2e-verify', phase: 'failed' as RunnerStatus, stream: 'stderr' as const, log: '[qa-tester] Invariant violation detected: test mock failure. Circuit breaker tripped.\n', delay: 600 },
-          ]
-        : [
-            { taskId: 'task-studio-e2e-verify', phase: 'verifying' as RunnerStatus, log: '[gatekeeper] Full E2E suite passed.\n', delay: 600 },
-            { taskId: 'task-studio-e2e-verify', phase: 'completed' as RunnerStatus, log: '[qa-tester] All milestones verified.\n', delay: 400 },
-          ]),
-    ];
-
-    let stepIndex = 0;
-    const runNext = () => {
-      if (!this.running || stepIndex >= steps.length) {
-        this.running = false;
-        return;
-      }
-      const step = steps[stepIndex++];
-      const record: RunnerRecord = {
-        runId: `${id}-${step.taskId}`,
-        taskId: step.taskId,
-        status: step.phase,
-        engine: 'native',
-        model: 'claude-opus-5-5 (simulation)',
-        thinking: { budget: 2048, effort: 'medium', budgetTokens: 2048 },
-        usage: {
-          model: 'claude-opus-5-5 (simulation)',
-          turns: 3,
-          inputTokens: 1400,
-          outputTokens: 380,
-          cacheCreationTokens: 500,
-          cacheReadTokens: 4000,
-          thinkingTokens: 120,
-          costUsd: 0.011,
-        },
-        pid: 99000 + stepIndex,
-        branch: `nativ/${step.taskId}`,
-        worktreeDir: `.nativ/worktrees/${step.taskId}`,
-        command: 'simulation',
-        startedAt: new Date(Date.now() - 2000).toISOString(),
-        endedAt: step.phase === 'completed' || step.phase === 'failed' ? new Date().toISOString() : null,
-        durationMs: 2500,
-        exitCode: step.phase === 'completed' ? 0 : step.phase === 'failed' ? 1 : null,
-        signal: null,
-        timeoutSeconds: 300,
-        timedOut: false,
-        logBytes: (step.log || '').length,
-        logFile: `.nativ/logs/${step.taskId}.log`,
-        error: step.phase === 'failed' ? (step.log || 'Task failed') : null,
-        abortReason: null,
-        verification: step.phase === 'completed' ? { command: 'npm test', success: true, exitCode: 0, durationMs: 400, skipped: false } : null,
-      };
-
-      this.events.publish('runner_status', runView(record));
-      if (step.log) {
-        this.events.publish('runner_log', {
-          runId: `${id}-${step.taskId}`,
-          taskId: step.taskId,
-          stream: step.stream ?? 'stdout',
-          chunk: step.log,
-          at: new Date().toISOString(),
-        });
-      }
-
-      this.activeTimer = setTimeout(runNext, Math.max(80, Math.round(step.delay / speed)));
-    };
-
-    this.activeTimer = setTimeout(runNext, Math.round(150 / speed));
-
-    return {
-      ok: true,
-      simulationId: id,
-      scenario,
-      speed,
-      status: 'running',
-    };
-  }
-
-  stop() {
-    if (this.activeTimer) {
-      clearTimeout(this.activeTimer);
-      this.activeTimer = null;
-    }
-    const wasRunning = this.running;
-    this.running = false;
-    this.currentId = null;
-    return { ok: true, status: 'stopped', wasRunning };
-  }
-}
-
 // ─── Server ────────────────────────────────────────────────────────────────────
 
 export function createStudioServer(options: StudioServerOptions = {}): http.Server {
@@ -1973,8 +1833,6 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   supervisor.on('runner_status', (record: RunnerRecord) => events.publish('runner_status', runView(record)));
   supervisor.on('runner_log', (entry: unknown) => events.publish('runner_log', entry));
   supervisor.on('runner_token_usage', (usage: RunnerTokenUsageEvent) => events.publish('runner_token_usage', usage));
-
-  const simulation = new SimulationController(events);
 
   // Tier 1 strategist: settings and counters live for this server session only.
   const liaison = new Tier1Liaison(root, options.triage);
@@ -2078,10 +1936,6 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, handleEscalations(root, url.searchParams));
         case 'POST /api/pipeline/escalations/resolve':
           return sendJson(res, 200, await handleEscalationResolve(root, await readJsonBody(req)));
-        case 'POST /api/pipeline/simulation/start':
-          return sendJson(res, 200, simulation.start(await readJsonBody(req)));
-        case 'POST /api/pipeline/simulation/stop':
-          return sendJson(res, 200, simulation.stop());
         case 'POST /api/pipeline/triage/evaluate':
           return sendJson(res, 200, await handleTriageEvaluate(root, liaison, triageInFlight, await readJsonBody(req)));
         case 'GET /api/pipeline/triage/status':
@@ -2100,8 +1954,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           '/api/pipeline/tasks/abort', '/api/pipeline/tasks/runs', '/api/pipeline/tasks/logs', '/api/pipeline/worktrees',
           '/api/pipeline/worktrees/action', '/api/pipeline/worktrees/diff', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
           '/api/pipeline/telemetry/detailed', '/api/pipeline/escalations', '/api/pipeline/escalations/resolve',
-          '/api/pipeline/simulation/start', '/api/pipeline/simulation/stop', '/api/pipeline/triage/evaluate',
-          '/api/pipeline/triage/status', '/api/pipeline/triage/config',
+          '/api/pipeline/triage/evaluate', '/api/pipeline/triage/status', '/api/pipeline/triage/config',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
@@ -2119,7 +1972,6 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   // Open SSE streams and in-flight agent runners would otherwise keep close() waiting forever.
   const closeServer = server.close.bind(server);
   server.close = ((callback?: (err?: Error) => void) => {
-    simulation.stop();
     supervisor.shutdown('Studio server shutting down');
     events.close();
     return closeServer(callback);
