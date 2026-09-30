@@ -6,6 +6,7 @@ import {
   MasterPlan,
   MasterPlanMilestone,
   MasterPlanTask,
+  TaskComplexity,
   SUBAGENT_TYPES,
   SubagentType,
   validateMasterPlanTask,
@@ -13,7 +14,7 @@ import {
   EscalationRecord,
   EscalationType,
 } from '../scanner/types.js';
-import { executeVerification, VerificationResult } from '../core/verifier.js';
+import { applyCodeShape, executeVerification, VerificationResult } from '../core/verifier.js';
 import {
   ContractGovernor,
   CircuitBreaker,
@@ -24,6 +25,8 @@ import {
 } from '../governor/index.js';
 import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
+import { resolveSpecSlices } from '../core/spec-slices.js';
+import { resolveWorkerModel } from '../core/model-routing.js';
 import { addTaskUnlock, removeTaskUnlock } from '../core/enforcement.js';
 
 export { loadPlan, savePlan, withPlanLock };
@@ -313,6 +316,10 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   const contractSlice = getRecommendedContractSlice(targetTask.assignedSubagent);
 
   if (options.json) {
+    const specResult = targetTask.specRefs?.length
+      ? resolveSpecSlices(path.dirname(path.dirname(planPath)), targetTask.specRefs)
+      : null;
+    const recommendedModel = resolveWorkerModel(path.dirname(path.dirname(planPath)), targetTask);
     console.log(JSON.stringify({
       status: 'ready',
       milestoneId: activeMilestone.id,
@@ -321,6 +328,8 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         ...targetTask,
         roleGuide,
         recommendedContractSlice: contractSlice,
+        ...(recommendedModel ? { recommendedModel } : {}),
+        ...(specResult ? { specSlices: specResult.slices, ...(specResult.warnings.length ? { specWarnings: specResult.warnings } : {}) } : {}),
       }
     }, null, 2));
     return;
@@ -512,7 +521,8 @@ export async function runTaskComplete(
   // ── Verification Gatekeeper ────────────────────────────────────────────────
   let vResult: VerificationResult | null = null;
   if (!options.skipVerify) {
-    vResult = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
+    const rawResult = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
+    vResult = applyCodeShape(rawResult, targetDir, foundTask);
     if (!vResult.success) {
       console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] verification FAILED with exit code ${vResult.exitCode}:`));
       console.error(pc.yellow(`  Command: \`${foundTask.verificationCommand}\``));
@@ -766,6 +776,12 @@ export interface TaskAddOptions {
   /** Dependency task IDs, comma-separated or as an array. */
   deps?: string | string[];
   notes?: string;
+  /** Spec refs, comma-separated or as an array. */
+  specRefs?: string | string[];
+  /** simple | standard | complex. */
+  complexity?: string;
+  /** "Done when" lines: an array, or one string with "|" separators. */
+  accept?: string | string[];
   json?: boolean;
 }
 
@@ -866,6 +882,13 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       }
     }
 
+    const specRefs = [...new Set(splitList(options.specRefs))];
+    const acceptanceCriteria = (Array.isArray(options.accept) ? options.accept : options.accept ? [options.accept] : [])
+      .flatMap((item) => item.split('|'))
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const complexity = options.complexity?.trim().toLowerCase();
+
     const task: MasterPlanTask = {
       id: generateNextTaskId(plan),
       title: cleanTitle,
@@ -877,6 +900,9 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       verificationCommand: (options.verify ?? '').trim(),
       notes: (options.notes ?? '').trim(),
       ...(fastPath ? { fastPath: true } : {}),
+      ...(specRefs.length ? { specRefs } : {}),
+      ...(complexity ? { complexity: complexity as TaskComplexity } : {}),
+      ...(acceptanceCriteria.length ? { acceptanceCriteria } : {}),
     };
 
     const problems = validateMasterPlanTask(task);

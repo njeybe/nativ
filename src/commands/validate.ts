@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
+import { resolveSpecSlices } from '../core/spec-slices.js';
 
 export async function runValidate(targetDirArg?: string) {
   const targetDir = path.resolve(targetDirArg || process.cwd());
@@ -57,7 +58,18 @@ export async function runValidate(targetDirArg?: string) {
     }
   }
 
-  const escalationPath = path.join(targetDir, '.ai/escalation.json');
+  if (plan && Array.isArray(plan.milestones)) {
+    const specWarnings: string[] = [];
+    for (const m of plan.milestones) {
+      for (const t of Array.isArray(m?.tasks) ? m.tasks : []) {
+        if (!Array.isArray(t?.specRefs) || !t.specRefs.length) continue;
+        for (const w of resolveSpecSlices(targetDir, t.specRefs).warnings) specWarnings.push(`${t.id}: ${w}`);
+      }
+    }
+    for (const w of specWarnings) console.log(pc.yellow(`  ⚠ ${w}`));
+  }
+
+  const escalationPath =path.join(targetDir, '.ai/escalation.json');
   if (fs.existsSync(escalationPath)) {
     const escData = checkFile('.ai/escalation.json', true);
     if (escData && !Array.isArray(escData.escalations)) {

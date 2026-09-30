@@ -155,6 +155,13 @@ export function createProgram(): Command {
     .option('-d, --description <text>', 'Task description')
     .option('--fast-path', 'Route to the fast-path milestone (created on first use) and flag the task as fast path')
     .option('--deps <ids>', 'Comma-separated dependency task IDs')
+    .option('--spec-refs <refs>', 'Comma-separated spec anchors, e.g. ui_specs.md#appointment-list')
+    .option('--complexity <level>', 'Task complexity: simple, standard or complex')
+    .option(
+      '--accept <text>',
+      'Acceptance ("done when") line; repeatable or "|"-separated',
+      (value: string, prev: string[] = []) => [...prev, value],
+    )
     .option('--json', 'Output the created task as JSON')
     .action(async (title, targetDir, options) => {
       await runTaskAdd(title, targetDir, options);

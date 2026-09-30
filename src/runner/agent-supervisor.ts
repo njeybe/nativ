@@ -22,6 +22,8 @@ import {
   safeUnlinkWorktreeNodeModules,
 } from '../core/root-resolver.js';
 import type { MasterPlanTask } from '../scanner/types.js';
+import { resolveSpecSlices } from '../core/spec-slices.js';
+import { resolveWorkerModel, toNativeModelId } from '../core/model-routing.js';
 import { buildDesiredConfig, cliString, configuredInvocation, resolveCliInvocation } from '../core/setup-assets.js';
 
 /**
@@ -639,6 +641,8 @@ How to work:
 4. If a contract in .ai/ lacks something the task needs, do not edit it. Run \`nativ task escalate <taskId> --type schema_flaw --details "<the gap>"\` and stop.
 5. When verification passes, run \`nativ task complete <taskId>\`.
 
+Code style (the project's own formatter or linter config wins): lines 100 characters or fewer, hard max 120; functions about 40 lines, files about 300; split a growing UI file into components, one per file; comments at most 2 lines, say why not what, plain everyday words, no restating the code, no banner comments, no commented-out code; match the surrounding code.
+
 Secrets: never open .env files (.env.example is fine), *.pem, *.key or .nativ/*.local.json, and never print environment variables. For database structure use \`nativ db status|inspect|diff --json\`; never read table data.
 
 When you finish or get blocked, end with a short plain-English summary: what changed, the verification result, and anything the operator must decide. Do not call a tool in that final message.`;
@@ -648,7 +652,16 @@ const NATIVE_TOOLS: Anthropic.Beta.Messages.BetaToolUnion[] = [
   { type: 'text_editor_20250728', name: 'str_replace_based_edit_tool', max_characters: NATIVE_TOOL_OUTPUT_LIMIT },
 ];
 
-function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, useWorktree: boolean): string {
+function buildSpecSlicesBlock(task: MasterPlanTask, rootDir: string | undefined): string {
+  if (!rootDir || !task.specRefs?.length) return '';
+  const { slices, warnings } = resolveSpecSlices(rootDir, task.specRefs);
+  if (!slices.length && !warnings.length) return '';
+  const parts = slices.map((s) => `<slice ref="${s.ref}" file="${s.file}"${s.truncated ? ' truncated="true"' : ''}>\n${s.text}\n</slice>`);
+  if (warnings.length) parts.push(`<warnings>\n${warnings.join('\n')}\n</warnings>`);
+  return `<spec_slices>\n${parts.join('\n')}\n</spec_slices>\nThe spec slices above are the parts of the contracts this task refers to. Read a whole contract only when a slice is missing, truncated or does not answer your question.`;
+}
+
+function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, useWorktree: boolean, rootDir?: string): string {
   const spec = {
     id: task.id,
     title: task.title,
@@ -663,6 +676,7 @@ function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, u
     `Execute task ${task.id}.`,
     `<task>\n${JSON.stringify(spec, null, 2)}\n</task>`,
     roleGuide ? `<role_guide path=".ai/subagents/${task.assignedSubagent}.md">\n${roleGuide}\n</role_guide>` : '',
+    buildSpecSlicesBlock(task, rootDir),
     'Load only the contract slice your role needs (.ai/api_contracts.json, .ai/db_schema.json, .ai/ui_specs.md, .ai/context.md) with the editor view command.',
     useWorktree
       ? 'You are in an isolated git worktree on the agent branch. After `nativ task complete` succeeds, commit the target files there (`git add <targetFiles> && git commit -m "<type>(<scope>): <summary>"`) so the operator can merge the branch.'
@@ -1050,7 +1064,9 @@ export class AgentSupervisor extends EventEmitter {
 
     const engine = normalizeEngine(options.runnerEngine, this.defaultEngine);
     const thinkingBudget = normalizeThinkingBudget(options.thinkingBudget);
-    const requestedModel = normalizeModel(options.model);
+    const explicitModel = normalizeModel(options.model);
+    const routedModel = explicitModel ? null : resolveWorkerModel(this.rootDir, task);
+    const requestedModel = explicitModel ?? (routedModel && engine === 'cli' ? routedModel : null);
     const timeoutSeconds = this.normalizeTimeout(options.timeoutSeconds);
     const useWorktree = options.useWorktree !== false;
     const worktreeDir = useWorktree ? path.join(this.rootDir, '.worktrees', `task-${taskId}`) : this.rootDir;
@@ -1067,7 +1083,9 @@ export class AgentSupervisor extends EventEmitter {
           'The native engine runs the model\'s commands in bash, which was not found. Install Git for Windows (it ships Git Bash) or set NATIV_BASH_PATH to bash.exe.',
         );
       }
-      const model = requestedModel ?? this.defaultNativeModel;
+      const model =
+        requestedModel ??
+        (routedModel ? toNativeModelId(routedModel, DEFAULT_NATIVE_MODEL) : this.defaultNativeModel);
       thinking = resolveNativeThinking(model, thinkingBudget);
       native = {
         client: this.createAnthropicClient(),
@@ -1620,7 +1638,7 @@ export class AgentSupervisor extends EventEmitter {
     const { thinking } = native;
     const fallback = supportsServerFallback(native.model);
     const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
-      { role: 'user', content: buildNativeTaskPrompt(run.task, this.readRoleGuide(run.task), useWorktree) },
+      { role: 'user', content: buildNativeTaskPrompt(run.task, this.readRoleGuide(run.task), useWorktree, this.rootDir) },
     ];
 
     for (let turn = 1; ; turn++) {

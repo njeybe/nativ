@@ -125,6 +125,32 @@ Start in `warn`, look at the log, then switch to `block`. If a task genuinely ne
 
 ---
 
+## Design-first planning, task fields and model routing
+
+**Planning levels.** The `.ai/ui_specs.md` template opens with a planning level: Quick (small fix, no design phase), Standard (new screen in an existing design) or Full (new app or redesign). It then walks through the design brief, users and top tasks, real content samples, user flows, design directions with a style tile, wireframes, a component map and one section per component. The architect and frontend/flutter guides were trimmed to match.
+
+**Optional task fields.** A task can carry `specRefs` (anchors such as `ui_specs.md#appointment-list`), `complexity` (`simple`, `standard` or `complex`) and `acceptanceCriteria` ("done when" lines):
+
+```bash
+nativ task add "Appointment list" -a frontend --complexity standard   --spec-refs "ui_specs.md#appointment-list" --accept "Empty state shown|Rows sorted by time"
+```
+
+`--accept` can be repeated or `|`-separated. The `nativ_task_add` MCP tool takes the same three fields.
+
+**Spec slices.** For a task with `specRefs`, `nativ task next --json` adds `specSlices` (the referenced heading sections or JSON pointers, size-capped) and `specWarnings` (a ref that is missing or outside `.ai/`). The native run engine puts the same slices in a `<spec_slices>` block of the worker prompt, and `nativ validate` prints the warnings for the whole plan. Workers read a whole contract only when a slice is missing or cut short.
+
+**Model routing.** `nativ task next --json` returns `recommendedModel` from the task's `complexity`: `simple` gives `haiku`, `standard` gives `sonnet`, `complex` gives `opus`. A task with no complexity gets no recommendation and nothing changes. Override the mapping with `workerModels` in `.nativ/config.json`:
+
+```json
+{ "workerModels": { "simple": "haiku", "standard": "sonnet", "complex": "opus" } }
+```
+
+The run engine uses the routed model when you did not pass one explicitly, and the project manager passes `recommendedModel` as the `model` parameter of the Agent tool. These are Claude Code model aliases, so a Claude Pro login is enough and no API key is needed.
+
+**Code style.** `AGENTS.md` gives workers short style rules: lines of 100 characters or fewer (hard maximum 120), functions of about 40 lines, files of about 300, comments of at most 2 lines, and your own formatter config wins. `nativ verify` also runs a check on a task's target files for over-long lines and long comment blocks. It only warns by default. Tune it with `codeStyle` in `.nativ/config.json` (`mode`: `warn`, `block` or `off`; `maxLineLength`, default 120; `maxCommentLines`, default 2). The `nativ task complete` gatekeeper runs it too, warn-only.
+
+---
+
 ## Providers
 
 nativ's own model calls (currently triage of escalations) go through one adapter, so no single vendor is on the critical path.
@@ -171,6 +197,7 @@ nativ task next                  # next executable task and its contract slice
 nativ task list --available
 nativ task list --milestone m1 --status pending
 nativ task add "Implement OAuth2 callback" -a backend -v "npm test" -f "src/auth.ts"
+nativ task add "Login form" -a frontend --complexity simple --spec-refs "ui_specs.md#login-form" --accept "Errors shown inline"
 nativ task start task-01
 nativ task complete task-01                # runs the verification command
 nativ task complete task-01 --timeout 600000   # for slow suites
@@ -271,7 +298,7 @@ Task transitions and role violations are recorded in `.ai/telemetry.json`: durat
 | Tool / resource | Description |
 | :--- | :--- |
 | `nativ_task_next`, `nativ_task_list`, `nativ_task_add` | Find and add work |
-| `nativ_task_start`, `nativ_task_complete`, `nativ_task_block` | Move a task through its lifecycle (complete runs the gatekeeper) |
+| `nativ_task_start`, `nativ_task_complete`, `nativ_task_block` | Move a task through its lifecycle (complete runs the gatekeeper and refuses skipVerify) |
 | `nativ_task_escalate`, `nativ_task_propose_patch` | Escalate a contract gap, or propose a governed patch |
 | `nativ_verify`, `nativ_bench`, `nativ_status` | Verification, benchmarks, progress |
 | `nativ_worktree_*` | Create, list, merge and remove task worktrees |

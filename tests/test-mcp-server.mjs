@@ -217,6 +217,14 @@ try {
   assert.notEqual(start.result.isError, true);
   assert.match(toolText(start), /in_progress/);
   assert.doesNotMatch(toolText(start), /\x1b\[/, 'ANSI color codes must be stripped');
+  for (const skipVerify of [true, false]) {
+    const bypass = await server.callTool('nativ_task_complete', { taskId: 'task-1', skipVerify });
+    assert.equal(bypass.result.isError, true, 'skipVerify must be refused over MCP');
+    assert.match(toolText(bypass), /skipVerify is not allowed over MCP/);
+  }
+  const stillOpen = JSON.parse(fs.readFileSync(path.join(projectDir, '.ai', 'master_plan.json'), 'utf8'));
+  assert.equal(stillOpen.milestones[0].tasks[0].status, 'in_progress', 'a refused call must not complete the task');
+  check('nativ_task_complete refuses skipVerify and leaves the task open');
   const complete = await server.callTool('nativ_task_complete', { taskId: 'task-1', notes: 'done via MCP' });
   assert.notEqual(complete.result.isError, true);
   const onDisk = JSON.parse(fs.readFileSync(path.join(projectDir, '.ai', 'master_plan.json'), 'utf8'));

@@ -23,6 +23,7 @@ The vendor behind a role does not matter. The boundary does, and it is enforced:
    - `database`, `db-migration`: `.ai/db_schema.json`
    - `devops-agent`: `.ai/context.md`
    - `qa-tester`, `security-auditor`: the target files and `.ai/api_contracts.json`
+   - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question.
 3. Contracts are also MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`. They are read-only.
 
 ## Task loop
@@ -34,7 +35,20 @@ The vendor behind a role does not matter. The boundary does, and it is enforced:
 5. When verification passes: `nativ task complete <taskId>`. The gatekeeper re-runs the check. Do not use `--no-verify`.
 6. `nativ task next` for the following task.
 
+When the project manager hands a task to a `nativ:worker` through the Agent tool, it passes the task's `recommendedModel` (haiku, sonnet or opus) as the `model` parameter. If the task has none, the worker's default applies.
+
 Independent tasks can run in parallel in isolated worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified.
+
+## Code style
+
+Applies to every worker. A project's own formatter or linter config wins over these defaults.
+
+- Lines: aim for 100 characters or fewer, hard maximum 120.
+- Functions: about 40 lines. Files: about 300 lines.
+- A growing UI file is split into components, one component per file.
+- Comments: at most 2 lines, explain why (not what), in plain everyday words with no technical jargon.
+- Do not restate the code in a comment. No banner or divider comments. No commented-out code.
+- Match the surrounding code.
 
 ## When the contract is wrong
 

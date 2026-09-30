@@ -1,78 +1,184 @@
-# UI/UX Specifications & Layout Design
+# UI/UX Specifications
 
-## 1. System Identity & Visual Design Style
-- **System Domain Archetype:** Developer Mission Control / Analytical Workbench / Workflow Pipeline / Creative Canvas
-- **Design Style Archetype:** Modern Minimalist / Neo-Brutalism / Glassmorphism / Bento Grid / Neumorphism / Claymorphism / Skeuomorphism / Spatial UI
-- **Zero-Emoji Mandate:** Strictly enforced. All visual iconography must be precision vector SVGs aligned to the stroke and geometry of the chosen style. Never use Unicode emojis.
+Plain language, concise. The Architect fills this in; workers follow it. Tasks point at a component with a specRef such as `ui_specs.md#appointment-list`.
 
 ---
 
-## 2. Design Tokens & CSS Variables
-Define explicit CSS variables for the chosen style to avoid ad-hoc hardcoded values:
+## Planning Level
+Pick one and write it here: **Level: Quick | Standard | Full**
+
+- **Quick:** small fix, fast-path task, no design phase.
+- **Standard:** new screen in an existing design. Flow + wireframe + component map. Reuse existing tokens.
+- **Full:** new app, new platform or redesign. Discovery questions, brief, flows, two directions with style tiles, wireframes, component map.
+
+---
+
+## Design Brief
+- **Who uses it:**
+- **The job they are doing:**
+- **Tone (three words):**
+- **Things to avoid:**
+
+---
+
+## Users & Top Tasks
+Top 3-5 user tasks and how often each happens.
+
+| Task | Frequency |
+| :--- | :--- |
+| | |
+
+---
+
+## Real Content Samples
+Real sample data per screen, drawn from `db_schema.json` and `api_contracts.json`. Include extremes: long names, empty values, big numbers. Never "Item 1" or lorem ipsum.
+
+---
+
+## User Flows
+Each key journey step by step, with tap/click counts.
+
+1. Journey name (N taps)
+   1. Step
+   2. Step
+
+---
+
+## Design Directions
+Exactly two directions.
+
+- **Direction A:**
+- **Direction B:**
+- **Chosen and why:**
+- **Full level only:** style tile at `.ai/design/style-tile.html`
+
+---
+
+## Design Tokens
+Placeholders the Architect fills, each with a one-line rationale. Do not copy a default palette.
 
 ```css
 :root {
-  /* Surface & Canvas */
-  --bg-canvas: #f8fafc;
-  --surface: #ffffff;
-  --surface-hover: #f1f5f9;
-  --border-subtle: #e2e8f0;
-  --border-hover: #cbd5e1;
+  /* Surface & canvas */
+  --bg-canvas: <value>;        /* why */
+  --surface: <value>;          /* why */
+  --surface-hover: <value>;    /* why */
+  --border-subtle: <value>;    /* why */
+  --border-hover: <value>;     /* why */
 
-  /* Typography & Contrast */
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --text-muted: #94a3b8;
+  /* Typography & contrast */
+  --text-primary: <value>;     /* why */
+  --text-secondary: <value>;   /* why */
+  --text-muted: <value>;       /* why */
 
-  /* Brand & Accents */
-  --brand: #4f46e5;
-  --brand-hover: #4338ca;
-  --brand-surface: #eef2ff;
+  /* Brand & accents */
+  --brand: <value>;            /* why */
+  --brand-hover: <value>;      /* why */
+  --brand-surface: <value>;    /* why */
 
-  /* Status Colors */
-  --status-success: #059669;
-  --status-success-bg: #ecfdf5;
-  --status-warning: #d97706;
-  --status-warning-bg: #fffbeb;
-  --status-danger: #e11d48;
-  --status-danger-bg: #fff1f2;
-  --status-info: #0284c7;
-  --status-info-bg: #f0f9ff;
+  /* Status */
+  --status-success: <value>;     --status-success-bg: <value>;
+  --status-warning: <value>;     --status-warning-bg: <value>;
+  --status-danger: <value>;      --status-danger-bg: <value>;
+  --status-info: <value>;        --status-info-bg: <value>;
 
-  /* Elevation & Geometry (Adjust by Design Style) */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.08);
+  /* Geometry & elevation */
+  --radius-sm: <value>;  --radius-md: <value>;  --radius-lg: <value>;
+  --shadow-sm: <value>;  --shadow-md: <value>;
 }
+```
+
+**Flutter mapping:** each token maps to a `ThemeData` field (`colorScheme`, `textTheme`) or a `ThemeExtension` (status colors, radii, shadows). List the mapping here.
+
+| Token | Flutter target |
+| :--- | :--- |
+| `--brand` | `colorScheme.primary` |
+| `--status-*` | `ThemeExtension` |
+
+---
+
+## Platform Rules
+- **Primary platform (designed first):**
+- **Web:** sidebar or top bar, density, keyboard support, hover states, targets at least 32px, behavior on wide screens.
+- **Mobile:** bottom nav and sheets, back gesture, one main action per screen, thumb reach, targets at least 48dp, offline / slow / permission-denied states, safe areas and keyboard.
+- **Mobile design language (choose explicitly):** Material 3 | Cupertino | custom.
+
+---
+
+## Wireframes
+ASCII box-drawing, max 80 columns. Label each region `<ComponentName>`. One desktop wireframe per key screen, plus mobile for the primary screen. Use real content. No HTML mockups.
+
+```
++--------------------------------------------------+
+| <AppHeader>  Clinic Dela Cruz          [Sign out] |
++----------+---------------------------------------+
+| <SideNav>| <AppointmentList>                      |
+| Today    | 09:00  Maria Concepcion-Villanueva     |
+| Patients | 09:30  (no name given)                 |
++----------+---------------------------------------+
 ```
 
 ---
 
-## 3. Layout Structure & Navigation Hierarchy
-- **Navigation Modality:** Vertical Pinned Sidebar (240px) or Top App Bar depending on application density.
-- **Content Area:** Fluid layout, max-width bounded, responsive grid/flex partitions.
-- **Docked Telemetry Drawer:** Collapsible bottom drawer for live logs, streaming output, or contextual diff inspections.
+## Component Map
+
+| Region | Component | File path | States | Section |
+| :--- | :--- | :--- | :--- | :--- |
+| | | | | [appointment-list](#appointment-list) |
+
+### appointment-list
+Example component section. One per component: purpose, data, states, behavior. Keep the heading anchor stable.
 
 ---
 
-## 4. The 5 UI States Matrix
-Every component and view must implement all five states:
+## Copy & Wording
+- **UI language(s):** e.g. English / Filipino
+- **Key labels:**
+- **Button verbs (domain words):**
+- **Empty-state text:**
+- **Error messages (plain language):**
 
-| State | Visual & Interactive Requirement |
+---
+
+## Signature Moments
+One or two. Everything else stays restrained.
+
+---
+
+## Anti-Generic Checklist
+**Web**
+- [ ] No default Inter or system-only type without a reason.
+- [ ] No default indigo/purple accent.
+- [ ] No rows of identical cards with pastel icon boxes.
+- [ ] No gradient-text hero.
+- [ ] No decorative blobs.
+- [ ] No greeting banners.
+- [ ] No emojis. Icons are vector SVG.
+
+**Mobile**
+- [ ] No default Material seed blue.
+- [ ] No unthemed default widgets without a reason.
+- [ ] No emojis.
+
+---
+
+## States
+Every component and view covers these.
+
+| State | Requirement |
 | :--- | :--- |
-| **Default / Populated** | Crisp typography, tabular alignment for metrics, subtle hover feedback. |
-| **Empty State** | Meaningful vector SVG illustration, clear explanatory text, primary CTA button. |
-| **Loading / Skeleton** | Shimmer pulse cards matching the exact dimensions of loaded content (zero CLS). |
-| **Error / Degraded** | Actionable error alert card with an inline "Retry" action and non-cryptic diagnosis. |
-| **Overflow / Truncated** | Ellipsis truncation with full-value tooltips; pagination or virtual scrolling for >20 items. |
+| **Loading** | Skeleton matching loaded dimensions. |
+| **Empty** | Short explanation and a primary action. |
+| **Error** | Plain diagnosis with a Retry action. |
+| **Success** | Clear confirmation. |
+| **Disabled** | Visibly inactive, with a reason where useful. |
+| **Mobile only** | Offline, slow connection, permission denied. |
 
 ---
 
-## 5. Interaction Ergonomics & Accessibility
-- **Micro-Transitions:** `transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);`.
-- **Active Click State:** `transform: scale(0.98)` (or brutalist `translate(2px, 2px)`).
-- **Focus Rings:** `:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }`.
-- **Dialogs & Drawers:** Dismissible via `Escape` key and backdrop click; background scroll locking.
-- **Accessible Labels:** `aria-label` required on all icon-only buttons.
+## Accessibility
+- **Transitions:** `transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);`
+- **Active state:** `transform: scale(0.98)`.
+- **Focus rings:** `:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }`
+- **Dialogs and drawers:** close with `Escape` and backdrop click; lock background scroll.
+- **Labels:** `aria-label` on every icon-only button.

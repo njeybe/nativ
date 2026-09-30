@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { MasterPlan, MasterPlanTask, MasterPlanMilestone } from '../scanner/types.js';
+import { checkCodeShape, formatCodeShapeReport, type CodeShapeReport } from './code-shape.js';
 
 export interface VerificationResult {
   success: boolean;
@@ -12,6 +13,7 @@ export interface VerificationResult {
   durationMs: number;
   error?: string;
   skipped?: boolean;
+  codeShape?: CodeShapeReport;
 }
 
 export interface TaskVerificationResult {
@@ -120,6 +122,29 @@ export async function executeVerification(
 }
 
 /**
+ * Run the code-shape check on a task's target files and print a short summary to stderr.
+ * In 'warn' mode (default) the result is untouched; in 'block' mode issues fail it with a reason.
+ */
+export function applyCodeShape(
+  result: VerificationResult,
+  targetDir: string,
+  task: MasterPlanTask
+): VerificationResult {
+  if (result.skipped || !result.success) return result;
+  const report = checkCodeShape(targetDir, task.targetFiles || []);
+  if (report.mode === 'off') return result;
+  result.codeShape = report;
+  const summary = formatCodeShapeReport(report);
+  if (summary) console.error(summary);
+  if (report.mode === 'block' && report.issues.length > 0) {
+    result.success = false;
+    result.exitCode = 1;
+    result.error = `Code shape check failed: ${report.issues.length} issue(s) (codeStyle.mode is "block")`;
+  }
+  return result;
+}
+
+/**
  * Run verification for a single specific task in the plan.
  */
 export async function verifyTask(
@@ -180,7 +205,8 @@ export async function verifyTask(
     };
   }
 
-  const result = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
+  const raw = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
+  const result = applyCodeShape(raw, targetDir, foundTask);
   return {
     taskId: foundTask.id,
     title: foundTask.title,
@@ -277,7 +303,8 @@ export async function verifyBatch(
   let totalDuration = 0;
 
   for (const { task, milestone } of candidates) {
-    const vResult = await executeVerification(task.verificationCommand, targetDir, options.timeout);
+    const raw = await executeVerification(task.verificationCommand, targetDir, options.timeout);
+    const vResult = applyCodeShape(raw, targetDir, task);
     totalDuration += vResult.durationMs;
 
     if (vResult.skipped) {

@@ -147,9 +147,12 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         targetFiles: z.array(z.string()).optional().describe('Files the task may modify'),
         dependencies: z.array(z.string()).optional().describe('Task IDs that must be completed first'),
         fastPath: z.boolean().optional().describe('Route to the fast-path track'),
+        specRefs: z.array(z.string()).optional().describe('Spec anchors, e.g. ui_specs.md#appointment-list'),
+        complexity: z.string().optional().describe('simple, standard or complex'),
+        acceptanceCriteria: z.array(z.string()).optional().describe('Plain-language "done when" lines'),
       },
     },
-    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath }) =>
+    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria }) =>
       captureOutput(() =>
         runTaskAdd(title, targetDir, {
           description,
@@ -159,6 +162,9 @@ export function createMcpServer(targetDirArg?: string): McpServer {
           files: targetFiles,
           deps: dependencies,
           fastPath,
+          specRefs,
+          complexity,
+          accept: acceptanceCriteria,
           json: true,
         }),
       ),
@@ -176,14 +182,21 @@ export function createMcpServer(targetDirArg?: string): McpServer {
   registerNativTool(
     'task_complete',
     {
-      description: "Mark a task as completed (automatically executes its verificationCommand unless skipVerify is true). Advances the milestone when all its tasks are done.",
+      description: "Mark a task as completed (always executes its verificationCommand; verification cannot be skipped over MCP). Advances the milestone when all its tasks are done.",
       inputSchema: {
         taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
         notes: z.string().optional().describe('Completion notes or summary'),
-        skipVerify: z.boolean().optional().describe('Skip automated verification command execution'),
+        skipVerify: z.unknown().optional().describe('Not accepted: only a human at a terminal may skip'),
       },
     },
-    ({ taskId, notes, skipVerify }) => captureOutput(() => runTaskComplete(taskId, targetDir, { notes, skipVerify })),
+    ({ taskId, notes, skipVerify }) =>
+      captureOutput(async () => {
+        // Kept in the schema so a stray value is refused instead of silently dropped.
+        if (skipVerify !== undefined) {
+          throw new Error('skipVerify is not allowed over MCP. Only a human at a terminal can skip verification.');
+        }
+        await runTaskComplete(taskId, targetDir, { notes });
+      }),
   );
 
   registerNativTool(

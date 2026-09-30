@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+
+- **Design-first planning.** The `ui_specs.md` template is rewritten around planning levels (Quick, Standard, Full), content samples, user flows, wireframes, a component map and a style tile. The architect, frontend and flutter guides are leaner.
+- **Optional task fields** `specRefs`, `complexity` and `acceptanceCriteria`: `nativ task add --spec-refs --complexity --accept`, and the same fields on the `nativ_task_add` MCP tool.
+- **Spec slices.** `nativ task next --json` returns `specSlices` and `specWarnings` for a task's `specRefs`, the native run engine adds a `<spec_slices>` block to the worker prompt, and `nativ validate` warns about refs that do not resolve.
+- **Complexity-based model routing.** `nativ task next --json` returns `recommendedModel` (simple: haiku, standard: sonnet, complex: opus). Override it with `workerModels` in `.nativ/config.json`. The run engine uses it when no model is given, and the project manager passes it as the Agent `model` parameter. Works with a Claude Pro login; no API key.
+- **Code style rules** for workers in `AGENTS.md`, and a code-shape check in `nativ verify` for long lines and long comments. It warns by default; configure it with `codeStyle` in `.nativ/config.json`. The `nativ task complete` gatekeeper runs it too, warn-only.
+- **API spec links.** `specRefs` can point at an endpoint by method and path (`api_contracts.json#GET /path`) or by endpoint id (`api_contracts.json#<endpoint-id>`).
+- **Design Brief step** in the Architect procedure. It records the primary platform and comes before the design directions.
+
+### Changed
+
+- **`nativ_task_complete` over MCP refuses `skipVerify`.** Only a human at a terminal can skip verification.
+
 ## 2.0.2
 
 - **`nativ doctor` no longer reports a failure on a brand-new project.** Right after `nativ init`, Claude Code lists the project's `nativ` MCP server as "Pending approval" until you approve it, which is the expected first state. Doctor showed it as a red failure and exited 1. It is now a warning that tells you to open `claude` in the folder and approve the server; a server that genuinely fails to connect is still a failure.
@@ -8,7 +24,7 @@
 
 Documentation and package metadata only; no behaviour changes.
 
-- **npm is the only install path.** The source repository is private, so the instructions for `npm install -g github:…` and for adding the plugin marketplace were removed from the README and the installation guide. `nativ setup` is the complete route: it writes the agents, the enforcement hook, the MCP entry and the permission rules, which a plugin cannot ship.
+- **npm is the only install path.** The source repository is private, so the instructions for `npm install -g github:â€¦` and for adding the plugin marketplace were removed from the README and the installation guide. `nativ setup` is the complete route: it writes the agents, the enforcement hook, the MCP entry and the permission rules, which a plugin cannot ship.
 - The plugin files still ship inside the package (`plugin/`) and can be tried for one session with `claude --plugin-dir`.
 - `package.json` no longer declares `repository`, `homepage` or `bugs`, so the npm page has no dead links.
 - The 2.0.0 entry below still mentions the plugin marketplace; that route is not available outside the private repository.

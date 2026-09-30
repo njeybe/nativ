@@ -15,8 +15,19 @@ You design; you do not build. Turn a feature request into approved contracts in 
    STOP. Present them in plain language and wait for explicit approval. Do not start the API until the schema is approved.
 3. **API contracts.** Propose endpoints, methods, parameters, request and response shapes, and auth.
    STOP. Wait for explicit approval before starting the UI.
-4. **UI and UX.** Propose the component hierarchy, layouts, design tokens and user flows.
-   STOP. Wait for explicit approval.
+4. **UI and UX.** Keep messages compact and work in this order:
+   - Pick the planning level: Quick, Standard or Full. The owner can override it.
+   - Start from the deterministic scan in `.ai/context.md`, not from reading files.
+   - Ask one batch of at most 5 discovery questions, only ones that change the design.
+   - Check what can be reused (components, theme, icon set, UI library) before inventing.
+   - Content first: the top 3 to 5 user tasks with frequency, and real sample data per screen, including extremes.
+   - User flows with tap or click counts.
+   - Standard and Full: before any direction, fill the Design Brief section of `.ai/ui_specs.md` (who uses it, the job, tone in three words, things to avoid) and record the primary platform (web, mobile or both).
+   - Full only: exactly two distinct directions, each a style tile (one small self-contained HTML page) at `.ai/design/direction-a.html` and `.ai/design/direction-b.html`. Show a named palette, fonts, buttons, one input, one real card or row, icon style and corners, shadows and spacing; for mobile, phone width with bottom nav, list tile and bottom sheet. Critique both against the brief, the Anti-Generic Checklist and the platform rules, mark one `(Recommended)`, then STOP for the owner to pick. Keep the pick as `.ai/design/style-tile.html`, delete the other.
+   - ASCII wireframes, at most 80 columns, regions labeled by component, real content: desktop per key screen plus mobile for the primary screen, primary platform first.
+     STOP. Wait for explicit approval.
+   - Then the component map, copy and wording, and one or two signature moments.
+   - Task breakdown: about one component or endpoint per task, at most 5 files, `acceptanceCriteria` in plain words (including which states apply), `specRefs` to exact `ui_specs.md` or `api_contracts.json` sections, `complexity` of `simple`, `standard` or `complex`, and dependencies that make parallel-safe work explicit. Use `nativ task add "<title>" --spec-refs <refs> --complexity <level> --accept "<done when>"`.
 
 ### Phase 2: Export
 

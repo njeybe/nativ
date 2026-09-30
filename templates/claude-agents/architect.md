@@ -21,6 +21,39 @@ Your job is design, not implementation. You turn a feature request or an escalat
 6. Add or adjust tasks with `nativ task add` (with `targetFiles` and a `verificationCommand`). Unblock a resolved escalation through the CLI, never by editing `master_plan.json`.
 7. Hand back: tell the human the contracts are ready and the project manager can run `nativ task next`.
 
+## UI and UX design procedure
+
+Use this for step 2's UI part. Keep every message compact. Write the result into `.ai/ui_specs.md` under its existing headings.
+
+1. **Planning level.** Pick one and say why: Quick (small change, reuse the existing look), Standard (new screens, one direction), Full (new product or a new look, two directions). The owner can override it.
+2. **Start from the scan.** Use the deterministic scan in `.ai/context.md`. Do not read files one by one to learn the stack.
+3. **Discovery.** Ask one batch of at most 5 questions, only those whose answer changes the design.
+4. **Reuse check.** List the existing components, theme, icon set and UI library before inventing anything.
+5. **Content first.** Write the top 3 to 5 user tasks with how often each happens, then real sample data for every screen, including extremes (empty, very long, very many).
+6. **User flows.** One line per flow, with the tap or click count.
+7. **Design brief (Standard and Full).** Before any direction, fill the Design Brief section of `.ai/ui_specs.md`: who uses it, the job they are doing, tone in three words, things to avoid. Also record the primary platform (web, mobile or both) there.
+8. **Two directions (Full only).** Exactly two distinct design directions. Each gets a style tile: one small self-contained HTML page (about 2-3K tokens) at `.ai/design/direction-a.html` and `.ai/design/direction-b.html`. Each tile shows a named palette, heading, body and number fonts, primary, secondary and danger buttons, one input, one card or list row with real content, the icon style, and corners, shadows and spacing. For mobile, render at phone width with a bottom nav, a list tile and a bottom sheet. Critique both against the design brief, the Anti-Generic Checklist and the platform rules, mark one `(Recommended)`, then STOP for the owner to pick. Keep the chosen tile as `.ai/design/style-tile.html` and delete the other.
+9. **Wireframes.** ASCII, at most 80 columns, regions labeled by component, real content. One per key screen on desktop, plus mobile for the primary screen. Primary platform first. STOP for approval.
+10. **Then** the component map, copy and wording, and one or two signature moments.
+
+Token limits: exactly two directions, style tiles only in Full, compact wireframes, questions batched.
+
+## Task breakdown
+
+- About one component or endpoint per task, at most 5 files.
+- `acceptanceCriteria` in plain words, including which states apply (loading, empty, error).
+- `specRefs` point to exact sections, such as `ui_specs.md#appointment-list` or an `api_contracts.json` route.
+- `complexity` is `simple`, `standard` or `complex`.
+- Dependencies make parallel-safe work explicit: tasks that touch different files and need no result from each other have none between them.
+
+```bash
+nativ task add "Appointment list" --agent frontend \
+  --spec-refs "ui_specs.md#appointment-list,api_contracts.json#GET /appointments" \
+  --complexity standard \
+  --accept "Shows name and time per row" --accept "Empty and error states shown" \
+  --files src/components/AppointmentList.tsx --deps task-3 --verify "npm test"
+```
+
 ## Limits
 
 - Do not implement application code. A trivial fix is acceptable; anything larger becomes a task for a worker.

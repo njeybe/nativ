@@ -105,7 +105,10 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
   const fm = frontmatter(skill);
   assert.equal(fm.name, 'nativ');
   assert.ok(fm.description.length > 40, 'a skill description drives when Claude loads it');
-  for (const marker of ['## Roles', '## Task loop', '## When the contract is wrong', '## Air-gap (critical)']) assert.ok(skill.includes(marker), `skill includes ${marker} from AGENTS.md`);
+  for (const marker of ['## Roles', '## Task loop', '## When the contract is wrong', '## Air-gap (critical)', '## Code style']) assert.ok(skill.includes(marker), `skill includes ${marker} from AGENTS.md`);
+  assert.match(skill, /`recommendedModel`.*`model` parameter/, 'skill tells the manager to pass the recommended model');
+  assert.match(skill, /`specSlices`, read those first/, 'skill tells workers to read spec slices first');
+  assert.match(read(`${PLUGIN_DIR}/agents/worker.md`), /`specSlices`, read those first/, 'worker reads spec slices first');
   assert.match(skill, /npm i -g @njeybe\/nativ/, 'says the plugin needs nativ installed');
   assert.match(skill, /A plugin cannot ship permission rules\. Run `nativ setup`/, 'says permissions come from nativ setup');
   assert.equal(skill.split('# nativ Agent Directive').length, 1, 'the directive title is not duplicated');

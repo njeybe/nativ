@@ -73,7 +73,16 @@ export interface MasterPlanTask {
    * (e.g. via `nativ task add --fast-path`). Absent or false means a planned task.
    */
   fastPath?: boolean;
+  /** Spec anchors, e.g. "ui_specs.md#appointment-list" or "api_contracts.json#/paths/~1appointments". */
+  specRefs?: string[];
+  complexity?: TaskComplexity;
+  /** Plain-language "done when" lines. */
+  acceptanceCriteria?: string[];
 }
+
+export type TaskComplexity = 'simple' | 'standard' | 'complex';
+
+export const TASK_COMPLEXITIES: readonly TaskComplexity[] = ['simple', 'standard', 'complex'];
 
 /** Lists every structural problem with a task; empty when the task is valid. */
 export function validateMasterPlanTask(task: unknown): string[] {
@@ -98,6 +107,12 @@ export function validateMasterPlanTask(task: unknown): string[] {
   if (!isStringArray(t.targetFiles)) errors.push(`${label}: "targetFiles" must be an array of paths`);
   if (t.notes !== undefined && typeof t.notes !== 'string') errors.push(`${label}: "notes" must be a string`);
   if (t.fastPath !== undefined && typeof t.fastPath !== 'boolean') errors.push(`${label}: "fastPath" must be a boolean`);
+  for (const field of ['specRefs', 'acceptanceCriteria'] as const) {
+    if (t[field] !== undefined && !isStringArray(t[field])) errors.push(`${label}: "${field}" must be an array of strings`);
+  }
+  if (t.complexity !== undefined && !(TASK_COMPLEXITIES as readonly unknown[]).includes(t.complexity)) {
+    errors.push(`${label}: "complexity" must be one of ${TASK_COMPLEXITIES.join(', ')}`);
+  }
   return errors;
 }
 
