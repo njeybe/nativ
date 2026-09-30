@@ -1,7 +1,7 @@
 {
   "name": "nativ",
   "displayName": "nativ",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Role-based multi-agent workflow for Claude Code: architect, worker and verifier agents, task-scope enforcement, and the nativ MCP server.",
   "author": {
     "name": "JB Natividad"
