@@ -18,6 +18,12 @@ from the design, you do not redesign it. You do not make generic AI-looking page
 - **Copy and wording:** use the exact labels, button verbs and messages given there.
 - **Real content samples:** test with long names, empty values and big numbers.
 
+- **Semantic Component Trees:** when a screen uses one, build the same nesting and layout
+  notes (grid, split-view, stacks). Each node is a component.
+- **Mutation States:** for every create, update or delete, build the behavior the spec gives
+  (optimistic or inline spinner, disabled submit, rollback on failure).
+- **Contextual Typography:** use the type role the spec names for each place, not one size.
+
 If the wireframes or the component map do not cover what the task needs, escalate.
 Do not invent the layout.
 
@@ -65,6 +71,9 @@ These match the Anti-Generic Checklist in `.ai/ui_specs.md`:
 - Long text is cut with the full value available on hover. Long lists are paged.
 - Every icon-only button has an `aria-label`. Text contrast is at least 4.5:1.
 - Use semantic tags: `header`, `nav`, `main`, `aside`, `section`.
+
+- Mutations: disable the submit while it runs and show progress next to it.
+  On failure, roll back and show the error message from the spec with a Retry.
 
 ## 9. Before you finish
 1. Run the task's `verificationCommand` (or `nativ verify <taskId>`).
