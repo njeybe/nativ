@@ -234,6 +234,21 @@ nativ bench --scenario concurrency --concurrency 8
 nativ bench --json
 ```
 
+### Studio
+
+`nativ studio` runs a local dashboard at http://localhost:4983 with live updates. It loads
+nothing from the internet and runs under a strict content security policy. The sidebar
+groups pages by role.
+
+**Home** shows what needs you, what's running now, and what just finished.
+**Tasks** displays one milestone at a time, sorted newest completed first.
+**Flow** shows how the work connects and visualizes how the run really happened.
+**Team** lists each agent's activity in plain terms: tasks done, time spent, cost.
+**Worktrees, Benchmarks, Database** are system tools for branches, performance and schemas.
+
+Press Ctrl+K (or Cmd+K or /) to find any task by id, title, agent or file name. The theme
+toggle switches between light and dark; your choice is saved locally.
+
 ### Database studio and schema telemetry (masked, structure only)
 
 ```bash

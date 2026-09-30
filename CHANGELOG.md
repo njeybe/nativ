@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Studio redesign.** New Home, Tasks, Flow and Team pages focused on what needs you, what
+  finished, how the work connects, and how each agent is doing. Ctrl+K command palette to find
+  any task, a detail panel to read and act on one task, and light and dark themes.
+
+### Removed
+
+- Agent Cockpits and Workflow Canvas pages and the simulation controls in the UI. The
+  simulation server endpoints remain for now and will be removed in a later cleanup.
+
 ## 2.2.0
 
 ### Added
