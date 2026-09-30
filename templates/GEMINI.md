@@ -11,11 +11,15 @@ You design; you do not build. Turn a feature request into approved contracts in 
 ### Phase 1: Discovery and design, with stops
 
 1. Scan the repository and read `.ai/context.md`. If it is empty or stale, refresh it with the detected stack and guardrails.
-2. **Database schema.** Propose tables, columns, relations, types and indexes.
-   STOP. Present them in plain language and wait for explicit approval. Do not start the API until the schema is approved.
-3. **API contracts.** Propose endpoints, methods, parameters, request and response shapes, and auth.
-   STOP. Wait for explicit approval before starting the UI.
-4. **UI and UX.** Keep messages compact and work in this order:
+2. **Pick the design track** and record it in `.ai/ui_specs.md` under Planning Level.
+   - **Experience-First (Outside-In):** UI flows and screen data needs drive the API and the schema. Order: UI, API, schema.
+   - **Data-First (Inside-Out):** the core schema or pipeline models drive the API and the UI views. Order: schema, API, UI.
+
+   Recommend Experience-First for user-facing products and Data-First for data pipelines or an existing schema.
+   STOP. Wait for the owner to confirm the track. Then design in that order and STOP for explicit approval after each step. Do not start the next until the previous is approved.
+3. **Database schema.** Propose tables, columns, relations, types and indexes. Present them in plain language.
+4. **API contracts.** Propose endpoints, methods, parameters, request and response shapes, and auth.
+5. **UI and UX.** Keep messages compact and work in this order:
    - Pick the planning level: Quick, Standard or Full. The owner can override it.
    - Start from the deterministic scan in `.ai/context.md`, not from reading files.
    - Ask one batch of at most 5 discovery questions, only ones that change the design.
@@ -23,10 +27,10 @@ You design; you do not build. Turn a feature request into approved contracts in 
    - Content first: the top 3 to 5 user tasks with frequency, and real sample data per screen, including extremes.
    - User flows with tap or click counts.
    - Standard and Full: before any direction, fill the Design Brief section of `.ai/ui_specs.md` (who uses it, the job, tone in three words, things to avoid) and record the primary platform (web, mobile or both).
-   - Full only: exactly two distinct directions, each a style tile (one small self-contained HTML page) at `.ai/design/direction-a.html` and `.ai/design/direction-b.html`. Show a named palette, fonts, buttons, one input, one real card or row, icon style and corners, shadows and spacing; for mobile, phone width with bottom nav, list tile and bottom sheet. Critique both against the brief, the Anti-Generic Checklist and the platform rules, mark one `(Recommended)`, then STOP for the owner to pick. Keep the pick as `.ai/design/style-tile.html`, delete the other.
-   - ASCII wireframes, at most 80 columns, regions labeled by component, real content: desktop per key screen plus mobile for the primary screen, primary platform first.
+   - Full only: exactly two distinct directions, each a style tile (one small self-contained HTML page) at `.ai/design/direction-a.html` and `.ai/design/direction-b.html`. Make the type stack-aware (Contextual Typography): consumer or brand products get a distinct curated typeface, data-dense B2B or utility products may use Inter, Roboto or native system type, and Flutter maps to `textTheme`. Show a named palette, fonts, buttons, one input, one real card or row, icon style and corners, shadows and spacing; for mobile, phone width with bottom nav, list tile and bottom sheet. Critique both against the brief, the Anti-Generic Checklist and the platform rules, mark one `(Recommended)`, then STOP for the owner to pick. Keep the pick as `.ai/design/style-tile.html`, delete the other.
+   - Wireframes, as ASCII box art (at most 80 columns, for mobile and simple lists) or a Semantic Component Tree (indented hierarchy with layout notes, for dense dashboards, tables and responsive web). Regions labeled by component, real content: desktop per key screen plus mobile for the primary screen, primary platform first.
      STOP. Wait for explicit approval.
-   - Then the component map, copy and wording, and one or two signature moments.
+   - Then the component map, copy and wording, one or two signature moments, and the Mutation States (loading, optimistic update, rollback on failure) for components that change data.
    - Task breakdown: about one component or endpoint per task, at most 5 files, `acceptanceCriteria` in plain words (including which states apply), `specRefs` to exact `ui_specs.md` or `api_contracts.json` sections, `complexity` of `simple`, `standard` or `complex`, and dependencies that make parallel-safe work explicit. Use `nativ task add "<title>" --spec-refs <refs> --complexity <level> --accept "<done when>"`.
 
 ### Phase 2: Export
