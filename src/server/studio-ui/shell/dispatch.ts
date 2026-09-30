@@ -59,15 +59,9 @@ export const dispatchScript = String.raw`  // ─── Autonomous dispatch: POS
 
   /** Mirrors buildDefaultClaudeCommand() in agent-supervisor.ts so the preview matches what the server runs. */
   function defaultClaudeCommand(t) {
-    var prompt = [
-      'Execute task ' + t.id + ' (' + t.title + ').',
-      t.description ? 'Description: ' + t.description + '.' : '',
-      t.verificationCommand ? 'Verify your work using: ' + t.verificationCommand + '.' : '',
-      'Start by running: nativ task start ' + t.id + '. When finished and verified, run: nativ task complete ' + t.id + '.',
-      'If blocked, follow the Human-Centric Communication Protocol in CLAUDE.md: explain the user experience symptom, root cause in plain English, and clear options without technical jargon.'
-    ].filter(Boolean).join(' ');
-    // No permission bypass: acceptEdits plus the per-task allowlist the server writes to .nativ/runs/permissions/<task>.json.
-    return 'claude -p "' + prompt.replace(/"/g, '\\"') + '" --output-format stream-json --verbose --permission-mode acceptEdits --settings ".nativ/runs/permissions/' + t.id + '.json"';
+    // The task prompt goes to the agent on stdin, so it is not part of the command.
+    return 'claude -p --output-format stream-json --verbose ' +
+      '--permission-mode acceptEdits --settings ".nativ/runs/permissions/' + t.id + '.json"';
   }
 
   function syncDispatchSwitches() {

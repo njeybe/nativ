@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Studio Dispatch on Windows: task text with quotes or symbols like > could cut off the agent's instructions and send its output to a stray file.
+
 ### Removed
 
 - The simulation endpoints (`/api/pipeline/simulation/start` and `/stop`) that fed the old Workflow Canvas.

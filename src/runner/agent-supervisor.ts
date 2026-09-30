@@ -443,15 +443,9 @@ export function writeRunnerSettings(runsDir: string, taskId: string, settings: R
   return file;
 }
 
-/**
- * Builds the autonomous prompt and arguments required by Claude Code CLI
- * to execute non-interactively in a headless child process.
- *
- * It runs in `acceptEdits` mode with the rules in `settingsFile` (see buildRunnerPermissions); it does not bypass
- * permissions. Without a settings file only the file-edit tools and read-only commands are pre-approved.
- */
-export function buildDefaultClaudeCommand(task: MasterPlanTask, model?: string | null, settingsFile?: string): string {
-  const parts = [
+/** The instructions text handed to the agent on its standard input. */
+export function buildRunnerPrompt(task: MasterPlanTask): string {
+  return [
     `Execute task ${task.id} (${task.title}).`,
     task.description ? `Description: ${task.description}.` : '',
     task.verificationCommand ? `Verify your work using: ${task.verificationCommand}.` : '',
@@ -460,12 +454,20 @@ export function buildDefaultClaudeCommand(task: MasterPlanTask, model?: string |
   ]
     .filter(Boolean)
     .join(' ');
+}
 
-  const escapedPrompt = parts.replace(/"/g, '\\"');
+/**
+ * Arguments for Claude Code CLI to run headless. The prompt goes on stdin, never in this string:
+ * quotes or symbols in task text would break the shell.
+ *
+ * It runs in `acceptEdits` mode with the rules in `settingsFile` (see buildRunnerPermissions); it does not bypass
+ * permissions. Without a settings file only the file-edit tools and read-only commands are pre-approved.
+ */
+export function buildDefaultClaudeCommand(_task: MasterPlanTask, model?: string | null, settingsFile?: string): string {
   const modelFlag = model ? ` --model ${model}` : '';
   // Plain `claude -p` prints nothing until it finishes; stream-json emits every message and tool call as it happens.
   const settingsFlag = settingsFile ? ` --settings "${settingsFile}"` : '';
-  return `claude -p "${escapedPrompt}"${modelFlag} --output-format stream-json --verbose --permission-mode acceptEdits${settingsFlag}`;
+  return `claude -p${modelFlag} --output-format stream-json --verbose --permission-mode acceptEdits${settingsFlag}`;
 }
 
 /** True when a runner command asks Claude Code for its line-delimited JSON event stream. */
@@ -1378,7 +1380,7 @@ export class AgentSupervisor extends EventEmitter {
       // stdio pipes, so we stay attached and let `taskkill /T` walk the tree.
       detached: process.platform !== 'win32',
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...buildRunnerEnv(process.env, options.env),
         ...(record.thinking?.budgetTokens ? { MAX_THINKING_TOKENS: String(record.thinking.budgetTokens) } : {}),
@@ -1390,6 +1392,10 @@ export class AgentSupervisor extends EventEmitter {
 
     run.child = child;
     record.pid = child.pid ?? null;
+
+    // A runner that exits without reading its input must not crash us or fail the run.
+    child.stdin?.on('error', () => {});
+    child.stdin?.end(buildRunnerPrompt(task), 'utf8');
 
     child.stdout?.on('data', (chunk: Buffer) => {
       if (run.streamJson) this.consumeStreamJson(run, chunk.toString());

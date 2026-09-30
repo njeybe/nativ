@@ -73,7 +73,7 @@ try {
     cliSup.dispatch({ taskId, runnerEngine: 'cli', useWorktree: false, timeoutSeconds: 30, ...extra });
   const routed = await cliRun('t-complex');
   assert.equal(routed.model, 'opus');
-  assert.match(routed.command, /^claude -p .* --model opus /);
+  assert.match(routed.command, /^claude -p --model opus /);
   const custom = await cliRun('t-standard');
   assert.equal(custom.model, 'haiku', 'workerModels override reaches the cli command');
   assert.match(custom.command, / --model haiku /);
