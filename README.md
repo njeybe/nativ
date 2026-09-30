@@ -129,6 +129,8 @@ Start in `warn`, look at the log, then switch to `block`. If a task genuinely ne
 
 **Planning levels.** The `.ai/ui_specs.md` template opens with a planning level: Quick (small fix, no design phase), Standard (new screen in an existing design) or Full (new app or redesign). It then walks through the design brief, users and top tasks, real content samples, user flows, design directions with a style tile, wireframes, a component map and one section per component. The architect and frontend/flutter guides were trimmed to match.
 
+**UI/UX design enhancements.** The template supports two intake approaches: Experience-First (start with user flows and wireframes) or Data-First (start with entity relationships and table schemas), both leading to the same component map. The component map now organizes components into semantic trees reflecting their roles in the interface (layout, data display, input, feedback, navigation). Style tiles are stack-aware, showing platform-specific token variants for web breakpoints and Flutter platform adaptations. Typography is specified in context with font scales per platform and semantic role, mapped directly to components. Every interactive element and input carries a mutation state spec: default, hover, focus, disabled, loading, error and success states, documented in wireframe notes and component sections.
+
 **Optional task fields.** A task can carry `specRefs` (anchors such as `ui_specs.md#appointment-list`), `complexity` (`simple`, `standard` or `complex`) and `acceptanceCriteria` ("done when" lines):
 
 ```bash

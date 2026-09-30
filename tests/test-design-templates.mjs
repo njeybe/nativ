@@ -56,4 +56,32 @@ assert.ok(!/[^\x00-\x7f]/.test(flutter.replace(/[–—]/g, '')), 'flutter-devel
 assert.ok(flutter.split('\n').every((l) => l.length <= 100), 'flutter-developer.md lines are 100 chars or fewer');
 assert.ok(!/#[0-9a-f]{6}\b/i.test(flutter), 'flutter-developer.md has no hard-coded hex');
 
+for (const [name, txt] of [['frontend.md', frontend], ['flutter-developer.md', flutter]]) {
+  assert.ok(txt.includes('ASCII box art') && txt.includes('Semantic Component Tree'), `${name} names both wireframe formats`);
+}
+for (const [name, txt] of [['architect.md', architect], ['GEMINI.md', gemini]]) {
+  for (const term of ['--primary', '--ring', '--radius', 'ColorScheme', 'ThemeExtension']) {
+    assert.ok(txt.includes(term), `${name} style tile step mentions ${term}`);
+  }
+}
+
+const intake = ['Experience-First', 'Data-First'];
+for (const term of [...intake, 'Semantic Component Tree', 'Mutation / Action']) {
+  assert.ok(ui.includes(term), `ui_specs.md does not mention "${term}"`);
+}
+
+const pluginArchitect = fs.readFileSync(path.join(root, 'plugin', 'agents', 'architect.md'), 'utf8');
+const enhanced = [
+  ['architect.md', architect, [...intake, 'Contextual Typography', 'Semantic Component Tree', 'Mutation State']],
+  ['plugin architect.md', pluginArchitect, [...intake, 'Contextual Typography', 'Semantic Component Tree', 'Mutation State']],
+  ['GEMINI.md', gemini, [...intake, 'Contextual Typography', 'Semantic Component Tree', 'Mutation State']],
+  ['frontend.md', frontend, ['Contextual Typography', 'Semantic Component Tree', 'Mutation State']],
+  ['flutter-developer.md', flutter, ['Contextual Typography', 'Semantic Component Tree', 'Mutation State']],
+];
+for (const [name, text, terms] of enhanced) {
+  for (const term of terms) {
+    assert.ok(text.includes(term), `${name} does not mention "${term}"`);
+  }
+}
+
 console.log('test-design-templates: ok');

@@ -5,11 +5,16 @@ Plain language, concise. The Architect fills this in; workers follow it. Tasks p
 ---
 
 ## Planning Level
-Pick one and write it here: **Level: Quick | Standard | Full**
+Pick one level and design track and write them here:
+- **Level:** Quick | Standard | Full
+- **Track:** Experience-First (Outside-In) | Data-First (Inside-Out)
 
 - **Quick:** small fix, fast-path task, no design phase.
-- **Standard:** new screen in an existing design. Flow + wireframe + component map. Reuse existing tokens.
-- **Full:** new app, new platform or redesign. Discovery questions, brief, flows, two directions with style tiles, wireframes, component map.
+- **Standard:** new screen in an existing design. Flow + wireframe or component tree + component map. Reuse existing tokens.
+- **Full:** new app, new platform or redesign. Discovery questions, brief, flows, two directions with style tiles, wireframes or component trees, component map.
+
+- **Experience-First (Outside-In):** UI flows and screen data needs drive API contracts and DB schema.
+- **Data-First (Inside-Out):** Core database schema or pipeline models drive API contracts and UI views.
 
 ---
 
@@ -106,7 +111,11 @@ Placeholders the Architect fills, each with a one-line rationale. Do not copy a 
 ---
 
 ## Wireframes
-ASCII box-drawing, max 80 columns. Label each region `<ComponentName>`. One desktop wireframe per key screen, plus mobile for the primary screen. Use real content. No HTML mockups.
+Choose the format that best communicates the layout:
+1. **ASCII Box Art:** Max 80 columns. Best for mobile screens, simple CRUD lists, and master-detail views.
+2. **Semantic Component Tree:** Indented hierarchy with layout annotations (e.g. grid, split-view, v-stack, h-stack). Best for dense dashboards, data tables, and responsive multi-column web views.
+
+Label each region `<ComponentName>`. One desktop wireframe per key screen, plus mobile for the primary screen. Use real content. No HTML mockups.
 
 ```
 +--------------------------------------------------+
@@ -118,6 +127,20 @@ ASCII box-drawing, max 80 columns. Label each region `<ComponentName>`. One desk
 +----------+---------------------------------------+
 ```
 
+Or Semantic Component Tree:
+```yaml
+Screen: AppointmentDashboard (Desktop 1280px+)
+Layout: SplitView (sidebar: 240px, content: 1fr)
+Tree:
+- <AppSidebar (sticky, h-full)>:
+    - <ClinicBrandHeader title="Clinic Dela Cruz">
+    - <NavMenu active="today" items=["Today", "Patients"]>
+- <MainContainer (v-stack, gap-6, p-6)>:
+    - <AppointmentFilterBar (h-stack, justify-between)>
+    - <AppointmentList (v-stack, gap-3)>:
+        - Columns: [Time, PatientName, StatusBadge, ActionButtons]
+```
+
 ---
 
 ## Component Map
@@ -127,7 +150,13 @@ ASCII box-drawing, max 80 columns. Label each region `<ComponentName>`. One desk
 | | | | | [appointment-list](#appointment-list) |
 
 ### appointment-list
-Example component section. One per component: purpose, data, states, behavior. Keep the heading anchor stable.
+Example component section. One per component: purpose, data, states, mutations, behavior. Keep the heading anchor stable.
+- **Purpose:** Display upcoming patient appointments with instant check-in.
+- **Data:** `Appointment[]` from `api_contracts.json#GET /appointments`.
+- **States:** Loading skeleton (3 rows), Empty (prompt to book), Error (inline retry).
+- **Mutations:**
+  - *Check in:* Inline button spinner -> optimistic status badge change to Checked In.
+  - *Cancel:* Confirm dialog -> optimistic remove. On error: rollback item with error toast.
 
 ---
 
@@ -147,7 +176,7 @@ One or two. Everything else stays restrained.
 
 ## Anti-Generic Checklist
 **Web**
-- [ ] No default Inter or system-only type without a reason.
+- [ ] No unconsidered font defaults. Consumer/brand: distinct curated typeface (e.g. Outfit, Plus Jakarta Sans, DM Sans). Data-dense B2B SaaS/utility: Inter, Roboto, or native system type permitted for density and zero-FOIT. No unstyled browser defaults without a reason.
 - [ ] No default indigo/purple accent.
 - [ ] No rows of identical cards with pastel icon boxes.
 - [ ] No gradient-text hero.
@@ -172,6 +201,7 @@ Every component and view covers these.
 | **Error** | Plain diagnosis with a Retry action. |
 | **Success** | Clear confirmation. |
 | **Disabled** | Visibly inactive, with a reason where useful. |
+| **Mutation / Action** | Behavior during Create/Update/Delete (optimistic vs inline spinner, disabled submit, rollback on failure). |
 | **Mobile only** | Offline, slow connection, permission denied. |
 
 ---

@@ -9,7 +9,7 @@
       "name": "nativ",
       "source": "./plugin",
       "description": "Architect, worker and verifier agents, task-scope enforcement hooks, the nativ MCP server and the task-loop skill.",
-      "version": "2.1.0"
+      "version": "2.2.0"
     }
   ]
 }

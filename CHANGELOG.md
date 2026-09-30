@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+
+- **Dual-Track Intake (Experience-First vs Data-First).** The `ui_specs.md` template can now start from either user experience (sketches and flows) or data structure (tables and entity relationships). Both paths lead to the same component map and style tile.
+- **Semantic Component Trees.** Components now organize into a hierarchical structure with semantic roles: layout containers, data display, input controls, feedback, and navigation. The component map in `ui_specs.md` reflects these roles.
+- **Stack-Aware Style Tiles.** Style tiles now include platform-specific variants. A web style tile shows how a design token adapts across desktop, tablet and mobile breakpoints. Flutter tiles show platform-native adaptations for iOS, Android and Cupertino.
+- **Contextual Typography.** The `ui_specs.md` template documents font scales in context: scale per platform, role (heading, body, caption, code), and how type tokens map to semantic roles in components. Font sizes, weights and line heights are specified per context, not globally.
+- **Mutation State Specs.** Every input component, button, and interactive element now carries a spec for its mutation states: default, hover, focus, disabled, loading, error and success. States are shown in the wireframe notes and in the component section.
+
 ## 2.1.0
 
 ### Added

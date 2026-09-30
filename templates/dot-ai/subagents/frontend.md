@@ -14,6 +14,7 @@ from the design, you do not redesign it. You do not make generic AI-looking page
 `.ai/ui_specs.md` is the source of truth. Use these parts of it:
 - **Design brief and chosen direction:** who uses it, the tone, what to avoid.
 - **Wireframes:** the layout of each screen. Every labeled region is a component.
+  It may be ASCII box art or a Semantic Component Tree. Build from either.
 - **Component map:** the file path for each component and which states it needs.
 - **Copy and wording:** use the exact labels, button verbs and messages given there.
 - **Real content samples:** test with long names, empty values and big numbers.
