@@ -110,7 +110,8 @@ const sx = createStudio();
 loadModel(sx, api);
 vm.runInContext(wrapPage(pages.find((p) => p.id === 'tasks').script), sx);
 const draw = () => vm.runInContext(
-  "Studio.pages.tasks.render({ model: Studio.model, state: Studio.state, fmt: Studio.fmt, ui: Studio.ui, width: 1200 })", sx);
+  "Studio.pages.tasks.render({ model: Studio.model, state: Studio.state, fmt: Studio.fmt, ui: Studio.ui, "
+  + "width: 1200 })", sx);
 const act = (name, attrs = {}) => {
   sx.__el = { getAttribute: (k) => attrs[k] };
   vm.runInContext(`Studio.pages.tasks.actions['${name}'](__el, {})`, sx);

@@ -82,7 +82,11 @@ try {
   const css = extractBlocks(html, 'style').map((b) => b.body).join('\n');
   const rules = parseCss(css);
   const resolve = createResolver(rules);
-  const decls = rules.flatMap((r) => r.decls.map((d) => ({ ...d, selectors: r.selectors, resolved: norm(resolve(d.value)) })));
+  const decls = rules.flatMap((r) => r.decls.map((d) => ({
+    ...d,
+    selectors: r.selectors,
+    resolved: norm(resolve(d.value)),
+  })));
   const cssNorm = norm(css);
   const scripts = extractBlocks(html, 'script').filter((b) => !/\bsrc\s*=/i.test(b.attrs));
   const classic = scripts.filter((b) => !/type\s*=\s*["']?module/i.test(b.attrs));
@@ -106,23 +110,48 @@ try {
     const dialog = /<dialog\b[^>]*id=["']dispatch-dialog["'][\s\S]*?<\/dialog>/i.exec(html);
     assert.ok(dialog, '#dispatch-dialog must be rendered');
     const dlg = decodeEntities(dialog[0]);
-    for (const label of ['Isolated Worktree', 'Auto-verify Gatekeeper', 'Auto-merge on Pass', 'Cancel', 'Launch Autonomous Runner', 'Ctrl+Enter']) {
+    for (const label of [
+      'Isolated Worktree', 'Auto-verify Gatekeeper', 'Auto-merge on Pass', 'Cancel',
+      'Launch Autonomous Runner', 'Ctrl+Enter',
+    ]) {
       assert.ok(dlg.includes(label), `dispatch modal missing "${label}"`);
     }
-    const checkbox = (id) => new RegExp(`<input[^>]*type=["']checkbox["'][^>]*id=["']${id}["'][^>]*>`).exec(dlg)?.[0] ?? '';
+    const checkbox = (id) => new RegExp(
+      `<input[^>]*type=["']checkbox["'][^>]*id=["']${id}["'][^>]*>`,
+    ).exec(dlg)?.[0] ?? '';
     assert.match(checkbox('dispatch-worktree'), /\bchecked\b/, 'Isolated Worktree defaults on');
     assert.match(checkbox('dispatch-verify-gate'), /\bchecked\b/, 'Auto-verify Gatekeeper defaults on');
-    assert.ok(checkbox('dispatch-merge') && !/\bchecked\b/.test(checkbox('dispatch-merge')), 'Auto-merge on Pass defaults off');
-    assert.match(code, /--permission-mode acceptEdits --settings "\.nativ\/runs\/permissions\//, 'dispatch modal must preview the headless claude command with its allowlist file');
+    assert.ok(
+      checkbox('dispatch-merge') && !/\bchecked\b/.test(checkbox('dispatch-merge')),
+      'Auto-merge on Pass defaults off',
+    );
+    assert.match(
+      code,
+      /--permission-mode acceptEdits --settings "\.nativ\/runs\/permissions\//,
+      'dispatch modal must preview the headless claude command with its allowlist file',
+    );
     assert.doesNotMatch(code, /dangerously-skip-permissions/, 'the preview must not offer a permission bypass');
     assert.match(code, /ctrlKey/, 'Ctrl+Enter must launch the agent');
-    assert.match(code, /['"]\/api\/pipeline\/tasks\/dispatch['"]/, 'dispatch modal must POST /api/pipeline/tasks/dispatch');
-    for (const field of ['useWorktree', 'verify', 'autoMerge']) assert.match(code, new RegExp(`\\b${field}\\s*:`), `dispatch payload must send ${field}`);
+    assert.match(
+      code,
+      /['"]\/api\/pipeline\/tasks\/dispatch['"]/,
+      'dispatch modal must POST /api/pipeline/tasks/dispatch',
+    );
+    for (const field of ['useWorktree', 'verify', 'autoMerge']) {
+      assert.match(code, new RegExp(`\\b${field}\\s*:`), `dispatch payload must send ${field}`);
+    }
 
     const drawer = decodeEntities(/<section\b[^>]*id=["']runner-console-drawer["'][\s\S]*?<\/section>/i.exec(html)[0]);
-    assert.ok(drawer.includes('Live Logs') && drawer.includes('Worktree Changes'), 'console drawer needs Live Logs and Worktree Changes tabs');
+    assert.ok(
+      drawer.includes('Live Logs') && drawer.includes('Worktree Changes'),
+      'console drawer needs Live Logs and Worktree Changes tabs',
+    );
     assert.match(drawer, /role=["']tablist["']/, 'console drawer tabs must be a tablist');
-    assert.match(code, /['"]\/api\/pipeline\/worktrees\/diff\?taskId=['"]/, 'diff viewer must call GET /api/pipeline/worktrees/diff');
+    assert.match(
+      code,
+      /['"]\/api\/pipeline\/worktrees\/diff\?taskId=['"]/,
+      'diff viewer must call GET /api/pipeline/worktrees/diff',
+    );
     assert.ok(searchable.includes('inspect diff'), 'worktree table needs an "Inspect Diff" action');
     console.log('✔ Dispatch modal (preview, switches, Ctrl+Enter) and Worktree Changes diff tab are wired');
   }
@@ -130,35 +159,93 @@ try {
   // 4d. Dual-mode dispatch, self-healing review (ui_specs.md View 1 card 3, View 3, §4 tab 3)
   {
     const dlg = decodeEntities(/<dialog\b[^>]*id=["']dispatch-dialog["'][\s\S]*?<\/dialog>/i.exec(html)[0]);
-    const radio = (name, id) => new RegExp(`<input[^>]*type=["']radio["'][^>]*name=["']${name}["'][^>]*id=["']${id}["'][^>]*>`).exec(dlg)?.[0] ?? '';
-    assert.ok(dlg.includes('Native Engine') && dlg.includes('Direct API, Prompt Caching & Fast Streaming'), 'engine selector offers the Native Engine');
+    const radio = (name, id) => new RegExp(
+      `<input[^>]*type=["']radio["'][^>]*name=["']${name}["'][^>]*id=["']${id}["'][^>]*>`,
+    ).exec(dlg)?.[0] ?? '';
+    assert.ok(
+      dlg.includes('Native Engine') && dlg.includes('Direct API, Prompt Caching & Fast Streaming'),
+      'engine selector offers the Native Engine',
+    );
     assert.ok(dlg.includes('CLI Terminal Pairing'), 'engine selector offers CLI Terminal Pairing');
-    assert.match(radio('dispatch-engine', 'dispatch-engine-native'), /\bchecked\b/, 'Native Engine is selected by default');
-    assert.doesNotMatch(radio('dispatch-engine', 'dispatch-engine-cli'), /\bchecked\b/, 'CLI pairing is opt-in');
+    assert.match(
+      radio('dispatch-engine', 'dispatch-engine-native'),
+      /\bchecked\b/,
+      'Native Engine is selected by default',
+    );
+    assert.doesNotMatch(
+      radio('dispatch-engine', 'dispatch-engine-cli'),
+      /\bchecked\b/,
+      'CLI pairing is opt-in',
+    );
     for (const chip of ['None', 'Fast / Deterministic', 'Standard', '2,048 tokens', 'Deep', '4,096 tokens']) {
       assert.ok(dlg.includes(chip), `thinking budget selector missing "${chip}"`);
     }
-    assert.match(radio('dispatch-budget', 'dispatch-budget-none'), /\bchecked\b/, 'the None budget chip is the default');
-    assert.match(radio('dispatch-budget', 'dispatch-budget-none'), /value=["']0["']/, 'None sends 0 (least thinking), not "model default"');
-    assert.match(radio('dispatch-budget', 'dispatch-budget-standard'), /value=["']2048["']/, 'Standard sends a 2,048-token budget');
-    assert.match(radio('dispatch-budget', 'dispatch-budget-deep'), /value=["']4096["']/, 'Deep sends a 4,096-token budget');
+    assert.match(
+      radio('dispatch-budget', 'dispatch-budget-none'),
+      /\bchecked\b/,
+      'the None budget chip is the default',
+    );
+    assert.match(
+      radio('dispatch-budget', 'dispatch-budget-none'),
+      /value=["']0["']/,
+      'None sends 0 (least thinking), not "model default"',
+    );
+    assert.match(
+      radio('dispatch-budget', 'dispatch-budget-standard'),
+      /value=["']2048["']/,
+      'Standard sends a 2,048-token budget',
+    );
+    assert.match(
+      radio('dispatch-budget', 'dispatch-budget-deep'),
+      /value=["']4096["']/,
+      'Deep sends a 4,096-token budget',
+    );
     assert.match(dlg, /<fieldset\b[^>]*>\s*<legend>Engine<\/legend>/, 'engine options are a labelled radio group');
-    for (const field of ['runnerEngine', 'thinkingBudget']) assert.match(code, new RegExp(`\\b${field}\\b`), `dispatch payload must send ${field}`);
+    for (const field of ['runnerEngine', 'thinkingBudget']) {
+      assert.match(code, new RegExp(`\\b${field}\\b`), `dispatch payload must send ${field}`);
+    }
     assert.match(code, /effort/, 'the budget hint explains how budgets map to effort on the native engine');
 
-    assert.match(code, /['"]\/api\/pipeline\/telemetry\/detailed['"]/, 'client must call GET /api/pipeline/telemetry/detailed');
+    assert.match(
+      code,
+      /['"]\/api\/pipeline\/telemetry\/detailed['"]/,
+      'client must call GET /api/pipeline/telemetry/detailed',
+    );
 
     const drawer = decodeEntities(/<section\b[^>]*id=["']runner-console-drawer["'][\s\S]*?<\/section>/i.exec(html)[0]);
     assert.ok(drawer.includes('Self-Healing Proposal'), 'console drawer needs the Self-Healing Proposal tab');
-    assert.match(drawer, /<button\b[^>]*id=["']rc-tab-heal["'][^>]*role=["']tab["']|<button\b[^>]*role=["']tab["'][^>]*id=["']rc-tab-heal["']/, 'the proposal view is a tab in the drawer tablist');
-    assert.match(drawer, /id=["']rc-heal["'][^>]*role=["']tabpanel["']|role=["']tabpanel["'][^>]*id=["']rc-heal["']/, 'the proposal view is a tabpanel');
+    assert.match(
+      drawer,
+      new RegExp(
+        '<button\\b[^>]*id=["\']rc-tab-heal["\'][^>]*role=["\']tab["\']'
+        + '|<button\\b[^>]*role=["\']tab["\'][^>]*id=["\']rc-tab-heal["\']',
+      ),
+      'the proposal view is a tab in the drawer tablist',
+    );
+    assert.match(
+      drawer,
+      /id=["']rc-heal["'][^>]*role=["']tabpanel["']|role=["']tabpanel["'][^>]*id=["']rc-heal["']/,
+      'the proposal view is a tabpanel',
+    );
     for (const label of ['PASSED in sandbox', 'Approve &amp; Apply Patch', 'Reject Proposal']) {
       assert.ok(code.includes(label), `self-healing review missing "${label}"`);
     }
-    assert.match(code, /['"]\/api\/pipeline\/escalations\?status=pending_review['"]/, 'client must list pending escalations');
-    assert.match(code, /['"]\/api\/pipeline\/escalations\/resolve['"]/, 'approve/reject must POST /api/pipeline/escalations/resolve');
+    assert.match(
+      code,
+      /['"]\/api\/pipeline\/escalations\?status=pending_review['"]/,
+      'client must list pending escalations',
+    );
+    assert.match(
+      code,
+      /['"]\/api\/pipeline\/escalations\/resolve['"]/,
+      'approve/reject must POST /api/pipeline/escalations/resolve',
+    );
     assert.match(code, /decision\s*:/, 'resolve payload must carry the decision');
-    assert.match(code, /addEventListener\(\s*['"]runner_token_usage['"]/, 'client must stream runner_token_usage SSE events');
+    assert.match(
+      code,
+      /addEventListener\(\s*['"]runner_token_usage['"]/,
+      'client must stream runner_token_usage SSE events',
+    );
     console.log('✔ Dual-mode dispatch (engine + budget chips), self-healing proposal tab are wired');
   }
 
@@ -168,8 +255,14 @@ try {
     const topbar = /<header\b[^>]*class=["']top["'][\s\S]*?<\/header>/i.exec(html)[0];
     const chip = /<button\b[^>]*id=["']t1-chip["'][\s\S]*?<\/button>/i.exec(topbar)?.[0];
     assert.ok(chip, 'top bar needs the Tier 1 strategist chip');
-    assert.ok(topbar.indexOf('id="t1-chip"') < topbar.indexOf('id="live"'), 'the chip sits beside the live stream indicator');
-    assert.match(decodeEntities(chip.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' '), /Tier 1 AI: Gemini 3\.8 Flash/);
+    assert.ok(
+      topbar.indexOf('id="t1-chip"') < topbar.indexOf('id="live"'),
+      'the chip sits beside the live stream indicator',
+    );
+    assert.match(
+      decodeEntities(chip.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' '),
+      /Tier 1 AI: Gemini 3\.8 Flash/,
+    );
     assert.match(chip, /<svg\b/, 'chip glyphs are inline SVG, not emoji');
     assert.match(chip, /aria-haspopup=["']dialog["']/);
     assert.match(chip, /aria-expanded=["']false["']/);
@@ -178,21 +271,36 @@ try {
     assert.ok(menu, 'chip needs its details dropdown');
     assert.match(menu, /\bhidden\b/, 'the dropdown starts closed');
     const menuText = decodeEntities(menu);
-    for (const label of ['gemini-3.8-flash', 'Last evaluation', 'Autonomous Auto-Triage', 'Evaluated', 'Auto-resolved', 'Human-escalated',
-      'Always halts on destructive database operations & major API contract breaks.']) {
+    for (const label of [
+      'gemini-3.8-flash', 'Last evaluation', 'Autonomous Auto-Triage', 'Evaluated',
+      'Auto-resolved', 'Human-escalated',
+      'Always halts on destructive database operations & major API contract breaks.',
+    ]) {
       assert.ok(menuText.includes(label), `Tier 1 dropdown missing "${label}"`);
     }
-    assert.match(menu, /<button\b[^>]*id=["']t1-auto["'][^>]*role=["']switch["']|<button\b[^>]*role=["']switch["'][^>]*id=["']t1-auto["']/, 'auto-triage toggle is a switch');
+    assert.match(
+      menu,
+      new RegExp(
+        '<button\\b[^>]*id=["\']t1-auto["\'][^>]*role=["\']switch["\']'
+        + '|<button\\b[^>]*role=["\']switch["\'][^>]*id=["\']t1-auto["\']',
+      ),
+      'auto-triage toggle is a switch',
+    );
 
-    for (const endpoint of ['/api/pipeline/triage/status', '/api/pipeline/triage/evaluate', '/api/pipeline/triage/config']) {
+    for (const endpoint of [
+      '/api/pipeline/triage/status', '/api/pipeline/triage/evaluate', '/api/pipeline/triage/config',
+    ]) {
       assert.match(code, new RegExp(`['"]${endpoint.replace(/\//g, '\\/')}['"]`), `client never calls ${endpoint}`);
     }
     assert.match(code, /autoTriageEnabled\s*:/, 'the toggle posts autoTriageEnabled');
     assert.match(code, /notes\s*=\s*notes|payload\.notes/, 'card decisions travel as resolution notes');
 
-    for (const copy of ['Human Decision Required', 'What is Happening?', 'Why is This Happening?', 'Who &amp; What is Affected?',
-      'Actionable Options &amp; Trade-offs', '(Recommended)', 'Custom instructions', 'Auto-Resolved by Tier 1 AI Strategist',
-      'Applied contract modification', 'Auto-unblocking', 'Run Tier 1 Triage']) {
+    for (const copy of [
+      'Human Decision Required', 'What is Happening?', 'Why is This Happening?',
+      'Who &amp; What is Affected?', 'Actionable Options &amp; Trade-offs', '(Recommended)',
+      'Custom instructions', 'Auto-Resolved by Tier 1 AI Strategist',
+      'Applied contract modification', 'Auto-unblocking', 'Run Tier 1 Triage',
+    ]) {
       assert.ok(code.includes(copy), `self-healing tab missing "${copy}"`);
     }
     assert.match(code, /role="radiogroup"/, 'decision options form a radio group');
@@ -212,7 +320,11 @@ try {
       }
     });
 
-    assert.match(code, /new\s+EventSource\(\s*['"]\/api\/events['"?]/, "client must open new EventSource('/api/events')");
+    assert.match(
+      code,
+      /new\s+EventSource\(\s*['"]\/api\/events['"]?\)/,
+      "client must open new EventSource('/api/events')",
+    );
     assert.match(code, /addEventListener\(/, 'named SSE events need addEventListener (onmessage only sees "message")');
     assert.match(code, /['"]plan_change['"]/, 'client must handle plan_change events');
     assert.match(code, /['"]telemetry_change['"]/, 'client must handle telemetry_change events');
@@ -234,16 +346,30 @@ try {
     assert.ok(!html.includes('/api/pipeline/simulation'), 'no simulation endpoint anywhere in the page');
     assert.ok(!code.includes('CACHE_RATES'), 'the client must not keep its own price table');
     // View 5 retains the embedded Database Studio.
-    for (const endpoint of ['/api/status', '/api/schema', '/api/diff', '/api/env-info', '/api/data', '/api/connect', '/api/export-contract']) {
+    for (const endpoint of [
+      '/api/status', '/api/schema', '/api/diff', '/api/env-info',
+      '/api/data', '/api/connect', '/api/export-contract',
+    ]) {
       assert.ok(code.includes(endpoint), `Database Studio view lost its ${endpoint} integration`);
     }
-    console.log(`✔ ${classic.length} inline script(s) parse; EventSource + plan_change/telemetry_change and all pipeline endpoints wired`);
+    console.log(
+      `✔ ${classic.length} inline script(s) parse; EventSource + plan_change/telemetry_change `
+      + 'and all pipeline endpoints wired',
+    );
   }
 
   // 6. Self-contained (studio CSP is default-src 'self') and no emoji glyphs
   {
-    assert.doesNotMatch(html, /<script[^>]+\bsrc\s*=\s*["']?(https?:)?\/\//i, 'external scripts are blocked by the studio CSP');
-    assert.doesNotMatch(html, /<link[^>]+\bhref\s*=\s*["']?(https?:)?\/\//i, 'external stylesheets/fonts are blocked by the studio CSP');
+    assert.doesNotMatch(
+      html,
+      /<script[^>]+\bsrc\s*=\s*["']?(https?:)?\/\//i,
+      'external scripts are blocked by the studio CSP',
+    );
+    assert.doesNotMatch(
+      html,
+      /<link[^>]+\bhref\s*=\s*["']?(https?:)?\/\//i,
+      'external stylesheets/fonts are blocked by the studio CSP',
+    );
     assert.doesNotMatch(css, /@import/i, 'CSS @import is not allowed (self-contained page)');
 
     const glyphs = decodeEntities(html)
@@ -262,7 +388,14 @@ try {
     fs.writeFileSync(path.join(dir, '.ai', 'context.md'), '# Context\n', 'utf8');
     fs.writeFileSync(
       path.join(dir, '.ai', 'master_plan.json'),
-      JSON.stringify({ version: '1.0.0', projectName: 'ui-fixture', lastUpdated: new Date().toISOString(), overallStatus: 'pending', activeMilestoneId: 'm1', milestones: [] }, null, 2),
+      JSON.stringify({
+        version: '1.0.0',
+        projectName: 'ui-fixture',
+        lastUpdated: new Date().toISOString(),
+        overallStatus: 'pending',
+        activeMilestoneId: 'm1',
+        milestones: [],
+      }, null, 2),
       'utf8',
     );
 
@@ -296,7 +429,9 @@ try {
   }
   setTimeout(() => {
     const active = process.getActiveResourcesInfo().filter((r) => !['Timeout', 'PipeWrap', 'TTYWrap'].includes(r));
-    console.error(`✖ Process still alive 10s after studio.close() (active resources: ${active.join(', ') || 'timers only'}).`);
+    console.error(
+      `✖ Process still alive 10s after studio.close() (active resources: ${active.join(', ') || 'timers only'}).`,
+    );
     process.exit(1);
   }, 10_000).unref();
 }

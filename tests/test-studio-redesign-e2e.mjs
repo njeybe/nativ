@@ -70,7 +70,10 @@ const records = [
   record('f-1', 'backend', 900, 4),
   record('f-2', 'backend', 880, 4, { actualUsage: usage(0.5) }),
   record('f-3', 'backend', 860, 4),
-  record('d-1', 'backend', 300, 5, { actualUsage: usage(0.42), verification: { command: 'true', durationMs: 38_000, exitCode: 0, skipped: false } }),
+  record('d-1', 'backend', 300, 5, {
+    actualUsage: usage(0.42),
+    verification: { command: 'true', durationMs: 38_000, exitCode: 0, skipped: false },
+  }),
   record('d-2', 'backend', 290, 5),
   // A 85 minute idle stretch follows d-2, so the timeline squeezes it.
   record('d-3', 'frontend', 200, 5, { actualUsage: usage(0.3) }),
@@ -158,10 +161,13 @@ try {
     same([...new Set(order.map((p) => p.group))].length, 3, 'three groups');
     const ctx = createStudio();
     loadModel(ctx, api);
-    const side = run(ctx, 'Studio.sidebarHtml({ model: Studio.model, view: "home", worktreeCount: 0, benchmarkText: "" })');
+    const side = run(ctx,
+      'Studio.sidebarHtml({ model: Studio.model, view: "home", worktreeCount: 0, benchmarkText: "" })');
     same([...side.matchAll(/nav-glabel">([^<]+)</g)].map((m) => m[1]), ['Now', 'Project', 'System']);
     eq((side.match(/data-go="/g) || []).length, 7, 'seven sidebar buttons');
-    for (const gone of ['nav-pods', 'panel-pods', 'panel-canvas', 'nav-canvas', 'Play Simulation', '/api/pipeline/simulation/']) {
+    for (const gone of [
+      'nav-pods', 'panel-pods', 'panel-canvas', 'nav-canvas', 'Play Simulation', '/api/pipeline/simulation/',
+    ]) {
       ok(!served.includes(gone), `served page has no ${gone}`);
     }
     for (const id of ['home', 'tasks', 'flow', 'team']) ok(served.includes(`id="panel-${id}"`), `panel-${id} present`);
@@ -418,7 +424,9 @@ function withActions(pageId, data, state = {}) {
   ctx.Studio.closeDetail = () => { ctx.Studio.state.focusTaskId = null; };
   run(ctx, wrapPage(pages.find((p) => p.id === pageId).script));
   ctx.__w = 1200;
-  const render = () => run(ctx, `Studio.pages['${pageId}'].render({ model: Studio.model, state: Studio.state, fmt: Studio.fmt, ui: Studio.ui, width: __w })`);
+  const render = () => run(ctx,
+    `Studio.pages['${pageId}'].render({ model: Studio.model, state: Studio.state, fmt: Studio.fmt, `
+    + `ui: Studio.ui, width: __w })`);
   const act = (name, el = {}) => { ctx.__el = el; run(ctx, `Studio.pages['${pageId}'].actions['${name}'](__el)`); };
   return { ctx, render, act };
 }

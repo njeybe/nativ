@@ -97,7 +97,9 @@ function withActions() {
   ctx.Studio.closeDetail = () => { calls.push(['close']); ctx.Studio.state.focusTaskId = null; };
   run(ctx, wrapPage(pages.find((p) => p.id === 'flow').script));
   ctx.__w = 1200;
-  const render = () => run(ctx, "Studio.pages.flow.render({ model: Studio.model, state: Studio.state, fmt: Studio.fmt, ui: Studio.ui, width: __w })");
+  const render = () => run(ctx,
+    "Studio.pages.flow.render({ model: Studio.model, state: Studio.state, fmt: Studio.fmt, ui: Studio.ui, "
+    + "width: __w })");
   const act = (name, el) => { ctx.__el = el; run(ctx, `Studio.pages.flow.actions['${name}'](__el)`); };
   return { ctx, calls, render, act };
 }

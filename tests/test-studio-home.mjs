@@ -40,7 +40,10 @@ function busyApi() {
     milestones: [{
       id: 'm3', name: 'Busy milestone: things',
       tasks: [
-        task('task-a', 'blocked', { notes: 'Verification failed after 3 attempts: heading missing.', circuitBreaker: { consecutiveFailures: 3 } }),
+        task('task-a', 'blocked', {
+          notes: 'Verification failed after 3 attempts: heading missing.',
+          circuitBreaker: { consecutiveFailures: 3 },
+        }),
         task('task-b', 'blocked'),
         task('task-c', 'in_progress', { assignedSubagent: 'frontend' }),
         task('task-d', 'pending', { dependencies: ['task-c'] }),
@@ -120,8 +123,14 @@ test('figure strip shows milestones, tasks, spend and plan files', () => {
   assert.match(strip, /Milestones<\/span><span class="v">2<small> \/ 2<\/small>/);
   assert.match(strip, /Tasks<\/span><span class="v">8<small> \/ 8<\/small><\/span><span class="s">all done/);
   assert.match(strip, /\$6\.18/);
-  assert.match(strip, /97\.6% cached, saved about \$39\.73/);
-  assert.match(strip, /Plan files<\/span><span class="v">5<small> \/ 5<\/small><\/span><span class="s">all present and intact/);
+  assert.match(
+    strip,
+    /97\.6% cached, saved about \$39\.73/,
+  );
+  assert.match(
+    strip,
+    /Plan files<\/span><span class="v">5<small> \/ 5<\/small><\/span><span class="s">all present and intact/,
+  );
   const busy = renderPage('home', busyApi());
   assert.match(busy, /4 left/);
   assert.match(busy, /3<small> \/ 5<\/small><\/span><span class="s">2 missing/);

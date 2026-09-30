@@ -23,19 +23,43 @@ const api = {
     { id: 'm2', name: LONG, status: 'in_progress', tasks: [
       task('task-studio-sse', { status: 'completed', assignedSubagent: 'frontend', title: 'Build the flow view' }),
       task('task-run', { status: 'in_progress', assignedSubagent: 'frontend', dependencies: ['task-studio-sse'] }),
-      task('task-stuck', { status: 'blocked', assignedSubagent: 'database', dependencies: ['task-studio-sse'],
-        notes: 'Verification failed after 3 attempts: heading not found.', circuitBreaker: { consecutiveFailures: 3, maxThreshold: 3 } }),
+      task('task-stuck', {
+        status: 'blocked',
+        assignedSubagent: 'database',
+        dependencies: ['task-studio-sse'],
+        notes: 'Verification failed after 3 attempts: heading not found.',
+        circuitBreaker: { consecutiveFailures: 3, maxThreshold: 3 },
+      }),
       task('task-wait', { dependencies: ['task-run', 'task-stuck'], isAvailable: false }),
       task('task-ready', { dependencies: ['task-studio-sse'] }),
     ] },
   ],
-  status: { contracts: { a: true, b: true, c: true, d: false, e: true }, telemetry: { actualSpendUsd: 1.5, cacheHitRate: 0.5 } },
+  status: {
+    contracts: { a: true, b: true, c: true, d: false, e: true },
+    telemetry: { actualSpendUsd: 1.5, cacheHitRate: 0.5 },
+  },
   telemetry: {
-    summary: { actual: { spendUsd: 6.18, cacheHitRate: 0.976, cacheSavingsUsd: 39.73 } },
+    summary: {
+      actual: { spendUsd: 6.18, cacheHitRate: 0.976, cacheSavingsUsd: 39.73 },
+    },
     taskBreakdowns: [
-      { taskId: 'task-studio-sse', startedAt: iso(-3_600_000), completedAt: iso(-3_300_000), durationMs: 300_000,
-        verification: { durationMs: 38_000 }, actual: { costUsd: 0.42 }, estimated: { costUsd: 0.1 } },
-      { taskId: 'task-run', startedAt: iso(-72_000), completedAt: null, durationMs: 0, actual: { costUsd: 0 }, estimated: { costUsd: 0.25 } },
+      {
+        taskId: 'task-studio-sse',
+        startedAt: iso(-3_600_000),
+        completedAt: iso(-3_300_000),
+        durationMs: 300_000,
+        verification: { durationMs: 38_000 },
+        actual: { costUsd: 0.42 },
+        estimated: { costUsd: 0.1 },
+      },
+      {
+        taskId: 'task-run',
+        startedAt: iso(-72_000),
+        completedAt: null,
+        durationMs: 0,
+        actual: { costUsd: 0 },
+        estimated: { costUsd: 0.25 },
+      },
       { taskId: 'task-01', startedAt: null, completedAt: null, durationMs: 0, actual: null, estimated: null },
     ],
   },
@@ -84,15 +108,21 @@ const api = {
   assert.equal(m.summary.contractsPresent, 4);
   const fallback = plain(loadModel(createStudio(), { ...api, telemetry: null }));
   assert.equal(fallback.summary.spendUsd, 1.5, 'falls back to the status telemetry');
-  assert.equal(plain(loadModel(createStudio(), { milestones: [] })).activeMilestoneId, null);
-  console.log('✔ buildModel joins timing, cost, attempts, reason, children, active milestone and needs-you');
+  assert.equal(
+    plain(loadModel(createStudio(), { milestones: [] })).activeMilestoneId,
+    null,
+  );
+  console.log(
+    '✔ buildModel joins timing, cost, attempts, reason, children, active milestone and needs-you',
+  );
 }
 
 // 2. sidebar
 {
   const ctx = createStudio();
   loadModel(ctx, api);
-  const html = run(ctx, 'Studio.sidebarHtml({ model: Studio.model, view: "tasks", worktreeCount: 2, benchmarkText: "364" })');
+  const html = run(ctx,
+    'Studio.sidebarHtml({ model: Studio.model, view: "tasks", worktreeCount: 2, benchmarkText: "364" })');
   const labels = [...html.matchAll(/nav-glabel">([^<]+)</g)].map((m) => m[1]);
   assert.deepEqual(labels, ['Now', 'Project', 'System']);
   const items = [...html.matchAll(/data-go="(\w+)"/g)].map((m) => m[1]);
@@ -108,8 +138,13 @@ const api = {
 {
   const ctx = createStudio();
   loadModel(ctx, api);
-  const find = (q) => plain(run(ctx, `Studio.paletteItems(${JSON.stringify(q)})`)).map((i) => (i.page ? `page:${i.page.id}` : i.task.id));
-  assert.deepEqual(find('').slice(0, 3), ['task-run', 'task-stuck', 'task-studio-sse'].slice(0, 3), 'running, stuck, then finished');
+  const find = (q) => plain(run(ctx, `Studio.paletteItems(${JSON.stringify(q)})`))
+    .map((i) => (i.page ? `page:${i.page.id}` : i.task.id));
+  assert.deepEqual(
+    find('').slice(0, 3),
+    ['task-run', 'task-stuck', 'task-studio-sse'].slice(0, 3),
+    'running, stuck, then finished',
+  );
   assert.ok(find('task-wait').includes('task-wait'), 'by id');
   assert.deepEqual(find('flow view'), ['task-studio-sse'], 'by title');
   assert.ok(find('database').includes('task-stuck'), 'by agent id');
@@ -131,7 +166,10 @@ const api = {
   const html = (id, env = {}) => run(ctx, `Studio.detailHtml(${JSON.stringify(id)}, ${JSON.stringify(env)})`);
   const stuck = html('task-stuck');
   assert.match(stuck, /class="reason"/);
-  for (const label of ['Show check output', 'Try again', 'Review proposal', 'Show in Flow', 'Needs first', 'Unblocks', 'Files it may change', 'How it is checked']) {
+  for (const label of [
+    'Show check output', 'Try again', 'Review proposal', 'Show in Flow',
+    'Needs first', 'Unblocks', 'Files it may change', 'How it is checked',
+  ]) {
     assert.ok(stuck.includes(label), `stuck panel missing ${label}`);
   }
   assert.doesNotMatch(stuck, /Ask the architect/, 'proposal wins over ask');
@@ -164,7 +202,9 @@ const api = {
   assert.match(busy, /spinner/);
   assert.match(busy, /data-act="task-dispatch" disabled/);
   assert.match(html('task-run'), /data-act="close-detail"/);
-  console.log('✔ Detail panel shows the right sections and actions per status, and a spinner while busy');
+  console.log(
+    '✔ Detail panel shows the right sections and actions per status, and a spinner while busy',
+  );
 }
 
 // 5. theme tokens and shell markup
@@ -173,20 +213,47 @@ const api = {
   const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
   const light = /:root\s*\{([^}]*)\}/.exec(css)[1];
   const lightTokens = {
-    '--bg': '#f6f6f9', '--surface': '#ffffff', '--surface-2': '#f0f0f5', '--line': '#e3e3ea', '--line-2': '#d2d2dc',
-    '--fg': '#16161f', '--fg-2': '#54546a', '--fg-3': '#8b8b9e', '--accent': '#4f46e5', '--accent-soft': '#eeeefe',
-    '--ok': '#15803d', '--run': '#2563eb', '--bad': '#dc2626', '--warn': '#b45309', '--ag-frontend': '#7c3aed',
+    '--bg': '#f6f6f9',
+    '--surface': '#ffffff',
+    '--surface-2': '#f0f0f5',
+    '--line': '#e3e3ea',
+    '--line-2': '#d2d2dc',
+    '--fg': '#16161f',
+    '--fg-2': '#54546a',
+    '--fg-3': '#8b8b9e',
+    '--accent': '#4f46e5',
+    '--accent-soft': '#eeeefe',
+    '--ok': '#15803d',
+    '--run': '#2563eb',
+    '--bad': '#dc2626',
+    '--warn': '#b45309',
+    '--ag-frontend': '#7c3aed',
   };
   for (const [k, v] of Object.entries(lightTokens)) assert.match(light, new RegExp(`${k}:\\s*${v}`), `light ${k}`);
   const darkBlock = /:root\[data-theme="dark"\]\s*\{([^}]*)\}/.exec(css)[1];
   const darkTokens = {
-    '--bg': '#0e0e13', '--surface': '#16161d', '--line': '#2a2a36', '--fg': '#ececf2', '--accent': '#8e8aff',
-    '--accent-fg': '#0e0e13', '--ok': '#4ade80', '--run': '#60a5fa', '--bad': '#f87171', '--warn': '#fbbf24',
+    '--bg': '#0e0e13',
+    '--surface': '#16161d',
+    '--line': '#2a2a36',
+    '--fg': '#ececf2',
+    '--accent': '#8e8aff',
+    '--accent-fg': '#0e0e13',
+    '--ok': '#4ade80',
+    '--run': '#60a5fa',
+    '--bad': '#f87171',
+    '--warn': '#fbbf24',
   };
   for (const [k, v] of Object.entries(darkTokens)) assert.match(darkBlock, new RegExp(`${k}:\\s*${v}`), `dark ${k}`);
-  assert.match(css, /prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)/, 'system dark applies when nothing is saved');
-  for (const alias of ['--border: var(--line)', '--text: var(--fg)', '--muted: var(--fg-2)', '--primary: var(--accent)',
-    '--success: var(--ok)', '--active: var(--run)', '--danger: var(--bad)', '--chip: var(--surface-2)', '--danger-bg: var(--bad-soft)']) {
+  assert.match(
+    css,
+    /prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)/,
+    'system dark applies when nothing is saved',
+  );
+  for (const alias of [
+    '--border: var(--line)', '--text: var(--fg)', '--muted: var(--fg-2)',
+    '--primary: var(--accent)', '--success: var(--ok)', '--active: var(--run)',
+    '--danger: var(--bad)', '--chip: var(--surface-2)', '--danger-bg: var(--bad-soft)',
+  ]) {
     assert.ok(css.includes(alias), `old token alias ${alias}`);
   }
   const head = html.slice(0, html.indexOf('<style>'));
@@ -202,7 +269,11 @@ const api = {
   const families = [...css.matchAll(/font-family:\s*([^;}]+)/g)].map((m) => m[1]);
   assert.ok(families.length > 0, 'font-family declarations exist');
   for (const f of families) {
-    assert.match(f, /var\(--(font|mono)\)|inherit/, `font-family must use the system tokens: ${f}`);
+    assert.match(
+      f,
+      /var\(--(font|mono)\)|inherit/,
+      `font-family must use the system tokens: ${f}`,
+    );
   }
   const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
   assert.ok(!html.includes('/api/pipeline/simulation'), 'the UI never calls the simulation endpoints');
