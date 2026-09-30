@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.3.0
 
 ### Changed
 
@@ -47,7 +47,7 @@
 
 Documentation and package metadata only; no behaviour changes.
 
-- **npm is the only install path.** The source repository is private, so the instructions for `npm install -g github:â€¦` and for adding the plugin marketplace were removed from the README and the installation guide. `nativ setup` is the complete route: it writes the agents, the enforcement hook, the MCP entry and the permission rules, which a plugin cannot ship.
+- **npm is the only install path.** The source repository is private, so the instructions for `npm install -g github:...` and for adding the plugin marketplace were removed from the README and the installation guide. `nativ setup` is the complete route: it writes the agents, the enforcement hook, the MCP entry and the permission rules, which a plugin cannot ship.
 - The plugin files still ship inside the package (`plugin/`) and can be tried for one session with `claude --plugin-dir`.
 - `package.json` no longer declares `repository`, `homepage` or `bugs`, so the npm page has no dead links.
 - The 2.0.0 entry below still mentions the plugin marketplace; that route is not available outside the private repository.
