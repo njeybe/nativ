@@ -22,6 +22,7 @@ import {
   TestIntegrityGuard,
   resolveGitHead,
   appendEscalation,
+  taskEscalationHistory,
 } from '../governor/index.js';
 import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
@@ -314,6 +315,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
 
   const roleGuide = getRoleGuide(targetTask.assignedSubagent);
   const contractSlice = getRecommendedContractSlice(targetTask.assignedSubagent);
+  const priorEscalations = taskEscalationHistory(path.dirname(path.dirname(planPath)), targetTask.id);
 
   if (options.json) {
     const specResult = targetTask.specRefs?.length
@@ -330,6 +332,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         recommendedContractSlice: contractSlice,
         ...(recommendedModel ? { recommendedModel } : {}),
         ...(specResult ? { specSlices: specResult.slices, ...(specResult.warnings.length ? { specWarnings: specResult.warnings } : {}) } : {}),
+        ...(priorEscalations.length ? { priorEscalations } : {}),
       }
     }, null, 2));
     return;
@@ -352,6 +355,10 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   }
   if (targetTask.notes) {
     console.log(pc.bold(`  Notes:             `) + pc.red(targetTask.notes));
+  }
+  for (const e of priorEscalations) {
+    const outcome = e.resolutionNotes ? ` -> ${e.resolutionNotes}` : '';
+    console.log(pc.bold(`  Past escalation:   `) + pc.white(`${e.id} ${e.status}: ${e.summary}${outcome}`));
   }
 
   console.log(pc.dim('\n─── Quick CLI Actions ──────────────────────────────────────────'));

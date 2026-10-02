@@ -23,6 +23,7 @@ import {
 } from '../core/root-resolver.js';
 import type { MasterPlanTask } from '../scanner/types.js';
 import { resolveSpecSlices } from '../core/spec-slices.js';
+import { taskEscalationHistory } from '../governor/store.js';
 import { resolveWorkerModel, toNativeModelId } from '../core/model-routing.js';
 import { buildDesiredConfig, cliString, configuredInvocation, resolveCliInvocation } from '../core/setup-assets.js';
 
@@ -663,6 +664,17 @@ function buildSpecSlicesBlock(task: MasterPlanTask, rootDir: string | undefined)
   return `<spec_slices>\n${parts.join('\n')}\n</spec_slices>\nThe spec slices above are the parts of the contracts this task refers to. Read a whole contract only when a slice is missing, truncated or does not answer your question.`;
 }
 
+function buildPriorEscalationsBlock(task: MasterPlanTask, rootDir: string | undefined): string {
+  if (!rootDir) return '';
+  const history = taskEscalationHistory(rootDir, task.id);
+  if (!history.length) return '';
+  const lines = history.map((e) => {
+    const outcome = e.resolutionNotes ? `\nOutcome: ${e.resolutionNotes}` : '';
+    return `${e.id} (${e.type}, ${e.status}): ${e.summary}${outcome}`;
+  });
+  return `<prior_escalations>\n${lines.join('\n')}\n</prior_escalations>\nThis task was escalated before. Follow how each gap was settled; do not raise a settled gap again.`;
+}
+
 function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, useWorktree: boolean, rootDir?: string): string {
   const spec = {
     id: task.id,
@@ -679,6 +691,7 @@ function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, u
     `<task>\n${JSON.stringify(spec, null, 2)}\n</task>`,
     roleGuide ? `<role_guide path=".ai/subagents/${task.assignedSubagent}.md">\n${roleGuide}\n</role_guide>` : '',
     buildSpecSlicesBlock(task, rootDir),
+    buildPriorEscalationsBlock(task, rootDir),
     'Load only the contract slice your role needs (.ai/api_contracts.json, .ai/db_schema.json, .ai/ui_specs.md, .ai/context.md) with the editor view command.',
     useWorktree
       ? 'You are in an isolated git worktree on the agent branch. After `nativ task complete` succeeds, commit the target files there (`git add <targetFiles> && git commit -m "<type>(<scope>): <summary>"`) so the operator can merge the branch.'

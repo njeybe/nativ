@@ -24,6 +24,7 @@ The vendor behind a role does not matter. The boundary does, and it is enforced:
    - `devops-agent`: `.ai/context.md`
    - `qa-tester`, `security-auditor`: the target files and `.ai/api_contracts.json`
    - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question.
+   - If the task has `priorEscalations`, it was escalated before. Follow how each one was settled and do not raise a settled gap again.
 3. Contracts are also MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`. They are read-only.
 
 ## Task loop

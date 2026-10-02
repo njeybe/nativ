@@ -154,6 +154,7 @@ export interface EscalationRecord {
   recommendedAction?: string;
   status: 'pending_review' | 'resolved' | 'dismissed';
   resolutionNotes?: string;
+  resolvedAt?: string;
 }
 
 export interface EscalationFile {

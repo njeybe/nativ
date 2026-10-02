@@ -117,6 +117,24 @@ try {
   out = await execFileAsync(process.execPath, [cli, 'task', 'next', '--json'], { cwd: dir });
   payload = JSON.parse(out.stdout).task;
   assert.equal(payload.specSlices, undefined);
+  assert.equal(payload.priorEscalations, undefined, 'no escalation history, no field');
+
+  // Closed escalations of the task travel with it; open ones and other tasks' do not.
+  const esc = (id, taskId, status, extra = {}) => ({
+    id, taskId, type: 'schema_flaw', reportedBy: 'backend', timestamp: `2026-01-0${id.slice(-1)}T00:00:00Z`,
+    summary: `gap ${id}`, affectedContracts: [], status, ...extra,
+  });
+  fs.writeFileSync(path.join(dir, '.ai', 'escalation.json'), JSON.stringify({ version: '1.0.0', projectName: 's', lastUpdated: '', escalations: [
+    esc('esc-01', 'task-01', 'resolved', { resolutionNotes: 'Added users.bio', resolvedAt: '2026-01-05T00:00:00Z' }),
+    esc('esc-02', 'task-01', 'pending_review'),
+    esc('esc-03', 'task-02', 'resolved'),
+    esc('esc-04', 'task-01', 'dismissed', { resolutionNotes: 'Use the existing route' }),
+  ] }));
+  out = await execFileAsync(process.execPath, [cli, 'task', 'next', '--json'], { cwd: dir });
+  payload = JSON.parse(out.stdout).task;
+  assert.deepEqual(payload.priorEscalations.map((e) => e.id), ['esc-04', 'esc-01'], 'closed ones only, oldest first');
+  assert.equal(payload.priorEscalations[1].resolutionNotes, 'Added users.bio');
+  fs.rmSync(path.join(dir, '.ai', 'escalation.json'));
 
   writePlan(task('task-01', ['ui_specs.md#gone']));
   out = await execFileAsync(process.execPath, [cli, 'validate'], { cwd: dir }).catch((e) => e);

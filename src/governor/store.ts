@@ -110,3 +110,38 @@ export function appendEscalation(
     return id;
   });
 }
+
+export interface EscalationHistoryEntry {
+  id: string;
+  type: string;
+  status: 'resolved' | 'dismissed';
+  summary: string;
+  resolutionNotes?: string;
+  resolvedAt?: string;
+}
+
+const HISTORY_TEXT_LIMIT = 400;
+
+function clip(text: string): string {
+  return text.length > HISTORY_TEXT_LIMIT ? `${text.slice(0, HISTORY_TEXT_LIMIT)}...` : text;
+}
+
+/**
+ * The closed escalations of one task, oldest first, so the worker who picks the task up again
+ * learns how each gap was settled instead of raising it a second time.
+ */
+export function taskEscalationHistory(targetDir: string, taskId: string, limit = 3): EscalationHistoryEntry[] {
+  const records = loadEscalationFile(targetDir, path.basename(targetDir)).escalations;
+  return records
+    .filter((e) => e?.taskId === taskId && (e.status === 'resolved' || e.status === 'dismissed'))
+    .sort((a, b) => (a.resolvedAt ?? a.timestamp ?? '').localeCompare(b.resolvedAt ?? b.timestamp ?? ''))
+    .slice(-limit)
+    .map((e) => ({
+      id: e.id,
+      type: e.type,
+      status: e.status as 'resolved' | 'dismissed',
+      summary: clip(String(e.summary ?? '')),
+      ...(e.resolutionNotes ? { resolutionNotes: clip(e.resolutionNotes) } : {}),
+      ...(e.resolvedAt ? { resolvedAt: e.resolvedAt } : {}),
+    }));
+}
