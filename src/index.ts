@@ -30,6 +30,7 @@ import { runVerify } from './commands/verify.js';
 import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
 import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
+import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
 import { packageVersion } from './core/version.js';
 
 export function createProgram(): Command {
@@ -255,6 +256,49 @@ export function createProgram(): Command {
     .option('--revoke', 'Re-lock the task to its target files')
     .action(async (taskId, targetDir, options) => {
       await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
+    });
+
+  const learn = program
+    .command('learn')
+    .description('Project lessons the contracts do not capture: agents propose, a human approves');
+
+  learn
+    .command('propose <insight> [targetDir]')
+    .description('Propose a lesson for later workers (it waits for a human to approve it)')
+    .option('--role <role>', 'Only workers with this role see it')
+    .option('--files <globs>', 'Comma-separated files, dirs or globs; only tasks touching them see it')
+    .option('--task <taskId>', 'The task where it came up')
+    .option('-d, --details <details>', 'Longer explanation')
+    .option('--by <who>', 'Who proposes it (defaults to NATIV_ROLE)')
+    .option('--json', 'Output the stored learning as JSON')
+    .action(async (insight, targetDir, options) => {
+      await runLearnPropose(insight, targetDir, options);
+    });
+
+  learn
+    .command('approve <id> [targetDir]')
+    .description('Approve a proposed lesson so matching tasks carry it (human only)')
+    .option('-n, --note <note>', 'Why it was approved')
+    .action(async (id, targetDir, options) => {
+      await runLearnDecide(id, 'approved', targetDir, options);
+    });
+
+  learn
+    .command('reject <id> [targetDir]')
+    .description('Reject a proposed or approved lesson (human only)')
+    .option('-n, --note <note>', 'Why it was rejected')
+    .action(async (id, targetDir, options) => {
+      await runLearnDecide(id, 'rejected', targetDir, options);
+    });
+
+  learn
+    .command('list [targetDir]')
+    .description('List lessons')
+    .option('-s, --status <status>', 'proposed, approved or rejected')
+    .option('--role <role>', 'Only lessons scoped to this role')
+    .option('--json', 'Output as JSON')
+    .action(async (targetDir, options) => {
+      await runLearnList(targetDir, options);
     });
 
   const hook = program

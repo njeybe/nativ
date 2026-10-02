@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Learnings.** `nativ learn propose` (and the `nativ_learn_propose` MCP tool) records a project
+  lesson the contracts do not capture. A human approves it with `nativ learn approve`; setup denies
+  approve and reject to agents. Approved lessons reach `nativ task next --json` as `learnings`,
+  scoped to the task's role and target files, at most five.
+- **Verify phases.** `verifyPhases` in `.nativ/config.json` lists checks (type check, lint) that
+  run before every task's own command in `nativ verify`, the `task complete` gatekeeper and Studio
+  dispatch. A failure names the phase.
+- **Escalation history.** `nativ task next --json` adds `priorEscalations`: the task's settled
+  escalations with their resolution notes, so a worker does not raise a settled gap again.
+
+### Changed
+
+- Design-time rules (fonts, color, marketing page layout) moved into the Anti-Generic Checklist of
+  the `ui_specs.md` template, checked by the architect. The frontend guide keeps build-time rules.
+
 ## 2.3.1
 
 ### Fixed

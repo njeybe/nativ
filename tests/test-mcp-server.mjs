@@ -19,6 +19,7 @@ const EXPECTED_TOOLS = [
   'nativ_task_complete',
   'nativ_task_block',
   'nativ_task_escalate',
+  'nativ_learn_propose',
   'nativ_init',
   'nativ_status',
   'nativ_db_status',
@@ -178,7 +179,7 @@ try {
   assert.ok(!toolNames.some((n) => n.startsWith('agentj_')), 'the retired agentj_ aliases must not be exposed');
   assert.equal(new Set(toolNames).size, toolNames.length, 'no tool is registered twice');
   assert.ok(toolNames.includes('nativ_doctor'), 'the read-only doctor tool is exposed');
-  assert.ok(!toolNames.some((n) => /sync|ui|studio|unlock|setup|fix/.test(n)), 'contract-writing, studio, unlock and repair tools must not be exposed');
+  assert.ok(!toolNames.some((n) => /sync|ui|studio|unlock|setup|fix|approve|reject/.test(n)), 'contract-writing, studio, unlock, approval and repair tools must not be exposed');
   const escalate = tools.result.tools.find((t) => t.name === 'nativ_task_escalate');
   assert.deepEqual([...escalate.inputSchema.required].sort(), ['details', 'taskId', 'type']);
   check(`tools/list exposes ${toolNames.length} nativ_* tools with input schemas and no legacy aliases`);

@@ -14,6 +14,15 @@ export interface VerificationResult {
   error?: string;
   skipped?: boolean;
   codeShape?: CodeShapeReport;
+  /** Results of the configured `verifyPhases`, when any ran. */
+  phases?: PhaseResult[];
+}
+
+export interface PhaseResult {
+  name: string;
+  command: string;
+  success: boolean;
+  durationMs: number;
 }
 
 export interface TaskVerificationResult {
@@ -144,6 +153,52 @@ export function applyCodeShape(
   return result;
 }
 
+export interface VerifyPhase {
+  name: string;
+  run: string;
+}
+
+/** `verifyPhases` from `.nativ/config.json`: project-wide checks run before every task's own command. */
+export function loadVerifyPhases(configDir: string): VerifyPhase[] {
+  try {
+    const raw = fs.readFileSync(path.join(configDir, '.nativ', 'config.json'), 'utf8');
+    const phases = JSON.parse(raw)?.verifyPhases;
+    if (!Array.isArray(phases)) return [];
+    return phases
+      .filter((p) => p && typeof p.name === 'string' && typeof p.run === 'string' && p.run.trim())
+      .map((p) => ({ name: p.name.trim(), run: p.run.trim() }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The one verification every path shares: the configured phases in order, stopping at the
+ * first failure, then the task's own command, then the code-shape check.
+ */
+export async function runTaskVerification(
+  task: MasterPlanTask,
+  options: { cwd: string; configDir?: string; timeout?: number }
+): Promise<VerificationResult> {
+  const phases = loadVerifyPhases(options.configDir ?? options.cwd);
+  const reports: PhaseResult[] = [];
+  for (const phase of phases) {
+    const res = await executeVerification(phase.run, options.cwd, options.timeout);
+    reports.push({ name: phase.name, command: res.command, success: res.success, durationMs: res.durationMs });
+    if (!res.success) {
+      const cause = res.error ? `: ${res.error.trim()}` : '';
+      return { ...res, phases: reports, error: `Phase "${phase.name}" failed${cause}` };
+    }
+  }
+  const raw = await executeVerification(task.verificationCommand, options.cwd, options.timeout);
+  if (reports.length) {
+    raw.phases = reports;
+    raw.durationMs += reports.reduce((sum, r) => sum + r.durationMs, 0);
+    raw.skipped = false;
+  }
+  return applyCodeShape(raw, options.cwd, task);
+}
+
 /**
  * Run verification for a single specific task in the plan.
  */
@@ -205,8 +260,7 @@ export async function verifyTask(
     };
   }
 
-  const raw = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
-  const result = applyCodeShape(raw, targetDir, foundTask);
+  const result = await runTaskVerification(foundTask, { cwd: targetDir, timeout: options.timeout });
   return {
     taskId: foundTask.id,
     title: foundTask.title,
@@ -303,8 +357,7 @@ export async function verifyBatch(
   let totalDuration = 0;
 
   for (const { task, milestone } of candidates) {
-    const raw = await executeVerification(task.verificationCommand, targetDir, options.timeout);
-    const vResult = applyCodeShape(raw, targetDir, task);
+    const vResult = await runTaskVerification(task, { cwd: targetDir, timeout: options.timeout });
     totalDuration += vResult.durationMs;
 
     if (vResult.skipped) {

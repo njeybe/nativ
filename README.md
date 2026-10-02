@@ -218,6 +218,34 @@ nativ verify --all
 nativ verify --milestone m1 --timeout 60000 --json
 ```
 
+**Verify phases.** Project-wide checks that run before every task's own `verificationCommand`, in
+order, stopping at the first failure. `nativ verify`, the `nativ task complete` gatekeeper and
+Studio dispatch all run them. With none configured, verification is unchanged.
+
+```json
+{ "verifyPhases": [
+  { "name": "types", "run": "npx tsc --noEmit" },
+  { "name": "lint", "run": "npm run lint" }
+] }
+```
+
+### Learnings
+
+Lessons from earlier tasks that the contracts do not capture: a setup quirk, a library gotcha, a
+convention. Agents propose them; only a human approves them, from a terminal.
+
+```bash
+nativ learn propose "Set the date picker locale before it mounts" --role frontend --files "src/components/forms/"
+nativ learn list --status proposed
+nativ learn approve learn-01 --note "confirmed"
+nativ learn reject learn-02
+```
+
+An approved lesson travels with `nativ task next --json` as `learnings`, only to tasks it fits:
+lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
+`nativ setup` denies `nativ learn approve` and `reject` to agents. Lessons live in
+`.ai/learnings.json`.
+
 ### Status and telemetry
 
 ```bash
@@ -321,9 +349,10 @@ Task transitions and role violations are recorded in `.ai/telemetry.json`: durat
 | `nativ_worktree_*` | Create, list, merge and remove task worktrees |
 | `nativ_db_status`, `nativ_db_inspect`, `nativ_db_diff` | Masked, structure-only database telemetry |
 | `nativ_doctor` | Read-only health report. Repairs are `nativ doctor --fix` in a terminal |
+| `nativ_learn_propose` | Propose a lesson for later workers; a human approves it in a terminal |
 | `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`, `nativ://telemetry` | Read-only resources |
 
-There is deliberately no MCP tool to unlock a task, write a contract, sync a database schema or run setup.
+There is deliberately no MCP tool to unlock a task, approve a lesson, write a contract, sync a database schema or run setup.
 
 Manual registration, if you prefer:
 

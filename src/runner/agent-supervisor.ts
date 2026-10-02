@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
-import { loadMasterPlan, executeVerification, type VerificationResult } from '../core/verifier.js';
+import { loadMasterPlan, runTaskVerification, type VerificationResult } from '../core/verifier.js';
 import {
   cacheHitRate,
   computeActualCostUsd,
@@ -24,6 +24,7 @@ import {
 import type { MasterPlanTask } from '../scanner/types.js';
 import { resolveSpecSlices } from '../core/spec-slices.js';
 import { taskEscalationHistory } from '../governor/store.js';
+import { learningsForTask } from '../core/learnings.js';
 import { resolveWorkerModel, toNativeModelId } from '../core/model-routing.js';
 import { buildDesiredConfig, cliString, configuredInvocation, resolveCliInvocation } from '../core/setup-assets.js';
 
@@ -675,6 +676,14 @@ function buildPriorEscalationsBlock(task: MasterPlanTask, rootDir: string | unde
   return `<prior_escalations>\n${lines.join('\n')}\n</prior_escalations>\nThis task was escalated before. Follow how each gap was settled; do not raise a settled gap again.`;
 }
 
+function buildLearningsBlock(task: MasterPlanTask, rootDir: string | undefined): string {
+  if (!rootDir) return '';
+  const learnings = learningsForTask(rootDir, task);
+  if (!learnings.length) return '';
+  const lines = learnings.map((l) => `${l.id}: ${l.insight}${l.details ? `\n${l.details}` : ''}`);
+  return `<learnings>\n${lines.join('\n')}\n</learnings>\nThese are approved lessons from earlier work on this project. Follow them.`;
+}
+
 function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, useWorktree: boolean, rootDir?: string): string {
   const spec = {
     id: task.id,
@@ -692,6 +701,7 @@ function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, u
     roleGuide ? `<role_guide path=".ai/subagents/${task.assignedSubagent}.md">\n${roleGuide}\n</role_guide>` : '',
     buildSpecSlicesBlock(task, rootDir),
     buildPriorEscalationsBlock(task, rootDir),
+    buildLearningsBlock(task, rootDir),
     'Load only the contract slice your role needs (.ai/api_contracts.json, .ai/db_schema.json, .ai/ui_specs.md, .ai/context.md) with the editor view command.',
     useWorktree
       ? 'You are in an isolated git worktree on the agent branch. After `nativ task complete` succeeds, commit the target files there (`git add <targetFiles> && git commit -m "<type>(<scope>): <summary>"`) so the operator can merge the branch.'
@@ -1886,7 +1896,7 @@ export class AgentSupervisor extends EventEmitter {
     record.status = 'verifying';
     this.emitStatus(record);
 
-    const result: VerificationResult = await executeVerification(task.verificationCommand, record.worktreeDir);
+    const result: VerificationResult = await runTaskVerification(task, { cwd: record.worktreeDir, configDir: this.rootDir });
     record.verification = {
       command: result.command,
       success: result.success,

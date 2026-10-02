@@ -14,7 +14,7 @@ import {
   EscalationRecord,
   EscalationType,
 } from '../scanner/types.js';
-import { applyCodeShape, executeVerification, VerificationResult } from '../core/verifier.js';
+import { runTaskVerification, VerificationResult } from '../core/verifier.js';
 import {
   ContractGovernor,
   CircuitBreaker,
@@ -29,6 +29,7 @@ import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
 import { resolveSpecSlices } from '../core/spec-slices.js';
 import { resolveWorkerModel } from '../core/model-routing.js';
 import { addTaskUnlock, removeTaskUnlock } from '../core/enforcement.js';
+import { learningsForTask, type Learning } from '../core/learnings.js';
 
 export { loadPlan, savePlan, withPlanLock };
 
@@ -315,13 +316,15 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
 
   const roleGuide = getRoleGuide(targetTask.assignedSubagent);
   const contractSlice = getRecommendedContractSlice(targetTask.assignedSubagent);
-  const priorEscalations = taskEscalationHistory(path.dirname(path.dirname(planPath)), targetTask.id);
+  const projectRoot = path.dirname(path.dirname(planPath));
+  const learnings = learningsForTask(projectRoot, targetTask);
+  const priorEscalations = taskEscalationHistory(projectRoot, targetTask.id);
 
   if (options.json) {
     const specResult = targetTask.specRefs?.length
-      ? resolveSpecSlices(path.dirname(path.dirname(planPath)), targetTask.specRefs)
+      ? resolveSpecSlices(projectRoot, targetTask.specRefs)
       : null;
-    const recommendedModel = resolveWorkerModel(path.dirname(path.dirname(planPath)), targetTask);
+    const recommendedModel = resolveWorkerModel(projectRoot, targetTask);
     console.log(JSON.stringify({
       status: 'ready',
       milestoneId: activeMilestone.id,
@@ -332,6 +335,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         recommendedContractSlice: contractSlice,
         ...(recommendedModel ? { recommendedModel } : {}),
         ...(specResult ? { specSlices: specResult.slices, ...(specResult.warnings.length ? { specWarnings: specResult.warnings } : {}) } : {}),
+        ...(learnings.length ? { learnings: learnings.map(toTaskLearning) } : {}),
         ...(priorEscalations.length ? { priorEscalations } : {}),
       }
     }, null, 2));
@@ -356,6 +360,9 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   if (targetTask.notes) {
     console.log(pc.bold(`  Notes:             `) + pc.red(targetTask.notes));
   }
+  for (const l of learnings) {
+    console.log(pc.bold(`  Learning:          `) + pc.white(`${l.id} ${l.insight}`));
+  }
   for (const e of priorEscalations) {
     const outcome = e.resolutionNotes ? ` -> ${e.resolutionNotes}` : '';
     console.log(pc.bold(`  Past escalation:   `) + pc.white(`${e.id} ${e.status}: ${e.summary}${outcome}`));
@@ -366,6 +373,11 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   console.log(pc.dim('  Complete task:') + pc.white(`nativ task complete ${targetTask.id}`));
   console.log(pc.dim('  Block task:   ') + pc.white(`nativ task block ${targetTask.id} --reason "..."`));
   console.log(pc.dim('  Escalate task:') + pc.white(`nativ task escalate ${targetTask.id} --type schema_flaw --details "..."\n`));
+}
+
+/** What a worker needs from a lesson; status and audit fields stay in .ai/learnings.json. */
+function toTaskLearning({ id, insight, details, files }: Learning) {
+  return { id, insight, ...(details ? { details } : {}), ...(files ? { files } : {}) };
 }
 
 export async function runTaskStart(taskId: string, targetDirArg?: string) {
@@ -528,11 +540,12 @@ export async function runTaskComplete(
   // ── Verification Gatekeeper ────────────────────────────────────────────────
   let vResult: VerificationResult | null = null;
   if (!options.skipVerify) {
-    const rawResult = await executeVerification(foundTask.verificationCommand, targetDir, options.timeout);
-    vResult = applyCodeShape(rawResult, targetDir, foundTask);
+    vResult = await runTaskVerification(foundTask, { cwd: targetDir, timeout: options.timeout });
     if (!vResult.success) {
       console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] verification FAILED with exit code ${vResult.exitCode}:`));
-      console.error(pc.yellow(`  Command: \`${foundTask.verificationCommand}\``));
+      const failedPhase = vResult.phases?.find((p) => !p.success);
+      if (failedPhase) console.error(pc.yellow(`  Phase:   ${failedPhase.name}`));
+      console.error(pc.yellow(`  Command: \`${vResult.command}\``));
 
       if (vResult.stderr && vResult.stderr.trim()) {
         console.error(pc.red('\n--- stderr ---'));

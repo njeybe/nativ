@@ -26,6 +26,7 @@ import {
 } from '../commands/worktree.js';
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
 import { runVerify } from '../commands/verify.js';
+import { runLearnPropose } from '../commands/learn.js';
 import { runTestGen } from '../commands/test-gen.js';
 import { runBench } from '../commands/bench.js';
 import { TEST_FRAMEWORKS } from '../core/test-generator-types.js';
@@ -237,6 +238,26 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     },
     ({ taskId, type, details, affected }) =>
       captureOutput(() => runTaskEscalate(taskId, targetDir, { type, details, affected: affected?.join(',') })),
+  );
+
+  registerNativTool(
+    'learn_propose',
+    {
+      description:
+        'Propose a project lesson the contracts do not capture, for later workers. ' +
+        'It waits for a human to approve it in a terminal; there is no tool to approve.',
+      inputSchema: {
+        insight: z.string().min(1).describe('One line: what the next worker must know'),
+        details: z.string().optional().describe('Longer explanation'),
+        role: z.enum(SUBAGENT_TYPES as [string, ...string[]]).optional().describe('Only workers with this role see it'),
+        files: z.array(z.string()).optional().describe('Files, dirs or globs; only tasks touching them see it'),
+        taskId: z.string().optional().describe('The task where it came up'),
+      },
+    },
+    ({ insight, details, role, files, taskId }) =>
+      captureOutput(() =>
+        runLearnPropose(insight, targetDir, { details, role, files: files?.join(','), task: taskId, json: true }),
+      ),
   );
 
   registerNativTool(

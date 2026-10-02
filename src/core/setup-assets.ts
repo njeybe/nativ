@@ -128,6 +128,8 @@ export function buildDesiredConfig(invocation: CliInvocation): DesiredClaudeConf
     deny: [
       ...prefixes.flatMap((p) => [
         `Bash(${p} task unlock *)`,
+        `Bash(${p} learn approve *)`,
+        `Bash(${p} learn reject *)`,
         `Bash(${p} db sync *)`,
         `Bash(${p} task complete * --no-verify)`,
         `Bash(${p} task complete * --no-verify *)`,

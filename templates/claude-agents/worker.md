@@ -14,12 +14,13 @@ You are given one task id. Do that task and nothing else.
 ## Steps
 
 1. `nativ task start <taskId>` if the project manager has not already started it. Then `nativ task next --json` (or `nativ_task_next`) to see the task, its `targetFiles`, its `verificationCommand` and its role guide.
-2. Load only what the task needs: `.ai/subagents/<assignedSubagent>.md` and the contract slice `AGENTS.md` lists for that role. If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question. If it has `priorEscalations`, follow how each was settled; do not raise a settled gap again.
+2. Load only what the task needs: `.ai/subagents/<assignedSubagent>.md` and the contract slice `AGENTS.md` lists for that role. If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question. If it has `priorEscalations`, follow how each was settled; do not raise a settled gap again. If it has `learnings`, follow them.
 3. Change **only** the files in `targetFiles`. Match the style of the surrounding code and follow the contracts exactly: table and column names, routes and schemas, design tokens.
    Follow the `## Code style` rules in `AGENTS.md`: short lines, small functions, one UI component per file, brief plain comments.
 4. Run the `verificationCommand`. If it fails, fix the cause and run it again. You have three fix attempts.
 5. If it still fails: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and report.
 6. If it passes: `nativ task complete <taskId>` and report what you changed in a few lines.
+7. If you lost time on a project-specific gotcha the next worker would hit too, propose it with `nativ learn propose` (see `AGENTS.md`). Do not approve it yourself.
 
 ## Boundaries
 

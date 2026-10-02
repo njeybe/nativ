@@ -52,12 +52,17 @@ export async function runVerify(
           pc.dim(` (${elapsed}s)`) +
           pc.yellow(` \`${t.result.command}\``)
       );
+      if (t.result.phases?.length) {
+        console.log(pc.dim(`    Phases passed: ${t.result.phases.map((p) => p.name).join(', ')}`));
+      }
     } else {
       console.log(
         pc.red(`  ✖ [${pc.bold(t.taskId)}] ${t.title}`) +
           pc.dim(` (${elapsed}s, exit code: ${t.result.exitCode})`) +
           pc.yellow(` \`${t.result.command}\``)
       );
+      const failedPhase = t.result.phases?.find((p) => !p.success);
+      if (failedPhase) console.log(pc.red(`    Failed in phase "${failedPhase.name}"`));
 
       if (t.result.stderr && t.result.stderr.trim()) {
         console.log(pc.red(`\n--- [${t.taskId}] stderr ---`));

@@ -33,6 +33,7 @@ The vendor behind a role does not matter. The boundary does, and it is enforced:
    - `qa-tester`, `security-auditor`: the target files and `.ai/api_contracts.json`
    - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question.
    - If the task has `priorEscalations`, it was escalated before. Follow how each one was settled and do not raise a settled gap again.
+   - If the task has `learnings`, follow them. They are lessons from earlier work that a human approved.
 3. Contracts are also MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`. They are read-only.
 
 ## Task loop
@@ -58,6 +59,16 @@ Applies to every worker. A project's own formatter or linter config wins over th
 - Comments: at most 2 lines, explain why (not what), in plain everyday words with no technical jargon.
 - Do not restate the code in a comment. No banner or divider comments. No commented-out code.
 - Match the surrounding code.
+
+## Lessons for later workers
+
+If you lost time on something specific to this project that the contracts do not say and the next worker would hit too (a setup quirk, a library gotcha, a convention), propose it:
+
+```bash
+nativ learn propose "Set the date picker locale before it mounts" --role frontend --files "src/components/forms/" --task <taskId>
+```
+
+MCP: `nativ_learn_propose`. One line, a fact rather than a preference. A human approves it with `nativ learn approve`; agents cannot. A missing contract detail is an escalation, not a lesson.
 
 ## When the contract is wrong
 
