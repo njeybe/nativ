@@ -10,6 +10,12 @@ from the design, you do not redesign it. You do not make generic AI-looking page
 - `.ai/design/style-tile.html`, when it exists. Match its fonts, colors, corners and spacing.
 - Read a whole contract file only when a slice is missing. Do not load everything up front.
 
+## 2.5 Design read (before coding)
+Before writing any code, state in one line what you are building:
+"Reading this as: [page kind] for [audience], in the [chosen direction] style."
+Take it from the design brief, the chosen direction and the style tile. If they do not
+settle it, escalate with `architectural_ambiguity`. Do not guess a direction.
+
 ## 3. Build from the design
 `.ai/ui_specs.md` is the source of truth. Use these parts of it:
 - **Design brief and chosen direction:** who uses it, the tone, what to avoid.
@@ -65,6 +71,22 @@ These match the Anti-Generic Checklist in `.ai/ui_specs.md`:
 - No greeting banners ("Welcome back!"). Let the content speak.
 - No emojis anywhere in code or UI. Icons are inline vector SVG.
 
+### 7.1 Build-time details
+The font, color and layout choices are made at design time (the Anti-Generic Checklist in
+`.ai/ui_specs.md`). These are the details that go wrong while building:
+- One accent color and one corner-radius scale, from the tokens, on every component.
+  A button or link that needs a different color is a spec gap: escalate it.
+- Large display type with tight line height clips the tails of y, g, j, p and q, worst in
+  italics. Keep display line height at 1.1 or more.
+- Images come from the spec. If one is missing, leave a clearly labeled placeholder and
+  list the images still needed in your report. Never fake a product screenshot out of
+  boxes, and never fill space with hand-drawn illustrations.
+- Logos are real vector files, never a company name typed out as text.
+- Numbers shown in the UI come from the spec's content samples or real data. Do not
+  invent precise-looking figures such as "92%" or "4.1x".
+- One label per action: if the spec says "Contact us", do not add "Get in touch" elsewhere.
+- Marketing or landing page: also follow the Marketing pages part of the checklist.
+
 ## 8. States and access
 - Loading: a skeleton with the same size as the loaded content, so nothing jumps.
 - Empty: a short explanation and a primary action.
@@ -81,3 +103,11 @@ These match the Anti-Generic Checklist in `.ai/ui_specs.md`:
 2. Check the source for emojis. There must be none.
 3. Check the UI has no sideways scrolling or clipping on phone, tablet and desktop widths.
 4. Check every item in the task's `acceptanceCriteria`.
+5. Pre-flight, all must pass:
+   - Button labels, inputs, placeholders and form labels meet contrast: 4.5:1 for body
+     text, 3:1 for large text.
+   - Button labels fit on one line at desktop width.
+   - The accent color and corner radius are the same everywhere.
+   - Re-read every string you wrote that the spec did not give. Rewrite anything vague,
+     broken or invented.
+   - Marketing or landing page: run the Marketing pages checks in the checklist.

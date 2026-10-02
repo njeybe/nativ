@@ -183,6 +183,23 @@ One or two. Everything else stays restrained.
 - [ ] No decorative blobs.
 - [ ] No greeting banners.
 - [ ] No emojis. Icons are vector SVG.
+- [ ] No serif by default. A serif needs a stated reason (editorial, heritage) in the brief.
+- [ ] One font family, unless the tokens define a heading and body pairing.
+- [ ] No purple or blue glow gradients and no neon mesh backgrounds unless the brief asks.
+- [ ] No warm beige with brass accents as the automatic "premium" look. Pick it only on purpose.
+- [ ] One accent color and one palette temperature (warm or cool grays, not both).
+- [ ] One corner-radius scale for every surface.
+
+**Marketing pages** (landing, product and pricing pages)
+- [ ] The hero fits the first screen: headline of at most 2 lines, subtext of about 20 words, the main button visible without scrolling.
+- [ ] The hero holds at most 4 things: an optional small label, headline, subtext, buttons (one primary, at most one secondary). Logo walls go in their own section below.
+- [ ] No more than 2 image-and-text split sections in a row.
+- [ ] Small uppercase labels above headings: at most one for every 3 sections.
+- [ ] Each section layout (3-column cards, split, bento) appears once per page.
+- [ ] Real images and real vector logos. No mock screenshots built from boxes, no text-only page.
+- [ ] Sections stay short: a headline of about 8 words, about 25 words of text, one visual or one button. More than 5 items need a grid, tabs or a carousel.
+- [ ] Every figure comes from real data or is marked as a sample.
+- [ ] One label per action across the page ("Contact us" everywhere, not three variants).
 
 **Mobile**
 - [ ] No default Material seed blue.
