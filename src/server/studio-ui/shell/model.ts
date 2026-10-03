@@ -120,7 +120,9 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     tasks.forEach(function (t) { if (t.status === 'blocked') add(t); });
     (escalations || []).forEach(function (e) {
       var pending = e && (!e.status || e.status === 'pending_review');
-      if (pending && byId[e.taskId] && !seen[e.taskId]) add(byId[e.taskId]);
+      var t = pending && byId[e.taskId];
+      // A completed task answered its own question; a left-over pending record is not a request for you.
+      if (t && t.status !== 'completed' && !seen[e.taskId]) add(t);
     });
     return items;
   }

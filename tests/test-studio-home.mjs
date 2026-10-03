@@ -90,6 +90,14 @@ test('idle with nothing finished yet', () => {
   assert.match(html, /Nothing has finished yet\./);
 });
 
+test('a completed task leaves Needs you even if its escalation was never closed', () => {
+  const api = busyApi();
+  api.escalations.push({ id: 'esc-4', taskId: 'task-e', status: 'pending_review', reason: 'Old question' });
+  const sec = section(renderPage('home', api), 'Needs you');
+  assert.match(sec, /3 items/);
+  assert.doesNotMatch(sec, /task-e|Old question/);
+});
+
 test('Needs you lists one item per task with the right actions', () => {
   const html = renderPage('home', busyApi());
   const sec = section(html, 'Needs you');
