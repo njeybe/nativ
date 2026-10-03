@@ -235,6 +235,19 @@ try {
   assert.equal(next2.task.id, 'task-2');
   check('nativ_task_start / nativ_task_complete update master_plan.json and advance task_next');
 
+  // 5b. Lesson proposals go in as proposed; the schema rejects unknown roles
+  const proposed = await server.callTool('nativ_learn_propose', {
+    insight: 'Set the locale first', role: 'frontend', files: ['src/a.ts', 'src/b/'], taskId: 'task-1',
+  });
+  assert.notEqual(proposed.result.isError, true, toolText(proposed));
+  const stored = JSON.parse(fs.readFileSync(path.join(projectDir, '.ai', 'learnings.json'), 'utf8')).learnings;
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].status, 'proposed');
+  assert.deepEqual(stored[0].files, ['src/a.ts', 'src/b/']);
+  const badRole = await server.callTool('nativ_learn_propose', { insight: 'x', role: 'frontnd' });
+  assert.equal(badRole.result?.isError ?? Boolean(badRole.error), true, 'an unknown role is rejected');
+  check('nativ_learn_propose stores a proposed lesson and rejects unknown roles');
+
   // 6. Error reporting
   const missing = await server.callTool('nativ_task_start', { taskId: 'task-404' });
   assert.equal(missing.result.isError, true);

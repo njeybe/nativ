@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseJsonLoose } from './enforcement.js';
 import { getTemplatesDir, planTemplateFile } from './setup-assets.js';
-import { canonicalRole, listLearnings, unverifiedApprovals } from './learnings.js';
+import { canonicalRole, listLearnings, loadLearnings } from './learnings.js';
 
 /**
  * nativ · Checks that the harness itself is intact: nothing switches the guardrails off, no secret
@@ -173,14 +173,13 @@ function checkLearnings(root: string): IntegrityFinding[] {
     const message = `${waiting} proposed ${noun} for approval: nativ learn list --status proposed`;
     findings.push({ id: 'learnings', status: 'info', category: 'learnings', message });
   }
-  const unverified = unverifiedApprovals(root).map((l) => l.id);
-  if (unverified.length) {
+  if (loadLearnings(root).unreadable) {
     findings.push({
-      id: 'learnings:unverified',
+      id: 'learnings:unreadable',
       status: 'warn',
       category: 'learnings',
-      message: `Approved lessons whose approval no longer matches (edited afterwards, or approved before signing): `
-        + `${unverified.join(', ')}. Workers do not receive them; review and run nativ learn approve again.`,
+      message: '.ai/learnings.json cannot be read, so workers receive no lessons and new ones cannot be '
+        + 'proposed. Fix the JSON or move the file.',
     });
   }
   return findings;

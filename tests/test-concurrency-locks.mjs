@@ -96,7 +96,7 @@ console.log('2. Testing Parallel `task complete` across 10 concurrent processes.
 const completePromises = [];
 for (let i = 1; i <= 10; i++) {
   const taskId = `task-${String(i).padStart(2, '0')}`;
-  completePromises.push(cli(['task', 'complete', taskId, fixture1.dir, '--no-verify']));
+  completePromises.push(cli(['task', 'complete', taskId, fixture1.dir]));
 }
 
 const completeResults = await Promise.all(completePromises);
@@ -151,7 +151,7 @@ const fixture3 = createConcurrentFixture(6);
 const mixedOps = [
   cli(['task', 'start', 'task-01', fixture3.dir]),
   cli(['task', 'block', 'task-02', fixture3.dir, '--reason', 'Waiting on API key']),
-  cli(['task', 'complete', 'task-03', fixture3.dir, '--no-verify']),
+  cli(['task', 'complete', 'task-03', fixture3.dir]),
   cli(['task', 'add', 'Fast Add Task', fixture3.dir, '--fast-path', '--json']),
   cli(['task', 'start', 'task-04', fixture3.dir]),
 ];

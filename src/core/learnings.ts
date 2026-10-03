@@ -1,14 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { withFileLockSync, writeJsonAtomicSync } from './lock-manager.js';
 import { matchesTarget, parseJsonLoose } from './enforcement.js';
 import { SUBAGENT_TYPES } from '../scanner/types.js';
-import { resolveMainRoot } from './root-resolver.js';
 
 /**
- * nativ · Project learnings in `.ai/learnings.json`. Agents propose; only a human approves, and each
- * approval is signed with a key agents cannot read, so a lesson flipped or rewritten later is not served.
+ * nativ · Project learnings in `.ai/learnings.json`. Agents propose; only a human approves, from an
+ * interactive terminal. The file is protected like the contracts, by the hook and the ask rules.
  */
 
 export const LEARNING_STATUSES = ['proposed', 'approved', 'rejected'] as const;
@@ -29,8 +27,6 @@ export interface Learning {
   createdAt: string;
   decidedAt?: string;
   decisionNote?: string;
-  /** HMAC of the approved content; checked before the lesson reaches a worker. */
-  signature?: string;
 }
 
 export interface LearningsFile {
@@ -51,82 +47,92 @@ export function learningsPath(root: string): string {
   return path.join(root, '.ai', 'learnings.json');
 }
 
-/** `.nativ/*.local.json` is a secret path: agents are denied reading it everywhere nativ enforces. */
-export function approvalKeyPath(root: string): string {
-  return path.join(resolveMainRoot(root), '.nativ', 'approval.local.json');
+function isLearning(l: unknown): l is Learning {
+  if (!l || typeof l !== 'object') return false;
+  const item = l as Learning;
+  if (typeof item.id !== 'string' || typeof item.insight !== 'string') return false;
+  if (!(LEARNING_STATUSES as readonly string[]).includes(item.status)) return false;
+  if (item.files !== undefined && !(Array.isArray(item.files) && item.files.every((f) => typeof f === 'string'))) {
+    return false;
+  }
+  return item.role === undefined || item.role === null || typeof item.role === 'string';
 }
 
-const empty = (): LearningsFile => ({ version: '1.0.0', updatedAt: new Date().toISOString(), learnings: [] });
-
-/** Drops entries a hand edit left malformed, so one bad record never breaks task selection. */
-function sanitize(raw: unknown): Learning[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((l): l is Learning => {
-    if (!l || typeof l !== 'object') return false;
-    const item = l as Learning;
-    if (typeof item.id !== 'string' || typeof item.insight !== 'string') return false;
-    if (!(LEARNING_STATUSES as readonly string[]).includes(item.status)) return false;
-    if (item.files !== undefined && !(Array.isArray(item.files) && item.files.every((f) => typeof f === 'string'))) {
-      return false;
-    }
-    return item.role === undefined || typeof item.role === 'string';
-  });
+/**
+ * The file as stored. Records a hand edit left malformed stay in `records` untouched, so writing
+ * never deletes them; only valid ones are served.
+ */
+interface RawFile {
+  doc: Record<string, unknown>;
+  records: unknown[];
+  corrupt: boolean;
 }
 
-/** Reads the file. `corrupt` is true when it exists with content that does not parse. */
-function readLearnings(root: string): { data: LearningsFile; corrupt: boolean } {
+function readRaw(root: string): RawFile {
+  const fresh = (): RawFile => ({ doc: { version: '1.0.0' }, records: [], corrupt: false });
   let raw: string;
   try {
     raw = fs.readFileSync(learningsPath(root), 'utf8');
   } catch {
-    return { data: empty(), corrupt: false };
+    return fresh();
   }
-  if (!raw.trim()) return { data: empty(), corrupt: false };
+  if (!raw.trim()) return fresh();
   try {
-    const parsed = parseJsonLoose<Partial<LearningsFile>>(raw);
-    if (!parsed || !Array.isArray(parsed.learnings)) return { data: empty(), corrupt: true };
-    const learnings = sanitize(parsed.learnings);
-    return { data: { version: '1.0.0', updatedAt: String(parsed.updatedAt ?? ''), learnings }, corrupt: false };
+    const doc = parseJsonLoose<Record<string, unknown>>(raw);
+    if (!doc || typeof doc !== 'object' || !Array.isArray(doc.learnings)) return { ...fresh(), corrupt: true };
+    return { doc, records: doc.learnings as unknown[], corrupt: false };
   } catch {
-    return { data: empty(), corrupt: true };
+    return { ...fresh(), corrupt: true };
   }
 }
 
-export function loadLearnings(root: string): LearningsFile {
-  return readLearnings(root).data;
+export function loadLearnings(root: string): LearningsFile & { unreadable: boolean } {
+  const { doc, records, corrupt } = readRaw(root);
+  return {
+    version: '1.0.0',
+    updatedAt: String(doc.updatedAt ?? ''),
+    learnings: records.filter(isLearning),
+    unreadable: corrupt,
+  };
 }
 
-function mutateLearnings<T>(root: string, mutate: (data: LearningsFile) => T): T {
+function mutateLearnings<T>(root: string, mutate: (records: unknown[]) => T): T {
   const file = learningsPath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   return withFileLockSync(file, () => {
-    const { data, corrupt } = readLearnings(root);
+    const { doc, records, corrupt } = readRaw(root);
     if (corrupt) {
       const rel = path.relative(root, file);
       throw new Error(`${rel} cannot be read, so nothing was changed. Fix or move it, then retry.`);
     }
-    const result = mutate(data);
-    data.updatedAt = new Date().toISOString();
-    writeJsonAtomicSync(file, data);
+    const result = mutate(records);
+    writeJsonAtomicSync(file, { ...doc, version: '1.0.0', updatedAt: new Date().toISOString(), learnings: records });
     return result;
   });
 }
 
-function nextId(existing: Learning[]): string {
-  const max = existing.reduce((m, l) => Math.max(m, Number(/^learn-(\d+)$/.exec(l.id)?.[1] ?? 0)), 0);
+/** Ids already used by any record, valid or not, so a new lesson never takes an old one's id. */
+function nextId(records: unknown[]): string {
+  const max = records.reduce<number>((m, r) => {
+    const id = r && typeof r === 'object' ? (r as { id?: unknown }).id : undefined;
+    return Math.max(m, Number(typeof id === 'string' ? /^learn-(\d+)$/.exec(id)?.[1] ?? 0 : 0));
+  }, 0);
   return `learn-${String(max + 1).padStart(2, '0')}`;
 }
 
-/** Trims, removes control characters that could hide text in a terminal, and caps the length. */
+// Control characters, bidi overrides, zero-width marks and line/paragraph separators can make the
+// text a human approves read differently from what a worker receives.
+const HIDDEN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
+const HIDDEN_AND_NEWLINE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
+
 function clean(text: string | undefined, max: number, keepNewlines = false): string | undefined {
-  const controls = keepNewlines ? /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g : /[\u0000-\u001f\u007f-\u009f]/g;
-  const t = text?.replace(controls, keepNewlines ? '' : ' ').trim();
+  const t = text?.replace(keepNewlines ? HIDDEN : HIDDEN_AND_NEWLINE, keepNewlines ? '' : ' ').trim();
   if (!t) return undefined;
   return t.length > max ? t.slice(0, max) : t;
 }
 
 /** Maps role aliases (`backend-agent`, `qa`) to the role names tasks use, or null when unknown. */
-export function canonicalRole(role: string | undefined): string | null {
+export function canonicalRole(role: string | null | undefined): string | null {
   const r = (role ?? '').trim().toLowerCase();
   if (!r) return null;
   const known = SUBAGENT_TYPES as readonly string[];
@@ -134,6 +140,9 @@ export function canonicalRole(role: string | undefined): string | null {
   const hit = candidates.find((c) => c && known.includes(c));
   return hit ? hit.replace(/^(backend|frontend|database)-agent$/, '$1').replace(/^qa-agent$/, 'qa-tester') : null;
 }
+
+/** A lesson's role in canonical form, also for records saved before roles were normalised. */
+const roleOf = (l: Learning): string | null => (l.role ? canonicalRole(l.role) ?? l.role.toLowerCase() : null);
 
 function normalizePattern(p: string): string {
   return p.trim().replace(/\\/g, '/').replace(/^\.\//, '');
@@ -174,13 +183,13 @@ export function proposeLearning(root: string, input: ProposeInput): Learning {
   const files = cleanFiles(input.files);
   const taskId = clean(input.taskId, 64);
   const proposedBy = clean(input.proposedBy, 64);
-  return mutateLearnings(root, (data) => {
-    const pending = data.learnings.filter((l) => l.status === 'proposed').length;
+  return mutateLearnings(root, (records) => {
+    const pending = records.filter((r) => isLearning(r) && r.status === 'proposed').length;
     if (pending >= MAX_PENDING) {
       throw new Error(`${pending} lessons already wait for approval. Approve or reject some before proposing more.`);
     }
     const item: Learning = {
-      id: nextId(data.learnings),
+      id: nextId(records),
       status: 'proposed',
       insight,
       ...(details ? { details } : {}),
@@ -190,58 +199,39 @@ export function proposeLearning(root: string, input: ProposeInput): Learning {
       ...(proposedBy ? { proposedBy } : {}),
       createdAt: new Date().toISOString(),
     };
-    data.learnings.push(item);
+    records.push(item);
     return item;
   });
 }
 
-function readKey(root: string): Buffer | null {
-  try {
-    const key = parseJsonLoose<{ key?: unknown }>(fs.readFileSync(approvalKeyPath(root), 'utf8')).key;
-    return typeof key === 'string' && /^[0-9a-f]{64}$/.test(key) ? Buffer.from(key, 'hex') : null;
-  } catch {
-    return null;
-  }
+/** What a worker receives from a lesson; a decision applies only if this is what the human saw. */
+export function lessonContent(l: Pick<Learning, 'insight' | 'details' | 'role' | 'files'>): string {
+  return JSON.stringify([l.insight, l.details ?? '', l.role ?? '', l.files ?? []]);
 }
 
-function readOrCreateKey(root: string): Buffer {
-  const existing = readKey(root);
-  if (existing) return existing;
-  const key = crypto.randomBytes(32);
-  fs.mkdirSync(path.dirname(approvalKeyPath(root)), { recursive: true });
-  const text = `${JSON.stringify({ key: key.toString('hex') }, null, 2)}\n`;
-  fs.writeFileSync(approvalKeyPath(root), text, { mode: 0o600 });
-  return key;
-}
-
-/** Signs exactly what a worker will receive, so any later edit to it voids the approval. */
-function sign(key: Buffer, l: Learning): string {
-  const content = JSON.stringify([l.id, 'approved', l.insight, l.details ?? '', l.role ?? '', l.files ?? []]);
-  return crypto.createHmac('sha256', key).update(content).digest('hex');
-}
-
-export function hasValidSignature(root: string, l: Learning, key: Buffer | null = readKey(root)): boolean {
-  if (!key || l.status !== 'approved' || typeof l.signature !== 'string') return false;
-  const expected = Buffer.from(sign(key, l), 'hex');
-  const actual = Buffer.from(l.signature, 'hex');
-  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
-}
-
-/** Approves or rejects a lesson. Returns an error message, or the updated lesson. */
-export function decideLearning(root: string, id: string, decision: LearningDecision, note?: string): Learning | string {
-  return mutateLearnings(root, (data) => {
-    const item = data.learnings.find((l) => l.id === id);
+/**
+ * Approves or rejects a lesson. Pass `seen` (from lessonContent) to refuse when the lesson changed
+ * after the human looked at it. Returns an error message, or the updated lesson.
+ */
+export function decideLearning(
+  root: string,
+  id: string,
+  decision: LearningDecision,
+  note?: string,
+  seen?: string,
+): Learning | string {
+  return mutateLearnings(root, (records) => {
+    const item = records.find((r): r is Learning => isLearning(r) && r.id === id);
     if (!item) return `No learning ${id}.`;
-    if (item.status === decision && (decision === 'rejected' || hasValidSignature(root, item))) {
-      return `${id} is already ${decision}.`;
+    if (seen !== undefined && lessonContent(item) !== seen) {
+      return `${id} changed while you were reviewing it. Nothing was decided; run the command again.`;
     }
+    if (item.status === decision) return `${id} is already ${decision}.`;
     item.status = decision;
     item.decidedAt = new Date().toISOString();
     const cleanNote = clean(note, MAX_DETAILS);
     if (cleanNote) item.decisionNote = cleanNote;
     else delete item.decisionNote;
-    if (decision === 'approved') item.signature = sign(readOrCreateKey(root), item);
-    else delete item.signature;
     return item;
   });
 }
@@ -249,14 +239,8 @@ export function decideLearning(root: string, id: string, decision: LearningDecis
 export function listLearnings(root: string, filter: { status?: LearningStatus; role?: string } = {}): Learning[] {
   const role = filter.role ? canonicalRole(filter.role) ?? filter.role.toLowerCase() : undefined;
   return loadLearnings(root).learnings.filter(
-    (l) => (!filter.status || l.status === filter.status) && (!role || l.role === role),
+    (l) => (!filter.status || l.status === filter.status) && (!role || roleOf(l) === role),
   );
-}
-
-/** Approved lessons whose signature no longer matches: edited or flipped after approval. */
-export function unverifiedApprovals(root: string): Learning[] {
-  const key = readKey(root);
-  return loadLearnings(root).learnings.filter((l) => l.status === 'approved' && !hasValidSignature(root, l, key));
 }
 
 const globBase = (p: string): string => p.split(/[*?[{]/)[0];
@@ -273,24 +257,23 @@ function overlaps(target: string, pattern: string): boolean {
 }
 
 /**
- * Approved, correctly signed lessons for one task: those scoped to its files first, then to its
- * role, then project-wide ones, newest first within each, capped at MAX_TASK_LEARNINGS.
+ * Approved lessons for one task: those scoped to its files first, then to its role, then
+ * project-wide ones, newest first within each, capped at MAX_TASK_LEARNINGS.
  */
 export function learningsForTask(
   root: string,
   task: { assignedSubagent?: string; targetFiles?: string[] },
 ): Learning[] {
-  const key = readKey(root);
-  if (!key) return [];
   const role = canonicalRole(task.assignedSubagent);
   const targets = Array.isArray(task.targetFiles) ? task.targetFiles.filter((t) => typeof t === 'string') : [];
   const scored: { item: Learning; score: number; order: number }[] = [];
   loadLearnings(root).learnings.forEach((item, order) => {
-    if (!hasValidSignature(root, item, key)) return;
-    if (item.role && item.role !== role) return;
+    if (item.status !== 'approved') return;
+    const itemRole = roleOf(item);
+    if (itemRole && itemRole !== role) return;
     const fileMatch = item.files?.length ? targets.some((t) => item.files!.some((p) => overlaps(t, p))) : null;
     if (fileMatch === false) return;
-    scored.push({ item, score: (fileMatch ? 2 : 0) + (item.role ? 1 : 0), order });
+    scored.push({ item, score: (fileMatch ? 2 : 0) + (itemRole ? 1 : 0), order });
   });
   return scored
     .sort((a, b) => b.score - a.score || b.order - a.order)

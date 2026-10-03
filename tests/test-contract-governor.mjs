@@ -436,8 +436,11 @@ try {
   git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '-A']);
   git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'weaken']);
 
-  const rejected = await repoCli(['task', 'complete', 't-weaken', '--no-verify']);
-  assert.equal(rejected.code, 1, 'a headless --no-verify must not bypass the guard');
+  const headless = await repoCli(['task', 'complete', 't-weaken', '--no-verify']);
+  assert.equal(headless.code, 1, 'a headless --no-verify is refused outright');
+  assert.match(headless.stdout + headless.stderr, /interactive terminal/);
+  const rejected = await repoCli(['task', 'complete', 't-weaken']);
+  assert.equal(rejected.code, 1, 'the guard refuses weakened tests');
   const output = rejected.stdout + rejected.stderr;
   for (const rule of ['TEST_ASSERTIONS_REMOVED', 'TEST_CASES_REMOVED', 'TESTS_SKIPPED', 'TEST_SUITE_DELETED', 'TEST_SCRIPT_WEAKENED']) {
     assert.ok(output.includes(rule), `expected ${rule} in:\n${output}`);

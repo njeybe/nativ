@@ -72,17 +72,39 @@ export function resolveMainRoot(startDirArg?: string): string {
   const marker = `${path.sep}.worktrees${path.sep}`;
   const idx = `${start}${path.sep}`.indexOf(marker);
   if (idx !== -1 && fs.existsSync(path.join(start.slice(0, idx), '.ai'))) return start.slice(0, idx);
-  try {
-    const gitFile = path.join(start, '.git');
-    if (fs.lstatSync(gitFile).isFile()) {
-      const gitDir = /^gitdir:\s*(.+)$/im.exec(fs.readFileSync(gitFile, 'utf8'))?.[1]?.trim();
-      const mainRepo = gitDir ? path.resolve(path.resolve(start, gitDir), '..', '..', '..') : '';
-      if (mainRepo && fs.existsSync(path.join(mainRepo, '.ai'))) return mainRepo;
-    }
-  } catch {
-    // No .git file: not a linked worktree.
+  const linked = linkedWorktreeMain(start);
+  return linked ?? resolveProjectRoot(start);
+}
+
+const isInside = (parent: string, child: string): boolean => {
+  const rel = path.relative(parent, child);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+};
+
+/**
+ * For a git linked worktree, the main checkout from git's own `commondir` record. Only a checkout
+ * that contains the worktree counts, so an edited `.git` file cannot point somewhere else.
+ */
+function linkedWorktreeMain(start: string): string | null {
+  let top = start;
+  while (!fs.existsSync(path.join(top, '.git'))) {
+    const up = path.dirname(top);
+    if (up === top) return null;
+    top = up;
   }
-  return resolveProjectRoot(start);
+  try {
+    const gitFile = path.join(top, '.git');
+    if (!fs.lstatSync(gitFile).isFile()) return null;
+    const gitDirRaw = /^gitdir:\s*(.+)$/im.exec(fs.readFileSync(gitFile, 'utf8'))?.[1]?.trim();
+    if (!gitDirRaw) return null;
+    const gitDir = path.resolve(top, gitDirRaw);
+    const common = fs.readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim();
+    const mainRepo = path.dirname(path.resolve(gitDir, common));
+    return isInside(mainRepo, top) && fs.existsSync(path.join(mainRepo, '.ai')) ? mainRepo : null;
+  } catch {
+    // No commondir (a submodule, or not a worktree): not a linked worktree.
+    return null;
+  }
 }
 
 /**

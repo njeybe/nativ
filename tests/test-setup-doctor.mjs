@@ -718,7 +718,7 @@ const doctorJson = async (root, options = {}) => {
   assert.equal(check(report, 'role-guides:missing'), undefined);
   assert.match(check(report, 'role-guides:edited').message, /backend\.md/);
   assert.match(check(report, 'learnings').message, /1 proposed lesson waits/);
-  assert.equal(check(report, 'learnings:unverified'), undefined);
+  assert.equal(check(report, 'learnings:unreadable'), undefined);
 
   // Aliases, URL look-alikes, local settings, unreadable settings, old specs, unsigned approvals.
   const plan = readJson(root, '.ai/master_plan.json');
@@ -729,16 +729,14 @@ const doctorJson = async (root, options = {}) => {
   fs.writeFileSync(path.join(root, '.claude', 'settings.local.json'), JSON.stringify({ env: { KEY: fakeKey } }));
   fs.writeFileSync(path.join(root, '.claude', 'settings.json'), '{ not json');
   fs.writeFileSync(path.join(root, '.ai', 'ui_specs.md'), '# UI\n\n## Anti-Generic Checklist\n- [ ] No emojis.\n');
-  fs.writeFileSync(path.join(root, '.ai', 'learnings.json'), JSON.stringify({ version: '1.0.0', learnings: [
-    { id: 'learn-01', status: 'approved', insight: 'hand-approved', createdAt: '' },
-  ] }));
+  fs.writeFileSync(path.join(root, '.ai', 'learnings.json'), '{ "learnings": [ ');
   const second = await doctorJson(root);
   assert.equal(check(second, 'role-guides:missing'), undefined, 'backend-agent uses backend.md');
   assert.ok(!second.checks.some((c) => c.id.startsWith('secret:.ai/context.md')), 'a port plus an @ path is not a password');
   assert.equal(check(second, 'secret:.claude/settings.local.json:Anthropic or OpenAI key').status, 'fail');
   assert.equal(check(second, 'guardrail:.claude/settings.json:unreadable').status, 'warn');
   assert.match(check(second, 'specs:marketing').message, /predates the Marketing pages/);
-  assert.match(check(second, 'learnings:unverified').message, /learn-01/);
+  assert.equal(check(second, 'learnings:unreadable').status, 'warn', 'an unreadable lessons file is reported');
   assert.ok(!JSON.stringify(second).includes(fakeKey), 'still never prints the secret');
   cleanup(root);
   console.log('✔ Test 21: doctor flags disabled hooks, bypass mode, secrets in agent-read files, edited or missing role guides and waiting lessons');

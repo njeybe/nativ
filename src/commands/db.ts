@@ -8,6 +8,7 @@ import { disconnectedStatus, introspectDatabase, type IntrospectionResult } from
 import { diffSchemas, loadContractTables } from '../db/diff.js';
 import { DEFAULT_STUDIO_PORT, startStudioServer, writeContractSchema } from '../server/studio-server.js';
 import { renderStudioHtml } from '../server/studio-ui.js';
+import { refuseHeadless } from '../core/human-gate.js';
 
 /**
  * `nativ db` command handlers.
@@ -371,6 +372,7 @@ export async function runDbSync(targetDirArg?: string, options: { source?: strin
     console.log(pc.yellow('Dry run: no files were changed. Re-run with --yes to write .ai/db_schema.json.\n'));
     return;
   }
+  if (refuseHeadless('nativ db sync --yes')) return;
 
   const filePath = writeContractSchema(targetDir, result.status, result.tables);
   const count = result.tables.length;

@@ -23,12 +23,14 @@ import {
   resolveGitHead,
   appendEscalation,
   taskEscalationHistory,
+  closeEscalationsForTask,
 } from '../governor/index.js';
 import { loadPlan, savePlan, withPlanLock } from '../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../core/telemetry.js';
 import { resolveSpecSlices } from '../core/spec-slices.js';
 import { resolveWorkerModel } from '../core/model-routing.js';
 import { addTaskUnlock, removeTaskUnlock } from '../core/enforcement.js';
+import { refuseHeadless } from '../core/human-gate.js';
 import { learningsForTask, type Learning } from '../core/learnings.js';
 
 export { loadPlan, savePlan, withPlanLock };
@@ -438,6 +440,7 @@ export interface TaskUnlockOptions {
  * tool: an agent must not be able to remove its own guardrail.
  */
 export async function runTaskUnlock(taskId: string, targetDirArg?: string, options: TaskUnlockOptions = {}) {
+  if (!options.revoke && refuseHeadless('nativ task unlock')) return;
   const { targetDir, planPath } = getPlanPath(targetDirArg);
   const plan = loadPlan(planPath);
   if (!plan) {
@@ -471,6 +474,7 @@ export async function runTaskComplete(
   targetDirArg?: string,
   options: TaskCompleteOptions = {}
 ) {
+  if (options.skipVerify && refuseHeadless('nativ task complete --no-verify')) return;
   const { targetDir, planPath } = getPlanPath(targetDirArg);
   const plan = loadPlan(planPath);
   if (!plan) {
@@ -630,6 +634,8 @@ export async function runTaskComplete(
 
   CircuitBreaker.recordSuccess(targetDir, taskId);
   CircuitBreaker.clearBaseline(targetDir, taskId);
+  const closed = closeEscalationsForTask(targetDir, taskId, 'Closed automatically: the task was completed.');
+  if (closed.length) console.log(pc.dim(`  Closed its open escalations: ${closed.join(', ')}`));
 
   try {
     await recordTaskComplete(targetDir, foundTask, vResult, options.notes);

@@ -3,6 +3,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { runTaskUnlock } from '../dist/commands/task.js';
+
+/** Runs fn as if from an interactive terminal: the human-only commands refuse to run headless. */
+async function asHuman(fn) {
+  const before = [process.stdin.isTTY, process.stdout.isTTY];
+  process.stdin.isTTY = true;
+  process.stdout.isTTY = true;
+  try {
+    return await fn();
+  } finally {
+    [process.stdin.isTTY, process.stdout.isTTY] = before;
+  }
+}
+
 
 console.log('--- Starting v2 End-to-End Scenario ---');
 
@@ -103,7 +117,8 @@ try {
   assert.equal(nativ('setup', root, '--enforcement', 'block').status, 0);
   const denied = runHook(hookCommand('PreToolUse'), write(at('src', 'other.ts')));
   assert.equal(denied.hookSpecificOutput.permissionDecision, 'deny');
-  assert.equal(nativ('task', 'unlock', taskId, '--reason', 'e2e').status, 0);
+  assert.equal(nativ('task', 'unlock', taskId, '--reason', 'e2e').status, 1, 'agents cannot unlock headless');
+  await asHuman(() => runTaskUnlock(taskId, root, { reason: 'e2e' }));
   assert.equal(runHook(hookCommand('PreToolUse'), write(at('src', 'other.ts'))), null, 'unlock lifts the scope rule');
   assert.equal(runHook(hookCommand('PreToolUse'), write(at('.env'))).hookSpecificOutput.permissionDecision, 'deny', 'secrets stay protected while unlocked');
   assert.equal(nativ('task', 'unlock', taskId, '--revoke').status, 0);

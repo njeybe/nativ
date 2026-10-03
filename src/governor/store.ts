@@ -150,3 +150,28 @@ export function taskEscalationHistory(targetDir: string, taskId: string, limit =
       ...(e.resolvedAt ? { resolvedAt: clip(e.resolvedAt) } : {}),
     }));
 }
+
+/**
+ * Closes the pending escalations of a task that has just completed: the question was settled one way
+ * or another, so it should not keep asking for a decision. Returns the ids it closed.
+ */
+export function closeEscalationsForTask(targetDir: string, taskId: string, note: string): string[] {
+  const file = escalationPath(targetDir);
+  if (!fs.existsSync(file)) return [];
+  return withFileLockSync(file, () => {
+    const data = loadEscalationFile(targetDir, path.basename(targetDir));
+    const closed: string[] = [];
+    for (const e of data.escalations) {
+      if (!e || e.taskId !== taskId || (e.status && e.status !== 'pending_review')) continue;
+      e.status = 'resolved';
+      e.resolutionNotes = note;
+      e.resolvedAt = new Date().toISOString();
+      closed.push(e.id);
+    }
+    if (closed.length) {
+      data.lastUpdated = new Date().toISOString();
+      writeJsonAtomicSync(file, data);
+    }
+    return closed;
+  });
+}

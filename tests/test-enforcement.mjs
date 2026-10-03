@@ -16,6 +16,19 @@ import {
 } from '../dist/core/enforcement.js';
 import { runHookCheck, getHookStatus } from '../dist/commands/hook.js';
 import { runTaskUnlock } from '../dist/commands/task.js';
+
+/** Runs fn as if from an interactive terminal: the human-only commands refuse to run headless. */
+async function asHuman(fn) {
+  const before = [process.stdin.isTTY, process.stdout.isTTY];
+  process.stdin.isTTY = true;
+  process.stdout.isTTY = true;
+  try {
+    return await fn();
+  } finally {
+    [process.stdin.isTTY, process.stdout.isTTY] = before;
+  }
+}
+
 import { recordRoleViolation, MAX_ROLE_VIOLATIONS } from '../dist/core/telemetry.js';
 
 console.log('--- Starting Role Enforcement Tests ---');
@@ -217,7 +230,12 @@ const payload = (root, tool, filePath, extra = {}) => ({
   const realLog = console.log;
   console.log = (...a) => logs.push(a.join(' '));
   try {
-    await runTaskUnlock('task-a', root, { reason: 'refactor touches shared file' });
+    process.exitCode = undefined;
+    await runTaskUnlock('task-a', root, { reason: 'headless' });
+    assert.equal(process.exitCode, 1, 'a headless unlock is refused');
+    assert.equal(isTaskUnlocked(root, 'task-a'), false);
+    process.exitCode = undefined;
+    await asHuman(() => runTaskUnlock('task-a', root, { reason: 'refactor touches shared file' }));
     assert.equal(isTaskUnlocked(root, 'task-a'), true);
     assert.equal(out().decision, 'allow', 'an unlocked task may edit outside targetFiles');
     assert.equal(checkWrite({ filePath: at(root, '.ai', 'context.md'), toolName: 'Write', cwd: root }).decision, 'deny', 'contracts stay protected');
@@ -228,7 +246,7 @@ const payload = (root, tool, filePath, extra = {}) => ({
     await runTaskUnlock('task-a', root, { revoke: true });
     assert.equal(out().decision, 'deny', 're-locked');
     process.exitCode = undefined;
-    await runTaskUnlock('task-missing', root, {});
+    await asHuman(() => runTaskUnlock('task-missing', root, {}));
     assert.equal(process.exitCode, 1, 'unknown task is an error');
     process.exitCode = undefined;
   } finally {
@@ -362,8 +380,9 @@ const payload = (root, tool, filePath, extra = {}) => ({
   assert.equal(parsed.mode, 'block');
   assert.deepEqual(parsed.activeTasks.map((t) => t.id), ['task-a']);
 
-  const unlock = run('', ['task', 'unlock', 'task-a', root, '--reason', 'cli test']);
-  assert.equal(unlock.status, 0);
+  const headless = run('', ['task', 'unlock', 'task-a', root, '--reason', 'cli test']);
+  assert.equal(headless.status, 1, 'the CLI refuses a headless unlock');
+  await asHuman(() => runTaskUnlock('task-a', root, { reason: 'cli test' }));
   assert.equal(JSON.parse(run(JSON.stringify(payload(root, 'Write', at(root, 'src', 'other.ts')))).stdout || '{}').hookSpecificOutput, undefined, 'unlocked through the CLI');
   cleanup(root);
   console.log('✔ Test 14: the CLI hook answers over stdin, always exits 0, and unlock works end to end');

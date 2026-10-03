@@ -166,26 +166,43 @@ export interface VerifyPhasesConfig {
   error?: string;
 }
 
+/** Reads the file, retrying once: antivirus or an editor saving can briefly lock it on Windows. */
+function readConfigText(file: string): string | null {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return fs.readFileSync(file, 'utf8');
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') return null;
+      if (attempt >= 1) throw err;
+    }
+  }
+}
+
 /** `verifyPhases` from the main checkout's `.nativ/config.json`, never from a worktree's own copy. */
 export function loadVerifyPhases(configDir: string): VerifyPhasesConfig {
-  let raw: string;
+  let raw: string | null;
   try {
-    raw = fs.readFileSync(path.join(resolveMainRoot(configDir), '.nativ', 'config.json'), 'utf8');
+    raw = readConfigText(path.join(resolveMainRoot(configDir), '.nativ', 'config.json'));
   } catch (err: any) {
-    if (err?.code === 'ENOENT') return { phases: [] };
     return { phases: [], error: `.nativ/config.json cannot be read (${err?.message})` };
   }
+  if (raw === null) return { phases: [] };
+  if (!raw.trim()) return { phases: [], error: '.nativ/config.json is empty' };
   let phases: unknown;
   try {
-    phases = raw.trim() ? parseJsonLoose<{ verifyPhases?: unknown }>(raw)?.verifyPhases : undefined;
+    phases = parseJsonLoose<{ verifyPhases?: unknown }>(raw)?.verifyPhases;
   } catch (err: any) {
     return { phases: [], error: `.nativ/config.json is not valid JSON (${err?.message})` };
   }
-  if (phases === undefined) return { phases: [] };
-  const isPhase = (p: any) => typeof p?.name === 'string' && p.name.trim() && typeof p.run === 'string' && p.run.trim();
-  const valid = Array.isArray(phases) && phases.every(isPhase);
-  if (!valid) return { phases: [], error: 'verifyPhases must be a list of { "name": "...", "run": "..." } entries' };
-  return { phases: (phases as VerifyPhase[]).map((p) => ({ name: p.name.trim(), run: p.run.trim() })) };
+  if (phases === undefined || phases === null) return { phases: [] };
+  // An empty or null "run" switches a phase off; a missing or mistyped field is a mistake.
+  const isEntry = (p: any) => typeof p?.name === 'string' && p.name.trim()
+    && (p.run === null || typeof p.run === 'string');
+  if (!Array.isArray(phases) || !phases.every(isEntry)) {
+    return { phases: [], error: 'verifyPhases must be a list of { "name": "...", "run": "..." } entries' };
+  }
+  const active = (phases as Array<{ name: string; run: string | null }>).filter((p) => p.run && p.run.trim());
+  return { phases: active.map((p) => ({ name: p.name.trim(), run: p.run!.trim() })) };
 }
 
 /** Outcome of running the configured phases once; shared by every task in a batch. */
@@ -226,7 +243,10 @@ export async function runTaskVerification(
 ): Promise<VerificationResult> {
   const configDir = options.configDir ?? options.cwd;
   const outcome = options.phases ?? (await runVerifyPhases(options.cwd, configDir, options.timeout));
-  if (outcome.failure) return { ...outcome.failure, phases: outcome.reports };
+  // In a batch the shared phase time is counted once, by the batch, not again for every task.
+  if (outcome.failure) {
+    return { ...outcome.failure, phases: outcome.reports, ...(options.phases ? { durationMs: 0 } : {}) };
+  }
   const raw = await executeVerification(task.verificationCommand, options.cwd, options.timeout);
   if (outcome.reports.length) {
     raw.phases = outcome.reports;

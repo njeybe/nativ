@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { EXAMPLE_ENV_FILES } from '../db/env-parser.js';
-import { resolveProjectRoot } from './root-resolver.js';
+import { resolveMainRoot, resolveProjectRoot } from './root-resolver.js';
 
 export type EnforcementMode = 'off' | 'warn' | 'block';
 export type ViolationRule = 'protected_path' | 'secret_path' | 'out_of_scope';
@@ -241,8 +241,18 @@ function verdict(mode: EnforcementMode, root: string, relPath: string | null, ta
  */
 export function checkWrite(input: WriteCheckInput): WriteCheckResult {
   const root = resolveProjectRoot(input.cwd);
-  const mode = input.mode ?? loadEnforcementMode(root);
-  const relPath = toProjectRelative(root, input.filePath, input.cwd);
+  // Settings and unlocks live in the main checkout; a worktree's own copy must not decide them.
+  const mainRoot = resolveMainRoot(input.cwd);
+  const mode = input.mode ?? loadEnforcementMode(mainRoot);
+  let relPath = toProjectRelative(root, input.filePath, input.cwd);
+  if (relPath === null && mainRoot !== root) {
+    // A worktree session can reach the main checkout through ../..; judge those paths as its own.
+    const mainRel = toProjectRelative(mainRoot, input.filePath, input.cwd);
+    const guarded = (p: string) => isSecretPath(p) || isNativSettingsPath(p) || isProtectedContractPath(p);
+    if (mainRel !== null && guarded(mainRel)) {
+      relPath = mainRel;
+    }
+  }
   const allow: WriteCheckResult = { decision: 'allow', mode, root, relPath, taskIds: [] };
 
   if (mode === 'off' || relPath === null) return allow;
@@ -291,7 +301,7 @@ export function checkWrite(input: WriteCheckInput): WriteCheckResult {
   }
 
   const taskIds = tasks.map((t) => t.id);
-  if (tasks.some((t) => isTaskUnlocked(root, t.id))) return { ...allow, taskIds };
+  if (tasks.some((t) => isTaskUnlocked(mainRoot, t.id))) return { ...allow, taskIds };
   if (tasks.some((t) => t.targetFiles.some((target) => matchesTarget(relPath, target)))) return { ...allow, taskIds };
 
   const label = taskIds.length === 1 ? `task ${taskIds[0]}` : `tasks ${taskIds.join(', ')}`;

@@ -195,7 +195,13 @@ try {
   const ok = await cli(['task', 'complete', 'task-09', dir]);
   assert.equal(ok.code, 0, ok.stderr);
   const forced = await cli(['task', 'complete', 'task-10', dir, '--no-verify']);
-  assert.equal(forced.code, 0, forced.stderr);
+  assert.equal(forced.code, 1, 'a headless --no-verify is refused');
+  assert.match(forced.stderr, /interactive terminal/);
+  const fixed = readPlan(dir);
+  fixed.milestones.at(-1).tasks[1].verificationCommand = 'none';
+  fs.writeFileSync(path.join(dir, '.ai', 'master_plan.json'), JSON.stringify(fixed, null, 2));
+  const done = await cli(['task', 'complete', 'task-10', dir]);
+  assert.equal(done.code, 0, done.stderr);
   assert.equal(readPlan(dir).milestones.at(-1).status, 'completed', 'fast-path milestone completes with its tasks');
   const fast3 = await addJson(dir, 'Another quick fix', ['--fast-path']);
   assert.equal(fast3.json.milestoneId, 'm4');

@@ -2,12 +2,14 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import pc from 'picocolors';
 import { resolveMainRoot } from '../core/root-resolver.js';
+import { refuseHeadless } from '../core/human-gate.js';
 import {
   LEARNING_STATUSES,
   proposeLearning,
   decideLearning,
   listLearnings,
   loadLearnings,
+  lessonContent,
   type Learning,
   type LearningDecision,
   type LearningStatus,
@@ -86,12 +88,7 @@ export async function runLearnDecide(
   targetDirArg?: string,
   options: { note?: string; yes?: boolean } = {},
 ) {
-  // A headless agent has no terminal, so this gate holds even where no permission rule is installed.
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    const command = decision === 'approved' ? 'approve' : 'reject';
-    fail(`nativ learn ${command} needs an interactive terminal; agents cannot run it.`);
-    return;
-  }
+  if (refuseHeadless(`nativ learn ${decision === 'approved' ? 'approve' : 'reject'}`)) return;
   const root = rootOf(targetDirArg);
   const current = loadLearnings(root).learnings.find((l) => l.id === id);
   if (!current) {
@@ -107,7 +104,7 @@ export async function runLearnDecide(
   }
   let result: Learning | string;
   try {
-    result = decideLearning(root, id, decision, options.note);
+    result = decideLearning(root, id, decision, options.note, lessonContent(current));
   } catch (err: any) {
     fail(err.message);
     return;

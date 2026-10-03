@@ -697,8 +697,15 @@ function buildLearningsBlock(task: MasterPlanTask, rootDir: string | undefined):
 }
 
 /** Keeps stored text from closing the block it sits in and passing as instructions. */
-function untag(text: string, tag: string): string {
-  return text.replace(new RegExp(`</?\\s*${tag}\\b[^>]*>`, 'gi'), '');
+export function untag(text: string, tag: string): string {
+  // Repeat until nothing changes: a tag split around another one would otherwise rebuild itself.
+  const pattern = new RegExp(`</?\\s*${tag}\\b[^>]*>`, 'gi');
+  let out = text;
+  for (let prev = ''; prev !== out; ) {
+    prev = out;
+    out = out.replace(pattern, '');
+  }
+  return out;
 }
 
 export function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | null, useWorktree: boolean, rootDir?: string): string {
@@ -748,14 +755,6 @@ class ToolInputError extends Error {}
 /** .env* (except .env.example), *.pem, *.key and .nativ|.agentj/*.local.json. */
 const SECRET_PATH_PATTERN =
   /(^|[\\/\s'"=])(\.env(?!\.example\b)[\w.-]*|[\w.-]+\.(pem|key)|\.(nativ|agentj)[\\/][\w.-]*\.local\.json)(?=$|[\s'";|&)])/i;
-
-/** The same guardrails `nativ setup` denies to Claude Code agents, for the native runner's shell. */
-const HUMAN_ONLY_COMMANDS: ReadonlyArray<{ label: string; pattern: RegExp }> = [
-  { label: 'Approving or rejecting a lesson', pattern: /\blearn\s+(approve|reject)\b/i },
-  { label: 'Unlocking a task', pattern: /\btask\s+unlock\b/i },
-  { label: 'Syncing the database schema', pattern: /\bdb\s+sync\b/i },
-  { label: 'Skipping verification', pattern: /--no-verify\b/i },
-];
 
 /** Top-level directories of POSIX, macOS and Git Bash (/c/, /d/ drive mounts) filesystems. */
 const FILESYSTEM_ROOT =
@@ -818,8 +817,6 @@ export function checkNativeBashCommand(command: string, allowed: ReadonlySet<str
   if (/\bgit\s+push\b|\bnpm\s+publish\b/.test(command)) {
     return 'Publishing actions (git push, npm publish) are reserved for the operator.';
   }
-  const human = HUMAN_ONLY_COMMANDS.find((c) => c.pattern.test(command));
-  if (human) return `${human.label} is reserved for the operator; agents cannot run it.`;
   if (/(^|[\s'"=/\\])\.nativ[\\/]/i.test(command)) {
     return 'nativ settings (.nativ/) are off-limits to agents; ask the operator to change them.';
   }
@@ -901,7 +898,7 @@ function canonicalize(target: string): string {
  * `.ai/` and `node_modules/` junctions the supervisor mounts into worktrees;
  * writes may not touch them at all.
  */
-function resolveEditorPath(workspace: string, projectRoot: string, raw: unknown, mode: 'read' | 'write'): string {
+export function resolveEditorPath(workspace: string, projectRoot: string, raw: unknown, mode: 'read' | 'write'): string {
   if (typeof raw !== 'string' || !raw.trim()) throw new ToolInputError('"path" is required.');
   if (/%2e|%2f|%5c/i.test(raw)) throw new ToolInputError('URL-encoded path segments are not allowed.');
 
@@ -914,7 +911,7 @@ function resolveEditorPath(workspace: string, projectRoot: string, raw: unknown,
     throw new ToolInputError('Secret files (.env, *.pem, *.key, .nativ/*.local.json) are off-limits; only .env.example may be read.');
   }
   const top = rel.split(/[\\/]/)[0];
-  if (mode === 'write' && ['.ai', '.nativ', 'node_modules', '.git'].includes(top)) {
+  if (mode === 'write' && ['.ai', '.nativ', 'node_modules', '.git'].includes(top.toLowerCase())) {
     throw new ToolInputError(`'${top}/' is read-only; contract changes go through \`nativ task escalate\`.`);
   }
 
