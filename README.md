@@ -1,232 +1,418 @@
 # nativ
 
-A role-based multi-agent workflow for AI coding agents. **Claude Code is the default**; other agents plug in. `nativ` keeps the design contracts, the task plan and the guardrails in your repository, so the same rules hold whichever tool or model does the work.
+**A role-based workflow harness for AI coding agents.** nativ keeps your design contracts, the task plan and the guardrails in your repository, so the same rules hold whichever agent or model does the work. Claude Code is the default; other agents plug in through `AGENTS.md` and MCP.
 
-> **Package:** `@njeybe/nativ` | **Command:** `nativ`
+[![npm](https://img.shields.io/npm/v/@njeybe/nativ)](https://www.npmjs.com/package/@njeybe/nativ)
+![node](https://img.shields.io/badge/node-%3E%3D20-339933)
+![license](https://img.shields.io/badge/license-MIT-blue)
+
+```bash
+npm install -g @njeybe/nativ     # the package is @njeybe/nativ, the command is nativ
+cd your-project && nativ init    # scaffold .ai/ and the Claude Code configuration
+```
 
 ---
 
-## The idea
+## Contents
 
-Four roles, fixed, plus a read-only explorer for existing code. The model or vendor behind each role is configurable.
+| Start here | Command reference | Reference |
+| :--- | :--- | :--- |
+| [Why nativ](#why-nativ) | [Command map](#command-map) | [Configuration](#configuration) |
+| [Quick start](#quick-start) | [Setup and health](#setup-and-health) | [Guardrails](#guardrails) |
+| [How it works](#how-it-works) | [Tasks](#tasks) | [Files nativ manages](#files-nativ-manages) |
+| [Everyday workflow](#everyday-workflow) | [Verification](#verification) | [MCP server](#mcp-server) |
+| | [Learnings](#learnings) | [Providers](#providers) |
+| | [Escalations and triage](#escalations-and-triage) | [Concurrency and telemetry](#concurrency-and-telemetry) |
+| | [Database](#database) | [Troubleshooting](#troubleshooting) |
+| | [Worktrees](#worktrees) | [For maintainers](#for-maintainers) |
+| | [Studio, tests and benchmarks](#studio-tests-and-benchmarks) | |
 
-```
-   Explorer             reads existing code and reports what is there; cannot edit files
-       |                (the project manager runs it; Sonnet, or Haiku for a quick lookup)
-       v   report, saved as .ai/codebase_map.md once the human approves
-   Architect            designs contracts (database, API, UI); the human approves each step
-       |
-       v   .ai/ contracts + master_plan.json
-   Project Manager      runs the task loop, delegates, reports (the main Claude Code session)
-       |
-       v   one task, one role guide, its own worktree if you like
-   Workers              backend, frontend, database, QA, Flutter, DevOps, security, migration
-       |
-       v
-   Verifier             independent checks; cannot edit files
-```
+---
 
-Why it works:
+## Why nativ
 
-- **Contracts, not chat.** `.ai/db_schema.json`, `.ai/api_contracts.json` and `.ai/ui_specs.md` are the source of truth. Workers implement against them and escalate gaps instead of improvising.
+- **Contracts, not chat.** `.ai/db_schema.json`, `.ai/api_contracts.json` and `.ai/ui_specs.md` are the source of truth. Workers build against them and escalate gaps instead of improvising.
 - **Boundaries enforced by code.** A Claude Code hook checks every file write against the active task, the protected contracts and your secret files. It does not rely on the model remembering a rule.
-- **Independent verification.** Each task has a `verificationCommand` that a gatekeeper re-runs before the task can complete, and a separate verifier agent reviews the result.
+- **Independent verification.** A gatekeeper re-runs each task's checks before it can complete, and a separate verifier agent reviews the result.
+- **A project that remembers.** Settled escalations and human-approved lessons travel with later tasks, so the same gap is not raised twice.
 - **Zero-credential air-gap.** Agents see database structure, never passwords, connection strings or rows.
 
 ---
 
 ## Quick start
 
-### 1. Install
-
-You need Node.js 20 or newer and Git.
+**1. Install.** You need Node.js 20 or newer and Git. More options are in [docs/installation.md](docs/installation.md).
 
 ```bash
 npm install -g @njeybe/nativ
 nativ --version
 ```
 
-The package is `@njeybe/nativ`; the command is `nativ`. More options, including running it without installing, are in [docs/installation.md](docs/installation.md).
-
-### 2. Set up a project
+**2. Set up a project.** `init` scaffolds `.ai/` and runs `setup`, which writes the Claude Code configuration. Setup merges: it never overwrites your own settings, hooks, MCP servers or edited files.
 
 ```bash
 cd your-project
 nativ init
+nativ doctor          # confirm everything is wired
 ```
 
-`nativ init` scaffolds the `.ai/` workflow and then runs `nativ setup`, which writes the Claude Code configuration:
+**3. Trust the folder.** Open Claude Code in the project once and accept the workspace trust dialog. Until you do, Claude Code ignores the project's `permissions.allow` entries.
 
-| File | What it does |
-| :--- | :--- |
-| `.mcp.json` | Registers the `nativ` MCP server |
-| `.claude/settings.json` | Permission rules, the enforcement hook, the session-start orientation hook |
-| `.claude/agents/` | The `architect`, `worker`, `verifier` and `explorer` agents |
-| `AGENTS.md` | The one directive every agent follows. `CLAUDE.md` and `GEMINI.md` point at it |
-| `.nativ/config.json` | Enforcement mode and provider choices |
+**4. Ask Claude to work.** On existing code, start with the explorer; then the architect designs, workers build, and the verifier checks. See [Everyday workflow](#everyday-workflow).
 
-Setup **merges**: it never overwrites your own settings, hooks, MCP servers or edited files. It is safe to run any number of times, and `nativ setup --dry-run` shows what it would change.
-
-Open Claude Code in the folder once and accept the workspace trust dialog. Until you do, Claude Code ignores the project's `permissions.allow` entries.
-
-### 3. About the Claude Code plugin
-
-You do not need the plugin. `nativ setup` writes the same agents, enforcement hook and MCP entry into your project, and also the permission rules that deny `nativ task unlock` and `nativ db sync`, block reading `.env*` files, and make Claude Code ask before any write under `.ai/`. **A plugin cannot ship permission rules**, so `nativ setup` is the complete route.
-
-The plugin files ship inside the package (`plugin/`). To try them for a single Claude Code session, point `claude --plugin-dir` at that folder under your global `node_modules` (`npm root -g` prints its location).
-
-### 4. Work
-
-1. On an existing codebase, ask Claude to run the **explorer** first. It maps your components, routes, models and conventions, and where they differ from the contracts.
-2. Ask Claude to use the **architect** agent to design your contracts. It stops for your approval after the database schema, then the API, then the UI. Claude Code asks you to confirm every write under `.ai/`.
-3. Ask Claude to run `nativ task next` and delegate each task to a **worker** agent. It works only inside the task's `targetFiles`, verifies, and completes.
-4. Ask for a **verifier** pass before you call a milestone done.
-
-### 5. Keep it healthy
-
-```bash
-nativ doctor          # checks the MCP server, hooks, permissions, agents, providers
-nativ doctor --fix    # repairs what it can, idempotently
-```
-
-It also checks the harness itself: a `disableAllHooks` or `bypassPermissions` setting that switches the guardrails off, credentials in files every agent reads (`AGENTS.md`, `.mcp.json`, `.claude/agents/`, `.ai/`; only the file and line are shown), tasks whose role has no guide, and lessons waiting for approval.
-
-Run it after updating Claude Code or nativ. It also asks Claude Code itself whether the `nativ` server connects, and warns when a `nativ` server registered in your user or local scope is shadowing the project's.
-
-### 6. Update
-
-```bash
-npm install -g @njeybe/nativ@latest
-nativ update                      # in each project
-nativ doctor
-```
-
-`nativ update` refreshes the directives, role guides, agents and hooks that nativ wrote and you have not edited. Anything you edited is kept and reported; `nativ update --force` replaces it. It never touches your contracts (`.ai/db_schema.json`, `.ai/api_contracts.json`, `.ai/ui_specs.md`, `.ai/master_plan.json`, `.ai/context.md`). See [CHANGELOG.md](CHANGELOG.md) before upgrading across a major version.
+> **About the Claude Code plugin.** The package also ships a plugin (`plugin/`), but you do not need it: a plugin cannot ship permission rules, so `nativ setup` is the complete route. To try the plugin for one session, point `claude --plugin-dir` at that folder under your global `node_modules` (`npm root -g` prints it).
 
 ---
 
-## Role enforcement
+## How it works
 
-`nativ hook check` runs before every `Write`, `Edit`, `MultiEdit` and `NotebookEdit`. It looks at three things:
+Four roles, fixed, plus a read-only explorer for existing code. The model or vendor behind each role is configurable.
 
-| Rule | Applies to | Meaning |
+```
+   Explorer          reads existing code and reports what is there        (Sonnet; Haiku for lookups)
+       |             saved as .ai/codebase_map.md once you approve
+       v
+   Architect         designs contracts: database, API, UI; you approve each step        (Opus)
+       |             .ai/ contracts + master_plan.json
+       v
+   Project Manager   runs the task loop, delegates, reports           (the main Claude Code session)
+       |             one task, one role guide, its own worktree if you like
+       v
+   Workers           backend, frontend, database, QA, Flutter, DevOps, security, migration
+       |
+       v
+   Verifier          independent checks; cannot edit files                                 (Haiku)
+```
+
+| Role | May | May not |
 | :--- | :--- | :--- |
-| `out_of_scope` | Workers and the project manager | The file is not in the active task's `targetFiles` (exact files, directories with a trailing `/`, and `*`/`**` globs) |
-| `protected_path` | Everyone but the architect | Anything under `.ai/` |
-| `secret_path` | Everyone, architect included | `.env`, `.env.*` (not `.env.example`), `.nativ/*.local.json`, `*.pem`, `*.key` |
+| **Explorer** | Read the codebase; report components, routes, models, conventions and drift from the contracts | Edit anything, design, decide |
+| **Architect** | Design contracts, resolve escalations, write `.ai/` after you approve | Write application code beyond a trivial fix |
+| **Project Manager** | Run the task loop, delegate, run verification, report | Edit `.ai/`, implement tasks itself |
+| **Worker** | Change the files in its task's `targetFiles` | Touch anything else, edit contracts |
+| **Verifier** | Read code, run checks, report findings | Edit files |
 
-Who is the architect? Inside a subagent, Claude Code reports the agent's name, so the `architect` agent (or the plugin's `nativ:architect`) is recognised. For a whole session, start it with `NATIV_ROLE=architect`.
-
-**Modes** (`"enforcement"` in `.nativ/config.json`, or `nativ setup --enforcement <mode>`):
-
-| Mode | Behaviour |
-| :--- | :--- |
-| `warn` (default) | The write goes through, the agent is told why it is out of scope, and the violation is logged to `.ai/telemetry.json` |
-| `block` | The write is denied with the reason |
-| `off` | No checks |
-
-Start in `warn`, look at the log, then switch to `block`. If a task genuinely needs to leave its scope, `nativ task unlock <taskId>` lifts the scope rule for that task (contracts and secrets stay protected) and `--revoke` restores it. Unlock is a CLI command on purpose: it is not an MCP tool, so an agent cannot remove its own guardrail.
-
-`nativ hook status` shows the mode, the role and the active task's scope. Two limits to know: the hook watches the file-editing tools, not shell commands (`sed -i` or a redirect can still write a file), and it fails open, so a broken payload never stops your work. The permission rules that `nativ setup` writes add a second layer.
+Every agent follows one directive, `AGENTS.md`, which `CLAUDE.md` and `GEMINI.md` point at. Subagents cannot start other subagents, so the project manager is the one who runs the explorer, workers and verifier.
 
 ---
 
-## Design-first planning, task fields and model routing
+## Everyday workflow
 
-**Planning levels.** The `.ai/ui_specs.md` template opens with a planning level: Quick (small fix, no design phase), Standard (new screen in an existing design) or Full (new app or redesign). It then walks through the design brief, users and top tasks, real content samples, user flows, design directions with a style tile, wireframes, a component map and one section per component. The architect and frontend/flutter guides were trimmed to match.
-
-**UI/UX design enhancements.** The template supports two intake approaches: Experience-First (start with user flows and wireframes) or Data-First (start with entity relationships and table schemas), both leading to the same component map. The component map now organizes components into semantic trees reflecting their roles in the interface (layout, data display, input, feedback, navigation). Style tiles are stack-aware, showing platform-specific token variants for web breakpoints and Flutter platform adaptations. Typography is specified in context with font scales per platform and semantic role, mapped directly to components. Every interactive element and input carries a mutation state spec: default, hover, focus, disabled, loading, error and success states, documented in wireframe notes and component sections.
-
-**Optional task fields.** A task can carry `specRefs` (anchors such as `ui_specs.md#appointment-list`), `complexity` (`simple`, `standard` or `complex`) and `acceptanceCriteria` ("done when" lines):
-
-```bash
-nativ task add "Appointment list" -a frontend --complexity standard   --spec-refs "ui_specs.md#appointment-list" --accept "Empty state shown|Rows sorted by time"
-```
-
-`--accept` can be repeated or `|`-separated. The `nativ_task_add` MCP tool takes the same three fields.
-
-**Spec slices.** For a task with `specRefs`, `nativ task next --json` adds `specSlices` (the referenced heading sections or JSON pointers, size-capped) and `specWarnings` (a ref that is missing or outside `.ai/`). The native run engine puts the same slices in a `<spec_slices>` block of the worker prompt, and `nativ validate` prints the warnings for the whole plan. Workers read a whole contract only when a slice is missing or cut short.
-
-**Model routing.** `nativ task next --json` returns `recommendedModel` from the task's `complexity`: `simple` gives `haiku`, `standard` gives `sonnet`, `complex` gives `opus`. A task with no complexity gets no recommendation and nothing changes. Override the mapping with `workerModels` in `.nativ/config.json`:
-
-```json
-{ "workerModels": { "simple": "haiku", "standard": "sonnet", "complex": "opus" } }
-```
-
-The run engine uses the routed model when you did not pass one explicitly, and the project manager passes `recommendedModel` as the `model` parameter of the Agent tool. These are Claude Code model aliases, so a Claude Pro login is enough and no API key is needed.
-
-**Code style.** `AGENTS.md` gives workers short style rules: lines of 100 characters or fewer (hard maximum 120), functions of about 40 lines, files of about 300, comments of at most 2 lines, and your own formatter config wins. `nativ verify` also runs a check on a task's target files for over-long lines and long comment blocks. It only warns by default. Tune it with `codeStyle` in `.nativ/config.json` (`mode`: `warn`, `block` or `off`; `maxLineLength`, default 120; `maxCommentLines`, default 2). The `nativ task complete` gatekeeper runs it too, warn-only.
-
----
-
-## Providers
-
-nativ's own model calls (currently triage of escalations) go through one adapter, so no single vendor is on the critical path.
-
-Default order: `claude-cli`, `claude-api`, `gemini`, then a deterministic rules engine.
-
-| Provider | Needs | Notes |
+| Step | You ask Claude to... | What happens |
 | :--- | :--- | :--- |
-| `claude-cli` | Claude Code signed in | Runs `claude -p` with your subscription login. No API key. Uses Haiku by default, with all tools disabled, from an empty working directory |
-| `claude-api` | `ANTHROPIC_API_KEY` | Anthropic SDK |
-| `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The key is sent in a header, never the URL |
-
-If a provider reports a rate or usage limit, nativ remembers it in `.nativ/provider-state.json` and skips that provider until the limit resets, so a limit costs seconds, not a long wait. If nothing is available, triage still answers from the offline rules engine. Prompts pass through secret redaction before leaving the machine.
-
-Choose providers and models per role in `.nativ/config.json`:
-
-```json
-{
-  "enforcement": "warn",
-  "providers": { "triage": ["claude-cli", "gemini"] },
-  "models": { "claude-cli": "haiku", "gemini": "gemini-3.8-flash" }
-}
-```
-
-Roles are `architect`, `pm`, `worker`, `verifier` and `triage`. Adding a vendor means adding one file under `src/providers/`.
+| 1. Explore | run the **explorer** (existing code only) | A map of components, routes, models and conventions, plus drift from the contracts. The architect saves it as `.ai/codebase_map.md`. |
+| 2. Design | use the **architect** | Experience-First or Data-First track, design brief, style tiles, wireframes, component map. It stops for your approval after each contract. |
+| 3. Plan | let the architect add tasks | Each task has `targetFiles`, `acceptanceCriteria`, `specRefs` and a `complexity` that picks the worker's model. |
+| 4. Build | run `nativ task next` and delegate to a **worker** | The worker gets only what it needs: contract slices, settled escalations and approved lessons. |
+| 5. Check | let the worker complete the task | The gatekeeper runs your verify phases, then the task's command, then a code-style check. |
+| 6. Review | ask for a **verifier** pass | An independent read of the diff against the contracts. |
+| 7. Improve | approve lessons agents proposed | `nativ learn list --status proposed`, then `approve` or `reject`. |
 
 ---
 
-## CLI reference
+## Command reference
+
+Every command takes an optional `[targetDir]` (default: the current directory) and most accept `--json` for scripting. Run `nativ <command> --help` for the full option list.
+
+### Command map
+
+**Who** says who should run it: **You** in a terminal, an **Agent** (directly or through MCP), or a Claude Code **Hook**. Commands marked *You only* are denied to agents by the permission rules `nativ setup` writes.
+
+| Command | What it does | Who |
+| :--- | :--- | :--- |
+| [`init`](#nativ-init) | Scaffold `.ai/` and the Claude Code configuration | You |
+| [`setup`](#nativ-setup) | Write or merge the Claude Code configuration | You |
+| [`doctor`](#nativ-doctor) | Check the integration and the harness; `--fix` repairs | You, Agent (read-only) |
+| [`update`](#nativ-update) | Refresh directives, role guides and agents to the latest templates | You |
+| [`validate`](#nativ-validate) | Check the contracts and role guides are well formed | You, Agent |
+| [`status`](#nativ-status) | Progress and telemetry | You, Agent |
+| [`hook status`](#nativ-hook) | Enforcement mode, role and active task scope | You, Agent |
+| [`task next`](#nativ-task-next) | The next executable task with its context | Agent |
+| [`task list`](#nativ-task-list) / `tasks` | List tasks with filters | You, Agent |
+| [`task add`](#nativ-task-add) | Add a task | Architect |
+| [`task start`](#nativ-task-start) | Mark a task in progress | Agent |
+| [`task complete`](#nativ-task-complete) | Complete a task through the gatekeeper | Agent |
+| [`task block`](#nativ-task-block) | Block a task with a reason | Agent |
+| [`task escalate`](#nativ-task-escalate) | Escalate a contract gap to the architect | Agent |
+| [`task propose-patch`](#nativ-task-propose-patch) | Propose a governed contract change | Agent |
+| [`task unlock`](#nativ-task-unlock) | Lift a task's file scope in an emergency | *You only* |
+| [`verify`](#nativ-verify) | Run verification for a task, a milestone or all | You, Agent |
+| [`learn propose`](#nativ-learn-propose) | Propose a lesson for later workers | Agent |
+| [`learn list`](#nativ-learn-list) | List lessons | You, Agent |
+| [`learn approve` / `reject`](#nativ-learn-approve--reject) | Decide on a lesson | *You only* |
+| [`triage`](#nativ-triage) | Evaluate pending escalations; decision cards for you | You |
+| [`db status` / `inspect` / `diff`](#nativ-db-status--inspect--diff) | Masked, structure-only database checks | You, Agent |
+| [`db sync`](#nativ-db-sync) | Copy a live schema into `.ai/db_schema.json` | *You only* |
+| [`worktree create` / `list` / `merge` / `remove`](#nativ-worktree) | Isolated worktrees for parallel tasks | You, Agent |
+| [`studio`](#nativ-studio) / `db ui` | Local dashboard at <http://localhost:4983> | You |
+| [`test gen`](#nativ-test-gen) | Generate contract and database tests | You, Agent |
+| [`bench`](#nativ-bench) | Synthetic benchmarks | You, Agent |
+| [`mcp`](#nativ-mcp) | Run the MCP server over stdio | Claude Code |
+| `hook check` / `hook context` | PreToolUse and SessionStart hooks | Hook |
+
+[Back to contents](#contents)
+
+---
 
 ### Setup and health
 
-```bash
-nativ init                       # scaffold .ai/ and run setup
-nativ setup [--dry-run] [--enforcement warn|block|off] [--command "npx -y @njeybe/nativ"] [--force]
-nativ doctor [--fix] [--no-deep] [--json]
-nativ hook status [--json]       # enforcement mode, role, active task scope
-```
+#### `nativ init`
 
-### Task management and JIT context slicing
+Scaffold the workflow (`.ai/`, `AGENTS.md`, directives), scan the stack into `.ai/context.md`, then run `setup`.
 
 ```bash
-nativ task next                  # next executable task and its contract slice
-nativ task list --available
-nativ task list --milestone m1 --status pending
-nativ task add "Implement OAuth2 callback" -a backend -v "npm test" -f "src/auth.ts"
-nativ task add "Login form" -a frontend --complexity simple --spec-refs "ui_specs.md#login-form" --accept "Errors shown inline"
-nativ task start task-01
-nativ task complete task-01                # runs the verification command
-nativ task complete task-01 --timeout 600000   # for slow suites
-nativ task block task-01 --reason "Missing Stripe API key"
-nativ task escalate task-01 --type schema_flaw --details "Missing foreign key on orders table"
-nativ task propose-patch task-01 --target db_schema --op ADD --path users.columns.bio --reason "..."
-nativ task unlock task-01 --reason "refactor touches a shared file"   # emergency; --revoke to re-lock
-nativ triage                     # evaluate pending escalations; decision cards for the human
+nativ init [targetDir] [-f, --force]
 ```
+
+| Option | Description |
+| :--- | :--- |
+| `-f, --force` | Overwrite existing specification and directive files |
+
+#### `nativ setup`
+
+Write the Claude Code configuration: `.mcp.json`, `.claude/settings.json` (permissions and hooks), `.claude/agents/`, `AGENTS.md` and `.nativ/config.json`. Safe to run any number of times.
+
+```bash
+nativ setup [targetDir] [options]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--command <cli>` | How Claude Code should start nativ, e.g. `"npx -y @njeybe/nativ"` (default: `nativ` when installed globally) |
+| `--enforcement <mode>` | `warn` (default), `block` or `off` |
+| `--dry-run` | Show what would change without writing |
+| `-f, --force` | Also replace agent and directive files you edited |
+| `--json` | Output the result as JSON |
+
+#### `nativ doctor`
+
+Check the integration for drift (MCP server, hooks, permissions, agents, providers) and the harness itself: settings that switch the guardrails off (`disableAllHooks`, `bypassPermissions`), credentials in files agents read (file and line only), roles with no guide, and lessons waiting for approval.
+
+```bash
+nativ doctor [targetDir] [options]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--fix` | Repair missing or out-of-date files (runs setup) |
+| `--command <cli>` | How Claude Code should start nativ (see `setup`) |
+| `--no-deep` | Skip asking Claude Code (`claude mcp list`) whether the server connects |
+| `--json` | Output the report as JSON |
+
+Run it after updating Claude Code or nativ.
+
+#### `nativ update`
+
+Refresh directives, role guides, agents and hooks that nativ wrote and you have not edited. Edited files are kept and reported. Contracts and the plan (`db_schema.json`, `api_contracts.json`, `ui_specs.md`, `master_plan.json`, `context.md`) are never touched.
+
+```bash
+npm install -g @njeybe/nativ@latest
+nativ update [targetDir] [-f, --force]     # --force also replaces files you edited
+nativ doctor
+```
+
+Read the [CHANGELOG](CHANGELOG.md) before upgrading across a major version.
+
+#### `nativ validate`
+
+Check that every `.ai/` contract parses and has the expected shape, that role guides exist, and that each task's `specRefs` resolve.
+
+```bash
+nativ validate [targetDir]
+```
+
+#### `nativ status`
+
+Progress per milestone; with `--telemetry`, durations, token and cost estimates, pass rates and role violations.
+
+```bash
+nativ status [targetDir] [-t, --telemetry] [--json]
+```
+
+#### `nativ hook`
+
+```bash
+nativ hook status [targetDir] [--json]    # enforcement mode, role and active task scope
+nativ hook check                          # PreToolUse hook (reads the tool call from stdin)
+nativ hook context                        # SessionStart hook (prints orientation)
+```
+
+`check` and `context` are wired by `setup`; you do not run them by hand.
+
+[Back to contents](#contents)
+
+---
+
+### Tasks
+
+The task lifecycle lives in `.ai/master_plan.json`. Never edit it by hand; these commands lock it, so parallel agents never lose updates.
+
+```
+ pending ──start──> in_progress ──complete (gatekeeper passes)──> completed
+                         │
+                         ├──block──────> blocked
+                         └──escalate───> blocked  ──(architect resolves)──> pending
+```
+
+#### `nativ task next`
+
+The next executable task in the active milestone: an in-progress task first, otherwise the first pending task whose dependencies are done.
+
+```bash
+nativ task next [targetDir] [--json]
+```
+
+With `--json`, the task carries everything a worker needs:
+
+| Field | Contents |
+| :--- | :--- |
+| `roleGuide`, `recommendedContractSlice` | Which guide and which contracts the role reads |
+| `recommendedModel` | `haiku`, `sonnet` or `opus`, from the task's `complexity` |
+| `specSlices`, `specWarnings` | The referenced contract sections, size-capped, and any refs that did not resolve |
+| `priorEscalations` | The task's settled escalations with their resolution notes (last 3) |
+| `learnings` | Approved lessons that fit the task's role and files (at most 5) |
+
+#### `nativ task list`
+
+```bash
+nativ task list [targetDir] [options]      # also available as: nativ tasks
+```
+
+| Option | Description |
+| :--- | :--- |
+| `-a, --available` | Only unblocked tasks ready to run |
+| `-s, --status <status>` | `pending`, `in_progress`, `completed` or `blocked` |
+| `-m, --milestone <id>` | Milestone ID or name |
+| `--fast-path` | Only fast-path tasks |
+| `--json` | Output as JSON |
+
+#### `nativ task add`
+
+Append a task with an auto-incremented ID.
+
+```bash
+nativ task add <title> [targetDir] [options]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `-a, --agent <name>` | Role: `backend` (default), `frontend`, `database`, `qa-tester`, `flutter-developer`, `devops-agent`, `security-auditor`, `db-migration` |
+| `-f, --files <paths>` | Comma-separated target files: exact files, `dir/`, or `*` / `**` globs |
+| `-v, --verify <command>` | Verification command the gatekeeper runs |
+| `-d, --description <text>` | Task description |
+| `-m, --milestone <id>` | Target milestone (default: the active one) |
+| `--deps <ids>` | Comma-separated dependency task IDs |
+| `--spec-refs <refs>` | Contract anchors, e.g. `ui_specs.md#appointment-list` or `api_contracts.json#GET /appointments` |
+| `--complexity <level>` | `simple`, `standard` or `complex` (routes the worker's model) |
+| `--accept <text>` | "Done when" line; repeatable or `\|`-separated |
+| `--fast-path` | Route to the fast-path milestone for quick fixes |
+| `--json` | Output the created task as JSON |
+
+```bash
+nativ task add "Appointment list" -a frontend --complexity standard \
+  --spec-refs "ui_specs.md#appointment-list" \
+  --accept "Shows name and time per row" --accept "Empty and error states shown" \
+  -f src/components/AppointmentList.tsx --deps task-3 -v "npm test"
+```
+
+#### `nativ task start`
+
+```bash
+nativ task start <taskId> [targetDir]
+```
+
+Marks the task `in_progress` and records the baseline the test-integrity guard compares against.
+
+#### `nativ task complete`
+
+Runs the [verification gatekeeper](#verification) and completes the task only if it passes. A change that deletes or weakens tests is refused.
+
+```bash
+nativ task complete <taskId> [targetDir] [options]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `-n, --notes <notes>` | Completion notes |
+| `--timeout <ms>` | Verification timeout (default 120000) |
+| `--no-verify` | Skip verification. *You only*: denied to agents, and the MCP tool refuses it |
+
+#### `nativ task block`
+
+```bash
+nativ task block <taskId> [targetDir] -r "Verification failed after 3 attempts: <short error>"
+```
+
+#### `nativ task escalate`
+
+Record a contract gap in `.ai/escalation.json` and block the task until the architect resolves it.
+
+```bash
+nativ task escalate <taskId> [targetDir] -t <type> -d "what is missing" [-a <contracts>]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `-t, --type <type>` | `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict` or `architectural_ambiguity` |
+| `-d, --details <text>` | What is missing |
+| `-a, --affected <list>` | Comma-separated affected contracts |
+
+#### `nativ task propose-patch`
+
+Propose a small contract change through the [Contract Governor](#contract-governor): additive changes are applied, destructive ones are rejected.
+
+```bash
+nativ task propose-patch <taskId> --target db_schema --op ADD \
+  --path users.columns.bio --value '{"type":"text","nullable":true}' -r "profile bio"
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--target <target>` | `db_schema` or `api_contracts` (required) |
+| `--op <op>` | `ADD`, `ALTER`, `DROP` or `RENAME` (required) |
+| `--path <path>` | Dot or pointer path, e.g. `users.columns.status` (required) |
+| `--value <json>` | Value or schema definition |
+| `-r, --reason <text>` | Why (required) |
+| `--base-hash <hash>` | Reject if the contract changed since this hash |
+| `--json` | Output the verdict as JSON |
+
+#### `nativ task unlock`
+
+*You only.* Lift the file-scope rule for one task when it genuinely must leave its `targetFiles`. Contracts and secrets stay protected.
+
+```bash
+nativ task unlock <taskId> [targetDir] -r "refactor touches a shared file"
+nativ task unlock <taskId> --revoke
+```
+
+[Back to contents](#contents)
+
+---
 
 ### Verification
 
+#### `nativ verify`
+
+Re-run verification for one task, a milestone or every completed task. Also available as `nativ task verify`.
+
 ```bash
 nativ verify task-01
-nativ verify --all
-nativ verify --milestone m1 --timeout 60000 --json
+nativ verify --milestone m1 --timeout 60000
+nativ verify --all --json
 ```
 
-**Verify phases.** Project-wide checks that run before every task's own `verificationCommand`, in
-order, stopping at the first failure. `nativ verify`, the `nativ task complete` gatekeeper and
-Studio dispatch all run them. With none configured, verification is unchanged.
+| Option | Description |
+| :--- | :--- |
+| `-a, --all` | Every completed task |
+| `-m, --milestone <id>` | Every task in a milestone |
+| `--timeout <ms>` | Per command (default 120000) |
+| `--json` | Output as JSON |
+
+**What runs, in order** (the same for `verify`, the `task complete` gatekeeper and Studio dispatch):
+
+1. **Verify phases** from `.nativ/config.json`, in order, stopping at the first failure. A failure names the phase.
+2. The task's own `verificationCommand`.
+3. The **code-style check** on the task's target files (warn-only unless `codeStyle.mode` is `block`).
 
 ```json
 { "verifyPhases": [
@@ -235,132 +421,327 @@ Studio dispatch all run them. With none configured, verification is unchanged.
 ] }
 ```
 
+With no phases configured, verification is just the task's command and the style check.
+
+[Back to contents](#contents)
+
+---
+
 ### Learnings
 
-Lessons from earlier tasks that the contracts do not capture: a setup quirk, a library gotcha, a
-convention. Agents propose them; only a human approves them, from a terminal.
+Lessons from earlier tasks that the contracts do not capture: a setup quirk, a library gotcha, a convention. Agents propose; only you approve. Stored in `.ai/learnings.json`.
+
+#### `nativ learn propose`
 
 ```bash
-nativ learn propose "Set the date picker locale before it mounts" --role frontend --files "src/components/forms/"
-nativ learn list --status proposed
-nativ learn approve learn-01 --note "confirmed"
-nativ learn reject learn-02
+nativ learn propose "<one-line insight>" [targetDir] [options]
 ```
 
-An approved lesson travels with `nativ task next --json` as `learnings`, only to tasks it fits:
-lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
-`nativ setup` denies `nativ learn approve` and `reject` to agents. Lessons live in
-`.ai/learnings.json`.
-
-### Status and telemetry
+| Option | Description |
+| :--- | :--- |
+| `--role <role>` | Only workers with this role see it |
+| `--files <globs>` | Comma-separated files, `dir/` or globs; only tasks touching them see it |
+| `--task <taskId>` | The task where it came up |
+| `-d, --details <text>` | Longer explanation |
+| `--by <who>` | Who proposed it (default: `NATIV_ROLE`) |
+| `--json` | Output the stored lesson as JSON |
 
 ```bash
-nativ status
-nativ status --telemetry         # durations, token estimates, cost estimates, pass rates, role violations
-nativ status --json
+nativ learn propose "Set the date picker locale before it mounts" \
+  --role frontend --files "src/components/forms/" --task task-12
 ```
 
-### Benchmarks
+#### `nativ learn list`
 
 ```bash
-nativ bench
-nativ bench --scenario concurrency --concurrency 8
-nativ bench --json
+nativ learn list [targetDir] [-s, --status proposed|approved|rejected] [--role <role>] [--json]
 ```
 
-### Studio
+#### `nativ learn approve` / `reject`
 
-`nativ studio` runs a local dashboard at http://localhost:4983 with live updates. It loads
-nothing from the internet and runs under a strict content security policy. The sidebar
-groups pages by role.
-
-**Home** shows what needs you, what's running now, and what just finished.
-**Tasks** displays one milestone at a time, sorted newest completed first.
-**Flow** shows how the work connects and visualizes how the run really happened.
-**Team** lists each agent's activity in plain terms: tasks done, time spent, cost.
-**Worktrees, Benchmarks, Database** are system tools for branches, performance and schemas.
-
-Press Ctrl+K (or Cmd+K or /) to find any task by id, title, agent or file name. The theme
-toggle switches between light and dark; your choice is saved locally.
-
-### Database studio and schema telemetry (masked, structure only)
+*You only.* An approved lesson travels with `nativ task next` to the tasks it fits: lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
 
 ```bash
-nativ db status
-nativ db inspect --env dev
-nativ db diff --target contract --exit-code
-nativ studio                     # local dashboard at http://localhost:4983
+nativ learn approve learn-01 [-n "confirmed on two tasks"]
+nativ learn reject learn-02 [-n "one-off, not a rule"]
 ```
 
-### Git worktree sandboxing
-
-```bash
-nativ worktree create task-01
-nativ worktree list
-nativ worktree merge task-01     # Safe Merge Gatekeeper enforced
-nativ worktree remove task-01
-```
+[Back to contents](#contents)
 
 ---
 
-## Contract Governor
+### Escalations and triage
 
-A deterministic firewall between agents and the contracts (`.ai/db_schema.json`, `.ai/api_contracts.json`):
+A worker that finds a contract gap escalates (`nativ task escalate`) and stops. The gap is then resolved by the architect, or first assessed by triage.
 
+#### `nativ triage`
+
+Run the strategist (Claude by default, see [Providers](#providers)) on pending escalations: it proves safe additive fixes in a sandbox, or gives you a four-part decision card (what the user would see, why, what is affected, options).
+
+```bash
+nativ triage [escalationId] [targetDir] [options]
 ```
-            An agent proposes a contract change
-                          |
-                          v
-                 [ Contract Governor ]
-                          |
-        +-----------------+------------------+
-        v                                    v
- LOW_ADDITIVE                          HIGH_DESTRUCTIVE
- new nullable columns, new tables,     dropping tables or columns,
- optional params, new response fields  changing column types, dropping
-                                       routes, new required params
-        |                                    |
-        v                                    v
- auto-approved and patched             rejected with a structured
- atomically                            violation; three strikes trip the
-                                       circuit breaker and log an escalation
-```
+
+| Option | Description |
+| :--- | :--- |
+| `-a, --all` | Triage every pending escalation (report only, no prompts) |
+| `--apply` | Write sandbox-proven additive patches and unblock their tasks |
+| `--threshold <policy>` | `safe_contracts_only` (default) or `all_non_destructive` |
+| `--json` | Output evaluations as JSON (no prompts) |
+
+When an escalation is settled, its resolution notes reach the next worker on that task as `priorEscalations`.
+
+[Back to contents](#contents)
 
 ---
 
-## Concurrency
+### Database
 
-`.ai/master_plan.json` and `.ai/telemetry.json` are protected by OS-level advisory file locks (`proper-lockfile`) with atomic read-modify-write and retry backoff for Windows `EBUSY`/`EPERM`. Several agents in separate terminals can start, complete and add tasks without lost updates. Long verification commands run outside the lock.
+Masked and structure-only: credentials stay inside the local nativ process, and row data is never read. Connections come from your `.env` files; see [Environment variables](#environment-variables).
 
-Parallel agents share your Claude usage limit. Two or three at a time is a sensible default on a subscription.
+#### `nativ db status` / `inspect` / `diff`
+
+```bash
+nativ db status [--json]                                 # dev/prod health, engine, latency, table count
+nativ db inspect [-e dev|prod] [-t <table>] [--json]     # columns, types, keys, indexes
+nativ db diff [--target prod|contract] [--exit-code]     # drift; --exit-code fails CI on drift
+```
+
+`nativ db diff --target contract` compares the dev database with `.ai/db_schema.json`.
+
+#### `nativ db sync`
+
+*You only.* Copy a live schema (structure only) into `.ai/db_schema.json`. It previews unless `--yes` is given; changing the contract is an architect decision you approve.
+
+```bash
+nativ db sync [-s dev|prod]          # preview
+nativ db sync --yes                  # write
+```
+
+[Back to contents](#contents)
 
 ---
 
-## Telemetry
+### Worktrees
 
-Task transitions and role violations are recorded in `.ai/telemetry.json`: durations, token estimates priced with the model table in `src/core/telemetry.ts`, verification pass rates, circuit-breaker trips, and (capped at the latest 200) enforcement violations with the rule, mode, tool, project-relative path and task. File contents are never logged.
+#### `nativ worktree`
+
+Run independent tasks in parallel, each in its own git worktree with the `.ai/` contracts mounted.
+
+```bash
+nativ worktree create <taskId> [--json]
+nativ worktree list [--json]
+nativ worktree merge <taskId> [-f] [--json]      # Safe Merge Gatekeeper; -f bypasses it
+nativ worktree remove <taskId> [-f] [--json]     # alias: cleanup; discards the branch
+```
+
+Parallel agents share your Claude usage limit; two or three at a time is a sensible default on a subscription.
+
+[Back to contents](#contents)
+
+---
+
+### Studio, tests and benchmarks
+
+#### `nativ studio`
+
+A local dashboard at <http://localhost:4983> with live updates. It loads nothing from the internet and runs under a strict content security policy. Also available as `nativ db ui`.
+
+```bash
+nativ studio [targetDir] [-p, --port <port>] [--no-open]
+```
+
+| Page | Shows |
+| :--- | :--- |
+| **Home** | What needs you, what is running, what just finished |
+| **Tasks** | One milestone at a time, newest completed first |
+| **Flow** | How the work connects and how the run actually happened |
+| **Team** | Each agent's tasks, time and cost |
+| **Worktrees, Benchmarks, Database** | Branches, performance and schemas |
+
+Press **Ctrl+K** (or Cmd+K or `/`) to find any task by id, title, agent or file. The theme toggle switches light and dark.
+
+#### `nativ test gen`
+
+Generate API contract and database integrity tests from `.ai/api_contracts.json` and `.ai/db_schema.json`.
+
+```bash
+nativ test gen [targetDir] [options]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `-f, --framework <name>` | `vitest` (default), `jest`, `node:test`, `pytest` or `go` |
+| `-o, --output <dir>` | Output directory (default `tests/contract`) |
+| `-b, --base-url <url>` | Base URL the API suites call (default `http://localhost:3000`) |
+| `--dry-run` | Show what would be generated |
+| `--json` | Output the result as JSON |
+
+#### `nativ bench`
+
+```bash
+nativ bench [-s concurrency|governor|verification|telemetry|e2e|all] [-c <workers>] [-o report.json] [--json]
+```
+
+#### `nativ mcp`
+
+Run the MCP server over stdio. `setup` registers it; see [MCP server](#mcp-server).
+
+[Back to contents](#contents)
+
+---
+
+## Configuration
+
+### `.nativ/config.json`
+
+Written by `setup`; every key is optional.
+
+```json
+{
+  "enforcement": "warn",
+  "workerModels": { "simple": "haiku", "standard": "sonnet", "complex": "opus" },
+  "verifyPhases": [{ "name": "types", "run": "npx tsc --noEmit" }],
+  "codeStyle": { "mode": "warn", "maxLineLength": 120, "maxCommentLines": 2 },
+  "providers": { "triage": ["claude-cli", "gemini"] },
+  "models": { "claude-cli": "haiku", "gemini": "gemini-3.8-flash" }
+}
+```
+
+| Key | Default | Meaning |
+| :--- | :--- | :--- |
+| `enforcement` | `warn` | Role enforcement mode: `warn`, `block` or `off`. See [Guardrails](#guardrails) |
+| `workerModels` | as above | Model per task `complexity`, returned as `recommendedModel` |
+| `verifyPhases` | none | Checks run before every task's own command. See [Verification](#verification) |
+| `codeStyle.mode` | `warn` | `warn`, `block` or `off` for the line-length and comment check |
+| `codeStyle.maxLineLength` | `120` | Longest allowed line |
+| `codeStyle.maxCommentLines` | `2` | Longest allowed comment block |
+| `providers` | see [Providers](#providers) | Provider order per role: `architect`, `pm`, `worker`, `verifier`, `triage` |
+| `models` | provider default | Model per provider |
+
+### Environment variables
+
+| Variable | Used for |
+| :--- | :--- |
+| `NATIV_ROLE` | Session role; `NATIV_ROLE=architect` lets a whole session write `.ai/` |
+| `ANTHROPIC_API_KEY` | The `claude-api` provider and the Studio native runner |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The `gemini` provider |
+| `NATIV_DEV_DATABASE_URL`, `DEV_DATABASE_URL`, `DATABASE_URL` | Dev database for `nativ db`, checked in that order, read from your `.env*` files. MongoDB (`MONGODB_URI`) and Firestore variants work too, and names declared in `.env.example` are checked first |
+| `NATIV_PROD_DATABASE_URL`, `PROD_DATABASE_URL`, `DATABASE_URL_PROD` | Prod database for `nativ db`, same rules |
+
+[Back to contents](#contents)
+
+---
+
+## Guardrails
+
+### Role enforcement
+
+`nativ hook check` runs before every `Write`, `Edit`, `MultiEdit` and `NotebookEdit`.
+
+| Rule | Applies to | Meaning |
+| :--- | :--- | :--- |
+| `out_of_scope` | Workers and the project manager | The file is not in the active task's `targetFiles` |
+| `protected_path` | Everyone but the architect | Anything under `.ai/` |
+| `secret_path` | Everyone, architect included | `.env`, `.env.*` (not `.env.example`), `.nativ/*.local.json`, `*.pem`, `*.key` |
+
+| Mode | Behaviour |
+| :--- | :--- |
+| `warn` (default) | The write goes through, the agent is told why, and the violation is logged to `.ai/telemetry.json` |
+| `block` | The write is denied with the reason |
+| `off` | No checks |
+
+Start in `warn`, look at the log, then switch to `block`. Two limits: the hook watches file-editing tools, not shell commands (`sed -i` can still write a file), and it fails open, so a broken payload never stops your work.
+
+### Permission rules
+
+`setup` adds rules that Claude Code enforces even under a broad `nativ *` allow:
+
+| Rule | Effect |
+| :--- | :--- |
+| Deny `nativ task unlock`, `nativ db sync`, `nativ task complete --no-verify` | Agents cannot lift their own guardrails or rewrite the schema |
+| Deny `nativ learn approve`, `nativ learn reject` | Agents cannot approve their own lessons |
+| Deny reading `.env*`, `*.pem`, `*.key` | Secrets stay out of agent context |
+| Ask before `Edit` or `Write` under `.ai/` | Every contract change needs your yes |
+
+### Air-gap
+
+Credentials exist only in `.env*` files and inside the local nativ process. Agents use the masked, structure-only `nativ db` commands and never read row data. Migrations and destructive changes run only against local or staging databases, and any `[DROPPED]` or `[DESTRUCTIVE]` diff goes to you.
+
+### Contract Governor
+
+A deterministic firewall between agents and the contracts:
+
+```
+             An agent proposes a contract change
+                           |
+                  [ Contract Governor ]
+                           |
+         +-----------------+------------------+
+         v                                    v
+  LOW_ADDITIVE                          HIGH_DESTRUCTIVE
+  new nullable columns, new tables,     dropping tables or columns,
+  optional params, new response fields  changing types, dropping routes,
+                                        new required params
+         |                                    |
+         v                                    v
+  applied atomically                    rejected with a structured violation;
+                                        three strikes trip the circuit breaker
+                                        and log an escalation
+```
+
+[Back to contents](#contents)
+
+---
+
+## Files nativ manages
+
+| Path | Written by | Contents |
+| :--- | :--- | :--- |
+| `AGENTS.md` | setup | The directive every agent follows |
+| `CLAUDE.md`, `GEMINI.md` | setup | Pointers to `AGENTS.md` (only created when absent) |
+| `.mcp.json` | setup | The `nativ` MCP server entry |
+| `.claude/settings.json` | setup | Permission rules and the enforcement and orientation hooks |
+| `.claude/agents/` | setup | `architect`, `worker`, `verifier` and `explorer` |
+| `.nativ/config.json` | setup | [Configuration](#configuration) |
+| `.ai/context.md` | init | Stack scan: runtime, framework, ORM, main folders |
+| `.ai/codebase_map.md` | architect, from the explorer | Map of existing code, stamped with the commit it describes |
+| `.ai/db_schema.json`, `.ai/api_contracts.json`, `.ai/ui_specs.md` | architect | The contracts |
+| `.ai/design/style-tile.html` | architect | The chosen visual direction |
+| `.ai/master_plan.json` | `nativ task` commands | Milestones and tasks |
+| `.ai/subagents/*.md` | init, update | One guide per worker role |
+| `.ai/escalation.json` | `task escalate`, triage | Escalations and how they were settled |
+| `.ai/learnings.json` | `nativ learn` | Proposed, approved and rejected lessons |
+| `.ai/telemetry.json` | nativ | Durations, costs, pass rates, role violations |
+
+Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched files from ones you edited.
+
+[Back to contents](#contents)
 
 ---
 
 ## MCP server
 
-`nativ mcp` speaks the Model Context Protocol over stdio. `nativ setup` registers it for Claude Code; the same server works with Cursor, Claude Desktop and Antigravity.
+`nativ mcp` speaks the Model Context Protocol over stdio. `setup` registers it for Claude Code; the same server works with Cursor, Claude Desktop and Antigravity.
 
-| Tool / resource | Description |
+| Tools | Purpose |
 | :--- | :--- |
 | `nativ_task_next`, `nativ_task_list`, `nativ_task_add` | Find and add work |
-| `nativ_task_start`, `nativ_task_complete`, `nativ_task_block` | Move a task through its lifecycle (complete runs the gatekeeper and refuses skipVerify) |
-| `nativ_task_escalate`, `nativ_task_propose_patch` | Escalate a contract gap, or propose a governed patch |
-| `nativ_verify`, `nativ_bench`, `nativ_status` | Verification, benchmarks, progress |
-| `nativ_worktree_*` | Create, list, merge and remove task worktrees |
-| `nativ_db_status`, `nativ_db_inspect`, `nativ_db_diff` | Masked, structure-only database telemetry |
-| `nativ_doctor` | Read-only health report. Repairs are `nativ doctor --fix` in a terminal |
-| `nativ_learn_propose` | Propose a lesson for later workers; a human approves it in a terminal |
-| `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`, `nativ://telemetry` | Read-only resources |
+| `nativ_task_start`, `nativ_task_complete`, `nativ_task_block` | Move a task through its lifecycle (complete always runs the gatekeeper) |
+| `nativ_task_escalate`, `nativ_task_propose_patch` | Escalate a gap or propose a governed patch |
+| `nativ_learn_propose` | Propose a lesson; you approve it in a terminal |
+| `nativ_verify`, `nativ_status`, `nativ_bench`, `nativ_test_gen` | Verification, progress, benchmarks, test generation |
+| `nativ_worktree_create`, `_list`, `_merge`, `_remove` | Task worktrees |
+| `nativ_db_status`, `nativ_db_inspect`, `nativ_db_diff` | Masked, structure-only database checks |
+| `nativ_init`, `nativ_doctor` | Scaffold, and a read-only health report |
+
+| Resources (read-only) |
+| :--- |
+| `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`, `nativ://telemetry` |
 
 There is deliberately no MCP tool to unlock a task, approve a lesson, write a contract, sync a database schema or run setup.
 
-Manual registration, if you prefer:
+**Manual registration:**
 
 ```bash
 claude mcp add nativ -- nativ mcp
@@ -374,31 +755,77 @@ claude mcp add nativ -- nativ mcp
 }
 ```
 
+[Back to contents](#contents)
+
 ---
 
-## Repository structure
+## Providers
+
+nativ's own model calls (triage of escalations) go through one adapter, so no single vendor is on the critical path. Default order: `claude-cli`, `claude-api`, `gemini`, then a deterministic rules engine.
+
+| Provider | Needs | Notes |
+| :--- | :--- | :--- |
+| `claude-cli` | Claude Code signed in | Uses your subscription login, no API key. Haiku by default, tools disabled, empty working directory |
+| `claude-api` | `ANTHROPIC_API_KEY` | Anthropic SDK |
+| `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The key goes in a header, never the URL |
+
+A provider that hits a usage limit is remembered in `.nativ/provider-state.json` and skipped until it resets. If none is available, triage still answers from the offline rules engine. Prompts pass through secret redaction before leaving the machine.
+
+[Back to contents](#contents)
+
+---
+
+## Concurrency and telemetry
+
+- **Locks.** `.ai/master_plan.json`, `.ai/telemetry.json`, `.ai/escalation.json` and `.ai/learnings.json` use OS-level advisory locks with atomic writes and retry backoff for Windows `EBUSY`/`EPERM`. Agents in separate terminals can start, complete and add tasks without lost updates. Long verification runs outside the lock.
+- **Telemetry.** `.ai/telemetry.json` records task durations, token and cost estimates, verification pass rates, circuit-breaker trips and the latest 200 enforcement violations (rule, mode, tool, path, task). File contents are never logged. View it with `nativ status --telemetry` or in Studio.
+
+[Back to contents](#contents)
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+| :--- | :--- |
+| Claude Code ignores the project's permissions | Open Claude Code in the folder and accept the trust dialog |
+| `doctor` reports missing or out-of-date files | `nativ doctor --fix` |
+| `doctor` fails on `disableAllHooks` | Remove it from `.claude/settings.json` or `.claude/settings.local.json`; enforcement is off while it is set |
+| The MCP server does not connect | `nativ doctor` (it asks `claude mcp list`); check for a `nativ` server in your user scope shadowing the project's |
+| The generated config points at a path on your machine | Install globally, or `nativ setup --command "npx -y @njeybe/nativ"` |
+| A worker keeps editing outside its task | Switch to `"enforcement": "block"`; a genuine need is an escalation, or `nativ task unlock` |
+| `task complete` fails in a phase | The output names it; run that phase's command yourself to see the error |
+| Triage says no provider | Sign in to Claude Code, or set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`; the offline rules engine still answers |
+
+[Back to contents](#contents)
+
+---
+
+## For maintainers
 
 ```
 nativ/
-  bin/cli.js               entry point (a fast path serves the hook commands without loading the whole CLI)
+  bin/cli.js               entry point (a fast path serves the hooks without loading the whole CLI)
   src/
     index.ts               command registry
-    commands/              init, setup, doctor, hook, task, verify, worktree, db, triage, ...
-    core/                  enforcement, setup-assets, tier1-liaison, telemetry, lock-manager, verifier, ...
+    commands/              init, setup, doctor, task, verify, learn, worktree, db, triage, ...
+    core/                  enforcement, verifier, learnings, harness-integrity, setup-assets, telemetry, ...
     providers/             claude-cli, claude-api, gemini, registry (fallback chain and cooldown)
-    governor/              contract evaluator, circuit breaker, rules
+    governor/              contract evaluator, circuit breaker, rules, escalation store
     mcp/server.ts          MCP server
     db/                    masked env parser, introspection, schema diff
-    server/                Studio web dashboard
-    runner/                agent supervisor
+    server/                Studio dashboard
+    runner/                agent supervisor (Studio dispatch)
   templates/               AGENTS.md, CLAUDE.md, GEMINI.md, claude-agents/, dot-ai/
   plugin/                  Claude Code plugin (generated by `npm run sync-plugin`)
-  .claude-plugin/          marketplace entry for the plugin
-  scripts/sync-plugin.mjs  renders plugin/ from the same sources as `nativ setup`
   tests/                   regression suites (`npm test`)
 ```
 
-Changed a template or the setup generator? Run `npm run sync-plugin`; a test fails if `plugin/` is out of date.
+```bash
+npm install && npm run build
+npm test
+npm run sync-plugin      # after changing a template or the setup generator; a test fails if plugin/ is stale
+```
 
 ---
 
