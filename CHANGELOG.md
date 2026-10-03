@@ -1,15 +1,14 @@
 # Changelog
 
-## Unreleased
+## 2.4.0
 
 ### Added
 
 - **Learnings.** `nativ learn propose` (and the `nativ_learn_propose` MCP tool) records a project
   lesson the contracts do not capture. A human approves it with `nativ learn approve` in an
-  interactive terminal, after seeing the full lesson; setup and Studio's native runner deny approve
-  and reject to agents. Approvals are signed with a key agents cannot read, so a lesson edited or
-  switched to approved by hand is not served. Approved lessons reach `nativ task next --json` as
-  `learnings`, scoped to the task's role and target files, at most five.
+  interactive terminal, after seeing the full lesson; a lesson that changed during review is not
+  decided. Approved lessons reach `nativ task next --json` as `learnings`, scoped to the task's
+  role and target files, at most five.
 - **Verify phases.** `verifyPhases` in `.nativ/config.json` lists checks (type check, lint) that
   run before every task's own command in `nativ verify` (once per batch), the `task complete`
   gatekeeper and Studio dispatch. They are always read from the main checkout, and an unreadable
@@ -24,11 +23,19 @@
 - **Harness checks in `nativ doctor`.** Flags `disableAllHooks` (fail) and `bypassPermissions`
   (warning) in project or local Claude settings, settings files it cannot read, well-known
   credential formats in files agents read (file and line only, never the value), roles with no
-  guide, hand-edited role guides, lessons waiting for approval, approvals that no longer match,
+  guide, hand-edited role guides, lessons waiting for approval, an unreadable lessons file,
   and a `ui_specs.md` that predates the Marketing pages checks.
 
 ### Changed
 
+- `nativ task unlock`, `nativ task complete --no-verify` and `nativ db sync --yes` now refuse to run
+  without an interactive terminal, like `nativ learn approve`. Agents run headless, so this holds
+  even where no permission rule is installed. `task unlock --revoke` still works anywhere.
+- Completing a task closes its pending escalations, and Studio's Needs you no longer lists
+  completed tasks.
+- The enforcement hook reads the enforcement mode and unlocks from the main checkout, also inside a
+  task worktree, and guards `../..` paths from a worktree into the main checkout's `.ai/`, `.nativ/`
+  and secrets.
 - `.nativ/` is protected like `.ai/`: the enforcement hook flags agent edits there, setup adds ask
   rules for it, and Studio's native runner refuses it. Agents are also denied reading
   `.nativ/*.local.json`.
