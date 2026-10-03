@@ -3,6 +3,8 @@ import path from 'node:path';
 import { exec } from 'node:child_process';
 import { MasterPlan, MasterPlanTask, MasterPlanMilestone } from '../scanner/types.js';
 import { checkCodeShape, formatCodeShapeReport, type CodeShapeReport } from './code-shape.js';
+import { parseJsonLoose } from './enforcement.js';
+import { resolveMainRoot } from './root-resolver.js';
 
 export interface VerificationResult {
   success: boolean;
@@ -158,18 +160,60 @@ export interface VerifyPhase {
   run: string;
 }
 
-/** `verifyPhases` from `.nativ/config.json`: project-wide checks run before every task's own command. */
-export function loadVerifyPhases(configDir: string): VerifyPhase[] {
+/** Configured phases, or an error when the config exists but cannot be trusted to say what they are. */
+export interface VerifyPhasesConfig {
+  phases: VerifyPhase[];
+  error?: string;
+}
+
+/** `verifyPhases` from the main checkout's `.nativ/config.json`, never from a worktree's own copy. */
+export function loadVerifyPhases(configDir: string): VerifyPhasesConfig {
+  let raw: string;
   try {
-    const raw = fs.readFileSync(path.join(configDir, '.nativ', 'config.json'), 'utf8');
-    const phases = JSON.parse(raw)?.verifyPhases;
-    if (!Array.isArray(phases)) return [];
-    return phases
-      .filter((p) => p && typeof p.name === 'string' && typeof p.run === 'string' && p.run.trim())
-      .map((p) => ({ name: p.name.trim(), run: p.run.trim() }));
-  } catch {
-    return [];
+    raw = fs.readFileSync(path.join(resolveMainRoot(configDir), '.nativ', 'config.json'), 'utf8');
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return { phases: [] };
+    return { phases: [], error: `.nativ/config.json cannot be read (${err?.message})` };
   }
+  let phases: unknown;
+  try {
+    phases = raw.trim() ? parseJsonLoose<{ verifyPhases?: unknown }>(raw)?.verifyPhases : undefined;
+  } catch (err: any) {
+    return { phases: [], error: `.nativ/config.json is not valid JSON (${err?.message})` };
+  }
+  if (phases === undefined) return { phases: [] };
+  const isPhase = (p: any) => typeof p?.name === 'string' && p.name.trim() && typeof p.run === 'string' && p.run.trim();
+  const valid = Array.isArray(phases) && phases.every(isPhase);
+  if (!valid) return { phases: [], error: 'verifyPhases must be a list of { "name": "...", "run": "..." } entries' };
+  return { phases: (phases as VerifyPhase[]).map((p) => ({ name: p.name.trim(), run: p.run.trim() })) };
+}
+
+/** Outcome of running the configured phases once; shared by every task in a batch. */
+export interface PhasesOutcome {
+  reports: PhaseResult[];
+  failure?: VerificationResult;
+}
+
+function configFailure(message: string): VerificationResult {
+  const error = `${message}, so the configured checks could not run. Fix it and verify again.`;
+  const command = '.nativ/config.json';
+  return { success: false, exitCode: 1, command, stdout: '', stderr: error, durationMs: 0, error };
+}
+
+/** Runs the configured phases in order and stops at the first failure. */
+export async function runVerifyPhases(cwd: string, configDir: string, timeout?: number): Promise<PhasesOutcome> {
+  const config = loadVerifyPhases(configDir);
+  if (config.error) return { reports: [], failure: configFailure(config.error) };
+  const reports: PhaseResult[] = [];
+  for (const phase of config.phases) {
+    const res = await executeVerification(phase.run, cwd, timeout);
+    reports.push({ name: phase.name, command: res.command, success: res.success, durationMs: res.durationMs });
+    if (!res.success) {
+      const cause = res.error ? `: ${res.error.trim()}` : '';
+      return { reports, failure: { ...res, phases: reports, error: `Phase "${phase.name}" failed${cause}` } };
+    }
+  }
+  return { reports };
 }
 
 /**
@@ -178,22 +222,15 @@ export function loadVerifyPhases(configDir: string): VerifyPhase[] {
  */
 export async function runTaskVerification(
   task: MasterPlanTask,
-  options: { cwd: string; configDir?: string; timeout?: number }
+  options: { cwd: string; configDir?: string; timeout?: number; phases?: PhasesOutcome }
 ): Promise<VerificationResult> {
-  const phases = loadVerifyPhases(options.configDir ?? options.cwd);
-  const reports: PhaseResult[] = [];
-  for (const phase of phases) {
-    const res = await executeVerification(phase.run, options.cwd, options.timeout);
-    reports.push({ name: phase.name, command: res.command, success: res.success, durationMs: res.durationMs });
-    if (!res.success) {
-      const cause = res.error ? `: ${res.error.trim()}` : '';
-      return { ...res, phases: reports, error: `Phase "${phase.name}" failed${cause}` };
-    }
-  }
+  const configDir = options.configDir ?? options.cwd;
+  const outcome = options.phases ?? (await runVerifyPhases(options.cwd, configDir, options.timeout));
+  if (outcome.failure) return { ...outcome.failure, phases: outcome.reports };
   const raw = await executeVerification(task.verificationCommand, options.cwd, options.timeout);
-  if (reports.length) {
-    raw.phases = reports;
-    raw.durationMs += reports.reduce((sum, r) => sum + r.durationMs, 0);
+  if (outcome.reports.length) {
+    raw.phases = outcome.reports;
+    raw.durationMs += options.phases ? 0 : outcome.reports.reduce((sum, r) => sum + r.durationMs, 0);
     raw.skipped = false;
   }
   return applyCodeShape(raw, options.cwd, task);
@@ -356,8 +393,11 @@ export async function verifyBatch(
   let skipped = 0;
   let totalDuration = 0;
 
+  // The phases check the whole project, so one run serves every task in the batch.
+  const phases = candidates.length ? await runVerifyPhases(targetDir, targetDir, options.timeout) : { reports: [] };
+  totalDuration += phases.reports.reduce((sum, r) => sum + r.durationMs, 0);
   for (const { task, milestone } of candidates) {
-    const vResult = await runTaskVerification(task, { cwd: targetDir, timeout: options.timeout });
+    const vResult = await runTaskVerification(task, { cwd: targetDir, timeout: options.timeout, phases });
     totalDuration += vResult.durationMs;
 
     if (vResult.skipped) {

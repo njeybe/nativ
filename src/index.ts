@@ -277,16 +277,18 @@ export function createProgram(): Command {
 
   learn
     .command('approve <id> [targetDir]')
-    .description('Approve a proposed lesson so matching tasks carry it (human only)')
+    .description('Approve a proposed lesson so matching tasks carry it (interactive terminal only)')
     .option('-n, --note <note>', 'Why it was approved')
+    .option('-y, --yes', 'Skip the confirmation question (still needs a terminal)')
     .action(async (id, targetDir, options) => {
       await runLearnDecide(id, 'approved', targetDir, options);
     });
 
   learn
     .command('reject <id> [targetDir]')
-    .description('Reject a proposed or approved lesson (human only)')
+    .description('Reject a proposed or approved lesson (interactive terminal only)')
     .option('-n, --note <note>', 'Why it was rejected')
+    .option('-y, --yes', 'Skip the confirmation question (still needs a terminal)')
     .action(async (id, targetDir, options) => {
       await runLearnDecide(id, 'rejected', targetDir, options);
     });

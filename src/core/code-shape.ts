@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseJsonLoose } from './enforcement.js';
+import { resolveMainRoot } from './root-resolver.js';
 
 /**
  * Code-shape check: flags over-long lines and long comment blocks in a task's target files.
@@ -37,8 +39,8 @@ const MAX_SHOWN = 10;
 export function loadCodeShapeSettings(targetDir: string): CodeShapeSettings {
   const settings = { ...DEFAULTS };
   try {
-    const raw = fs.readFileSync(path.join(targetDir, '.nativ', 'config.json'), 'utf8');
-    const style = JSON.parse(raw)?.codeStyle;
+    const raw = fs.readFileSync(path.join(resolveMainRoot(targetDir), '.nativ', 'config.json'), 'utf8');
+    const style = parseJsonLoose<{ codeStyle?: any }>(raw)?.codeStyle;
     if (!style || typeof style !== 'object') return settings;
     if (['warn', 'block', 'off'].includes(style.mode)) settings.mode = style.mode;
     if (Number.isInteger(style.maxLineLength) && style.maxLineLength > 0) {

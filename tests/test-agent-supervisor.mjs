@@ -1102,7 +1102,7 @@ try {
     for (const rule of ['Bash(nativ task unlock *)', 'Bash(nativ db sync *)', 'Bash(nativ task complete * --no-verify)', 'Read(./.env)', 'Read(./**/*.pem)']) {
       assert.ok(perms.permissions.deny.includes(rule), `deny must include ${rule}, even where nativ setup never ran`);
     }
-    assert.deepEqual(perms.permissions.ask, ['Edit(./.ai/**)', 'Write(./.ai/**)'], 'contract writes are asked for (and so denied when nothing can answer)');
+    assert.deepEqual(perms.permissions.ask, ['Edit(./.ai/**)', 'Write(./.ai/**)', 'Edit(./.nativ/**)', 'Write(./.nativ/**)'], 'contract writes are asked for (and so denied when nothing can answer)');
     assert.equal(perms.hooks.PreToolUse[0].hooks[0].type, 'command');
     assert.match(perms.hooks.PreToolUse[0].hooks[0].command, /hook check$/, 'scope enforcement runs for dispatched agents too');
     assert.equal(new Set(perms.permissions.allow).size, perms.permissions.allow.length, 'no duplicate rules');

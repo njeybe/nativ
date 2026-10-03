@@ -122,9 +122,13 @@ export interface EscalationHistoryEntry {
 
 const HISTORY_TEXT_LIMIT = 400;
 
-function clip(text: string): string {
+/** Plain single-line text: control characters could hide words in a terminal or a prompt. */
+function clip(value: unknown): string {
+  const text = String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim();
   return text.length > HISTORY_TEXT_LIMIT ? `${text.slice(0, HISTORY_TEXT_LIMIT)}...` : text;
 }
+
+const sortKey = (e: EscalationRecord): string => String(e.resolvedAt ?? e.timestamp ?? '');
 
 /**
  * The closed escalations of one task, oldest first, so the worker who picks the task up again
@@ -133,15 +137,16 @@ function clip(text: string): string {
 export function taskEscalationHistory(targetDir: string, taskId: string, limit = 3): EscalationHistoryEntry[] {
   const records = loadEscalationFile(targetDir, path.basename(targetDir)).escalations;
   return records
-    .filter((e) => e?.taskId === taskId && (e.status === 'resolved' || e.status === 'dismissed'))
-    .sort((a, b) => (a.resolvedAt ?? a.timestamp ?? '').localeCompare(b.resolvedAt ?? b.timestamp ?? ''))
+    .filter((e) => e && typeof e === 'object' && e.taskId === taskId)
+    .filter((e) => e.status === 'resolved' || e.status === 'dismissed')
+    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
     .slice(-limit)
     .map((e) => ({
-      id: e.id,
-      type: e.type,
+      id: clip(e.id),
+      type: clip(e.type),
       status: e.status as 'resolved' | 'dismissed',
-      summary: clip(String(e.summary ?? '')),
+      summary: clip(e.summary),
       ...(e.resolutionNotes ? { resolutionNotes: clip(e.resolutionNotes) } : {}),
-      ...(e.resolvedAt ? { resolvedAt: e.resolvedAt } : {}),
+      ...(e.resolvedAt ? { resolvedAt: clip(e.resolvedAt) } : {}),
     }));
 }

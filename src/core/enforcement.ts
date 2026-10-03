@@ -199,6 +199,10 @@ export function isSecretPath(relPath: string): boolean {
   return base.endsWith('.pem') || base.endsWith('.key');
 }
 
+export function isNativSettingsPath(relPath: string): boolean {
+  return relPath === '.nativ' || relPath.toLowerCase().startsWith('.nativ/');
+}
+
 /** Everything under `.ai/` is written by nativ commands or the architect, never by a worker's file tools. */
 export function isProtectedContractPath(relPath: string): boolean {
   return relPath === '.ai' || relPath.toLowerCase().startsWith('.ai/');
@@ -256,6 +260,12 @@ export function checkWrite(input: WriteCheckInput): WriteCheckResult {
 
   const role = (input.role ?? process.env[ROLE_ENV] ?? '').toLowerCase();
   const isArchitect = ARCHITECT_ROLES.has(role);
+
+  // The settings decide what the gate runs and how strict the hook is, so no agent edits them.
+  if (isNativSettingsPath(relPath)) {
+    const reason = `${relPath} holds nativ settings, which only the operator changes. Ask the human to edit it.`;
+    return verdict(mode, root, relPath, [], 'protected_path', reason);
+  }
 
   if (isProtectedContractPath(relPath)) {
     if (isArchitect) return allow;

@@ -64,6 +64,28 @@ export function resolveProjectRoot(startDirArg?: string): string {
 }
 
 /**
+ * The main checkout, also from inside a task worktree. Worktrees link `.ai/` but not `.nativ/`,
+ * so settings and keys must always come from here, never from the agent's own copy.
+ */
+export function resolveMainRoot(startDirArg?: string): string {
+  const start = path.resolve(startDirArg || process.cwd());
+  const marker = `${path.sep}.worktrees${path.sep}`;
+  const idx = `${start}${path.sep}`.indexOf(marker);
+  if (idx !== -1 && fs.existsSync(path.join(start.slice(0, idx), '.ai'))) return start.slice(0, idx);
+  try {
+    const gitFile = path.join(start, '.git');
+    if (fs.lstatSync(gitFile).isFile()) {
+      const gitDir = /^gitdir:\s*(.+)$/im.exec(fs.readFileSync(gitFile, 'utf8'))?.[1]?.trim();
+      const mainRepo = gitDir ? path.resolve(path.resolve(start, gitDir), '..', '..', '..') : '';
+      if (mainRepo && fs.existsSync(path.join(mainRepo, '.ai'))) return mainRepo;
+    }
+  } catch {
+    // No .git file: not a linked worktree.
+  }
+  return resolveProjectRoot(start);
+}
+
+/**
  * Creates a directory junction (Windows) or symlink (Unix) linking .ai/
  * from the main project root into the newly created worktree so path-relative
  * agent tools continue to work seamlessly.

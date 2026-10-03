@@ -105,6 +105,7 @@ const SECRET_READ_DENY = [
   'Read(./.env.production.local)',
   'Read(./**/*.pem)',
   'Read(./**/*.key)',
+  'Read(./.nativ/*.local.json)',
 ];
 
 export interface DesiredClaudeConfig {
@@ -137,7 +138,7 @@ export function buildDesiredConfig(invocation: CliInvocation): DesiredClaudeConf
       ...SECRET_READ_DENY,
     ],
     // Contract edits always need a human's yes, whichever agent asks.
-    ask: ['Edit(./.ai/**)', 'Write(./.ai/**)'],
+    ask: ['Edit(./.ai/**)', 'Write(./.ai/**)', 'Edit(./.nativ/**)', 'Write(./.nativ/**)'],
     preToolUse: { matcher: PRE_TOOL_USE_MATCHER, command: `${cli} hook check`, timeout: HOOK_TIMEOUT_SECONDS },
     sessionStart: { matcher: SESSION_START_MATCHER, command: `${cli} hook context`, timeout: HOOK_TIMEOUT_SECONDS },
   };

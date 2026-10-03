@@ -123,6 +123,11 @@ const payload = (root, tool, filePath, extra = {}) => ({
     assert.match(r.reason, /propose-patch|escalate/);
   }
   assert.equal(checkWrite({ filePath: at(root, 'src', '..', '.ai', 'db_schema.json'), toolName: 'Write', cwd: root }).rule, 'protected_path', '.. segments are resolved first');
+  for (const role of [undefined, 'architect']) {
+    const r = checkWrite({ filePath: at(root, '.nativ', 'config.json'), toolName: 'Edit', cwd: root, role });
+    assert.equal(r.decision, 'deny', `nativ settings are protected from ${role ?? 'workers'}`);
+    assert.match(r.reason, /only the operator changes/);
+  }
   if (process.platform === 'win32') {
     assert.equal(checkWrite({ filePath: at(root, '.AI', 'DB_SCHEMA.JSON'), toolName: 'Write', cwd: root }).rule, 'protected_path', 'case-insensitive filesystems');
   }
