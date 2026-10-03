@@ -24,7 +24,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 export const PLUGIN_NAME = 'nativ';
 export const PLUGIN_DIR = 'plugin';
 
-const AGENT_FILES = ['architect.md', 'worker.md', 'verifier.md'];
+const AGENT_FILES = ['architect.md', 'worker.md', 'verifier.md', 'explorer.md'];
 
 const json = (value) => JSON.stringify(value, null, 2) + '\n';
 
@@ -56,7 +56,7 @@ export async function renderPlugin(root = repoRoot) {
       name: PLUGIN_NAME,
       displayName: 'nativ',
       version: pkg.version,
-      description: 'Role-based multi-agent workflow for Claude Code: architect, worker and verifier agents, task-scope enforcement, and the nativ MCP server.',
+      description: 'Role-based multi-agent workflow for Claude Code: architect, worker, verifier and explorer agents, task-scope enforcement, and the nativ MCP server.',
       ...(authorName ? { author: { name: authorName } } : {}),
       // The repository may be private, in which case package.json carries no link and neither does the plugin.
       ...(repo ? { homepage: repo.url, repository: repo.url } : {}),
@@ -114,7 +114,7 @@ export async function renderPlugin(root = repoRoot) {
         {
           name: PLUGIN_NAME,
           source: `./${PLUGIN_DIR}`,
-          description: 'Architect, worker and verifier agents, task-scope enforcement hooks, the nativ MCP server and the task-loop skill.',
+          description: 'Architect, worker, verifier and explorer agents, task-scope enforcement hooks, the nativ MCP server and the task-loop skill.',
           version: pkg.version,
         },
       ],

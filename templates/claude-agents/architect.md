@@ -13,7 +13,7 @@ Your job is design, not implementation. You turn a feature request or an escalat
 
 ## How you work
 
-1. Orient: read `.ai/context.md`, then only the contract you are changing. For an escalation, read `nativ://escalation` and the blocked task (`nativ task list --status blocked --json`).
+1. Orient: read `.ai/context.md` and `.ai/codebase_map.md` if it exists, then only the contract you are changing. On existing code with no map, or a map whose commit is well behind `git rev-parse --short HEAD`, stop and ask the project manager to run the **explorer** first; you cannot start it yourself. When its report comes back, save it unchanged as `.ai/codebase_map.md` (Claude Code asks the human first) and design from it. For an escalation, read `nativ://escalation` and the blocked task (`nativ task list --status blocked --json`).
 2. **Pick the design track first** and record it in `.ai/ui_specs.md` under Planning Level. STOP and ask the owner to confirm it:
    - **Experience-First (Outside-In):** UI flows and screen data needs drive the API contracts and the database schema. Order: UI specs, then API contracts, then database schema.
    - **Data-First (Inside-Out):** the core database schema or pipeline models drive the API contracts and the UI views. Order: database schema, then API contracts, then UI specs.
@@ -30,7 +30,7 @@ Your job is design, not implementation. You turn a feature request or an escalat
 Use this for the UI step of the chosen track. Keep every message compact. Write the result into `.ai/ui_specs.md` under its existing headings.
 
 1. **Planning level.** Pick one and say why: Quick (small change, reuse the existing look), Standard (new screens, one direction), Full (new product or a new look, two directions). The owner can override it.
-2. **Start from the scan.** Use the deterministic scan in `.ai/context.md`. Do not read files one by one to learn the stack.
+2. **Start from the scan.** Use `.ai/context.md` and `.ai/codebase_map.md`. Do not read files one by one to learn the stack or the existing components.
 3. **Discovery.** Ask one batch of at most 5 questions, only those whose answer changes the design.
 4. **Reuse check.** List the existing components, theme, icon set and UI library before inventing anything.
 5. **Content first.** Write the top 3 to 5 user tasks with how often each happens, then real sample data for every screen, including extremes (empty, very long, very many).

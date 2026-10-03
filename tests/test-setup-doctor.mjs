@@ -85,6 +85,7 @@ const doctorJson = async (root, options = {}) => {
     '.claude/agents/architect.md': 'created',
     '.claude/agents/worker.md': 'created',
     '.claude/agents/verifier.md': 'created',
+    '.claude/agents/explorer.md': 'created',
     'AGENTS.md': 'created',
     'CLAUDE.md': 'created',
     'GEMINI.md': 'created',
@@ -110,11 +111,14 @@ const doctorJson = async (root, options = {}) => {
 
   for (const file of AGENT_FILES) {
     const text = read(root, `.claude/agents/${file}`);
-    assert.match(text, /^---\nname: (architect|worker|verifier)\n/, `${file} starts with frontmatter`);
+    assert.match(text, /^---\nname: (architect|worker|verifier|explorer)\n/, `${file} starts with frontmatter`);
     assert.equal(managedState(text), 'pristine', `${file} carries an intact managed marker`);
   }
   assert.match(read(root, '.claude/agents/verifier.md'), /tools: Read, Grep, Glob, Bash, mcp__nativ/, 'the verifier cannot edit');
-  assert.ok(!/tools:.*\b(Edit|Write)\b/.test(read(root, '.claude/agents/verifier.md').split('---')[1]), 'no Edit or Write for the verifier');
+  for (const agent of ['verifier', 'explorer']) {
+    const front = read(root, `.claude/agents/${agent}.md`).split('---')[1];
+    assert.ok(!/tools:.*\b(Edit|Write|MultiEdit|NotebookEdit)\b/.test(front), `no editing tools for the ${agent}`);
+  }
   assert.match(read(root, 'AGENTS.md'), /# nativ Agent Directive/);
   cleanup(root);
   console.log('✔ Test 1: fresh setup writes every asset in the verified Claude Code formats');
@@ -187,7 +191,7 @@ const doctorJson = async (root, options = {}) => {
   const root = tempProject();
   const result = applySetup(root, { ...NATIV, dryRun: true });
   assert.equal(result.dryRun, true);
-  assert.equal(result.changes.filter((c) => c.action === 'created').length, 9);
+  assert.equal(result.changes.filter((c) => c.action === 'created').length, 10);
   for (const rel of ['.mcp.json', '.claude', 'AGENTS.md', 'CLAUDE.md', '.nativ']) assert.ok(!exists(root, rel), `${rel} must not exist after a dry run`);
 
   const shown = await quiet(() => runSetup(root, { command: 'nativ', dryRun: true }));
@@ -611,7 +615,7 @@ const doctorJson = async (root, options = {}) => {
 {
   const dir = path.resolve('templates', 'claude-agents');
   const KNOWN = new Set(['name', 'description', 'tools', 'disallowedTools', 'model', 'permissionMode', 'maxTurns', 'skills', 'mcpServers', 'hooks', 'memory', 'background', 'effort', 'isolation', 'color']);
-  const EXPECTED = { architect: 'opus', worker: 'sonnet', verifier: 'haiku' };
+  const EXPECTED = { architect: 'opus', worker: 'sonnet', verifier: 'haiku', explorer: 'sonnet' };
   for (const [agent, model] of Object.entries(EXPECTED)) {
     const text = fs.readFileSync(path.join(dir, `${agent}.md`), 'utf8').replace(/\r\n/g, '\n');
     const front = /^---\n([\s\S]*?)\n---/.exec(text);

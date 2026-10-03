@@ -8,9 +8,12 @@ A role-based multi-agent workflow for AI coding agents. **Claude Code is the def
 
 ## The idea
 
-Four roles, fixed. The model or vendor behind each role is configurable.
+Four roles, fixed, plus a read-only explorer for existing code. The model or vendor behind each role is configurable.
 
 ```
+   Explorer             reads existing code and reports what is there; cannot edit files
+       |                (the project manager runs it; Sonnet, or Haiku for a quick lookup)
+       v   report, saved as .ai/codebase_map.md once the human approves
    Architect            designs contracts (database, API, UI); the human approves each step
        |
        v   .ai/ contracts + master_plan.json
@@ -58,7 +61,7 @@ nativ init
 | :--- | :--- |
 | `.mcp.json` | Registers the `nativ` MCP server |
 | `.claude/settings.json` | Permission rules, the enforcement hook, the session-start orientation hook |
-| `.claude/agents/` | The `architect`, `worker` and `verifier` agents |
+| `.claude/agents/` | The `architect`, `worker`, `verifier` and `explorer` agents |
 | `AGENTS.md` | The one directive every agent follows. `CLAUDE.md` and `GEMINI.md` point at it |
 | `.nativ/config.json` | Enforcement mode and provider choices |
 
@@ -74,9 +77,10 @@ The plugin files ship inside the package (`plugin/`). To try them for a single C
 
 ### 4. Work
 
-1. Ask Claude to use the **architect** agent to design your contracts. It stops for your approval after the database schema, then the API, then the UI. Claude Code asks you to confirm every write under `.ai/`.
-2. Ask Claude to run `nativ task next` and delegate each task to a **worker** agent. It works only inside the task's `targetFiles`, verifies, and completes.
-3. Ask for a **verifier** pass before you call a milestone done.
+1. On an existing codebase, ask Claude to run the **explorer** first. It maps your components, routes, models and conventions, and where they differ from the contracts.
+2. Ask Claude to use the **architect** agent to design your contracts. It stops for your approval after the database schema, then the API, then the UI. Claude Code asks you to confirm every write under `.ai/`.
+3. Ask Claude to run `nativ task next` and delegate each task to a **worker** agent. It works only inside the task's `targetFiles`, verifies, and completes.
+4. Ask for a **verifier** pass before you call a milestone done.
 
 ### 5. Keep it healthy
 

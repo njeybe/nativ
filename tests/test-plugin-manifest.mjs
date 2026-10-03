@@ -84,7 +84,7 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
 
 // Test 5: agents follow the templates, with the plugin's MCP tool prefix
 {
-  for (const file of ['architect.md', 'worker.md', 'verifier.md']) {
+  for (const file of ['architect.md', 'worker.md', 'verifier.md', 'explorer.md']) {
     const agent = read(`${PLUGIN_DIR}/agents/${file}`);
     const template = read(`templates/claude-agents/${file}`);
     const fm = frontmatter(agent);
@@ -94,8 +94,10 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
     assert.ok(!/\bmcp__nativ\b/.test(fm.tools), `${file} must not use the project-scope prefix, which matches nothing inside a plugin`);
     assert.equal(agent, template.replace(/\bmcp__nativ\b/g, 'mcp__plugin_nativ_nativ'), `${file} differs from its template only by the tool prefix`);
   }
-  const verifierTools = frontmatter(read(`${PLUGIN_DIR}/agents/verifier.md`)).tools;
-  assert.ok(!/\b(Edit|Write)\b/.test(verifierTools), 'the verifier stays read-only');
+  for (const agent of ['verifier', 'explorer']) {
+    const tools = frontmatter(read(`${PLUGIN_DIR}/agents/${agent}.md`)).tools;
+    assert.ok(!/\b(Edit|Write|MultiEdit|NotebookEdit)\b/.test(tools), `the ${agent} stays read-only`);
+  }
   console.log('✔ Test 5: plugin agents mirror the templates and use the plugin MCP prefix');
 }
 

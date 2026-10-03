@@ -13,6 +13,10 @@
   dispatch. A failure names the phase.
 - **Escalation history.** `nativ task next --json` adds `priorEscalations`: the task's settled
   escalations with their resolution notes, so a worker does not raise a settled gap again.
+- **Explorer agent.** A read-only `explorer` subagent (Sonnet; the project manager passes Haiku
+  for a quick lookup) maps existing code: layout, components, routes, data models, conventions,
+  drift against the contracts, and suggested target files for a feature. The architect saves its
+  report as `.ai/codebase_map.md` after the human approves, stamped with the commit it describes.
 - **Harness checks in `nativ doctor`.** Flags `disableAllHooks` (fail) and `bypassPermissions`
   (warning) in project or local Claude settings, well-known credential formats in files agents
   read (file and line only, never the value), roles with no guide, hand-edited role guides, and

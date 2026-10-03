@@ -18,7 +18,7 @@ import { isLegacyTemplate, normalizeForHash } from './legacy-templates.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const MCP_SERVER_NAME = 'nativ';
-export const AGENT_FILES = ['architect.md', 'worker.md', 'verifier.md'] as const;
+export const AGENT_FILES = ['architect.md', 'worker.md', 'verifier.md', 'explorer.md'] as const;
 
 const MANAGED_PREFIX = '<!-- nativ:managed sha256=';
 const MANAGED_PATTERN = /\n?<!-- nativ:managed sha256=([0-9a-f]{12}) -->\s*$/;

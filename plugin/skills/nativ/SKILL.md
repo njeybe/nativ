@@ -18,6 +18,7 @@ This project uses the **nativ** role-based workflow. Every agent, whatever tool 
 | **Project Manager** | the main Claude Code session | Run the task loop, delegate to workers, run verification, report to the human | Edit `.ai/`, or implement tasks itself when a worker can |
 | **Worker** | the `worker` subagent (one task, one role guide) | Change the files in the task's `targetFiles` | Touch anything else, edit contracts, run destructive commands |
 | **Verifier** | the `verifier` subagent | Read code, run tests and checks, report findings | Edit files |
+| **Explorer** | the `explorer` subagent | Read the codebase and report what exists, drift against the contracts, and files a feature would touch | Edit files, design, decide |
 
 The vendor behind a role does not matter. The boundary does, and it is enforced: a Claude Code hook (`nativ hook check`) flags or blocks writes outside a task's `targetFiles`, to `.ai/`, and to secret files.
 
@@ -46,6 +47,8 @@ The vendor behind a role does not matter. The boundary does, and it is enforced:
 6. `nativ task next` for the following task.
 
 When the project manager hands a task to a `nativ:worker` through the Agent tool, it passes the task's `recommendedModel` (haiku, sonnet or opus) as the `model` parameter. If the task has none, the worker's default applies.
+
+Before the architect designs on existing code, the project manager runs the **explorer** when `.ai/codebase_map.md` is missing or its commit is well behind `HEAD`, and passes the report to the architect, who saves it after the human approves. Subagents cannot start other subagents, so this is always the project manager's call. Use the explorer's default model for a map or drift report; pass `model: haiku` for a single lookup such as "where is the auth middleware?".
 
 Independent tasks can run in parallel in isolated worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified.
 
