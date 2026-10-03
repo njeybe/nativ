@@ -66,33 +66,37 @@ nativ doctor          # confirm everything is wired
 
 ## How it works
 
-Four roles, fixed, plus a read-only explorer for existing code. The model or vendor behind each role is configurable.
+Four roles, plus a read-only explorer for existing code. Each one has a single job and hands a
+concrete result to the next.
 
 ```
-   Explorer          reads existing code and reports what is there        (Sonnet; Haiku for lookups)
-       |             saved as .ai/codebase_map.md once you approve
-       v
-   Architect         designs contracts: database, API, UI; you approve each step        (Opus)
-       |             .ai/ contracts + master_plan.json
-       v
-   Project Manager   runs the task loop, delegates, reports           (the main Claude Code session)
-       |             one task, one role guide, its own worktree if you like
-       v
-   Workers           backend, frontend, database, QA, Flutter, DevOps, security, migration
-       |
-       v
-   Verifier          independent checks; cannot edit files                                 (Haiku)
+  Explorer            maps the existing code
+     │
+     ▼  codebase map
+  Architect           designs the contracts        ◀── you approve each step
+     │
+     ▼  contracts + task plan
+  Project Manager     hands out one task at a time
+     │
+     ▼  one task + only the context it needs
+  Workers             build inside the task's files
+     │
+     ▼  finished change
+  Verifier            checks it independently
 ```
 
-| Role | May | May not |
-| :--- | :--- | :--- |
-| **Explorer** | Read the codebase; report components, routes, models, conventions and drift from the contracts | Edit anything, design, decide |
-| **Architect** | Design contracts, resolve escalations, write `.ai/` after you approve | Write application code beyond a trivial fix |
-| **Project Manager** | Run the task loop, delegate, run verification, report | Edit `.ai/`, implement tasks itself |
-| **Worker** | Change the files in its task's `targetFiles` | Touch anything else, edit contracts |
-| **Verifier** | Read code, run checks, report findings | Edit files |
+| Role | Job | Runs on | Never |
+| :--- | :--- | :--- | :--- |
+| **Explorer** | Maps components, routes, models, conventions and drift from the contracts | Sonnet · Haiku for quick lookups | Edits, designs or decides |
+| **Architect** | Designs the database, API and UI contracts; resolves escalations | Opus | Writes application code |
+| **Project Manager** | Runs the task loop, delegates, reports back to you | Your main Claude Code session | Edits contracts or does tasks itself |
+| **Workers** | Build one task each: backend, frontend, database, QA, Flutter, DevOps, security, migration | Picked per task: Haiku, Sonnet or Opus | Touch files outside the task, or contracts |
+| **Verifier** | Reruns the checks and reviews the diff against the contracts | Haiku | Edits anything |
 
-Every agent follows one directive, `AGENTS.md`, which `CLAUDE.md` and `GEMINI.md` point at. Subagents cannot start other subagents, so the project manager is the one who runs the explorer, workers and verifier.
+- **One rulebook.** Every agent follows `AGENTS.md`; `CLAUDE.md` and `GEMINI.md` point at it.
+- **The project manager starts everyone else.** Subagents cannot start other subagents, so it
+  runs the explorer, the workers and the verifier.
+- **Swap any model or vendor.** The roles are fixed; what runs behind them is configurable.
 
 ---
 
