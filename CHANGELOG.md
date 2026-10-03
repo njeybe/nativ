@@ -5,27 +5,36 @@
 ### Added
 
 - **Learnings.** `nativ learn propose` (and the `nativ_learn_propose` MCP tool) records a project
-  lesson the contracts do not capture. A human approves it with `nativ learn approve`; setup denies
-  approve and reject to agents. Approved lessons reach `nativ task next --json` as `learnings`,
-  scoped to the task's role and target files, at most five.
+  lesson the contracts do not capture. A human approves it with `nativ learn approve` in an
+  interactive terminal, after seeing the full lesson; setup and Studio's native runner deny approve
+  and reject to agents. Approvals are signed with a key agents cannot read, so a lesson edited or
+  switched to approved by hand is not served. Approved lessons reach `nativ task next --json` as
+  `learnings`, scoped to the task's role and target files, at most five.
 - **Verify phases.** `verifyPhases` in `.nativ/config.json` lists checks (type check, lint) that
-  run before every task's own command in `nativ verify`, the `task complete` gatekeeper and Studio
-  dispatch. A failure names the phase.
+  run before every task's own command in `nativ verify` (once per batch), the `task complete`
+  gatekeeper and Studio dispatch. They are always read from the main checkout, and an unreadable
+  config fails verification instead of skipping it. A failure names the phase, in Studio too.
 - **Escalation history.** `nativ task next --json` adds `priorEscalations`: the task's settled
-  escalations with their resolution notes, so a worker does not raise a settled gap again.
-- **Explorer agent.** A read-only `explorer` subagent (Sonnet; the project manager passes Haiku
-  for a quick lookup) maps existing code: layout, components, routes, data models, conventions,
-  drift against the contracts, and suggested target files for a feature. The architect saves its
-  report as `.ai/codebase_map.md` after the human approves, stamped with the commit it describes.
+  escalations with how each was settled, so a worker does not raise a settled gap again.
+- **Explorer agent.** An `explorer` subagent with only Read, Grep and Glob (Sonnet; the project
+  manager passes Haiku for a quick lookup) maps existing code: layout, components, routes, data
+  models, conventions, drift against the contracts, and suggested target files for a feature. The
+  architect saves its report as `.ai/codebase_map.md` after the human approves, stamped with the
+  commit it describes.
 - **Harness checks in `nativ doctor`.** Flags `disableAllHooks` (fail) and `bypassPermissions`
-  (warning) in project or local Claude settings, well-known credential formats in files agents
-  read (file and line only, never the value), roles with no guide, hand-edited role guides, and
-  lessons waiting for approval.
+  (warning) in project or local Claude settings, settings files it cannot read, well-known
+  credential formats in files agents read (file and line only, never the value), roles with no
+  guide, hand-edited role guides, lessons waiting for approval, approvals that no longer match,
+  and a `ui_specs.md` that predates the Marketing pages checks.
 
 ### Changed
 
+- `.nativ/` is protected like `.ai/`: the enforcement hook flags agent edits there, setup adds ask
+  rules for it, and Studio's native runner refuses it. Agents are also denied reading
+  `.nativ/*.local.json`.
 - Design-time rules (fonts, color, marketing page layout) moved into the Anti-Generic Checklist of
-  the `ui_specs.md` template, checked by the architect. The frontend guide keeps build-time rules.
+  the `ui_specs.md` template, checked by the architect. The frontend guide keeps build-time rules,
+  and its design read applies only to Standard or Full work that renders a screen.
 
 ## 2.3.1
 

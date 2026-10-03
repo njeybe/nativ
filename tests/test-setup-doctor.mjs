@@ -99,7 +99,7 @@ const doctorJson = async (root, options = {}) => {
   for (const rule of ['Bash(nativ task unlock *)', 'Bash(nativ db sync *)', 'Bash(nativ task complete * --no-verify)', 'Read(./.env)', 'Read(./**/*.pem)']) {
     assert.ok(s.permissions.deny.includes(rule), `deny must include ${rule}`);
   }
-  assert.deepEqual(s.permissions.ask, ['Edit(./.ai/**)', 'Write(./.ai/**)'], 'contract writes always ask the human');
+  assert.deepEqual(s.permissions.ask, ['Edit(./.ai/**)', 'Write(./.ai/**)', 'Edit(./.nativ/**)', 'Write(./.nativ/**)'], 'contract and settings writes always ask the human');
   assert.deepEqual(s.hooks.PreToolUse, [{ matcher: 'Write|Edit|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: 'nativ hook check', timeout: 10 }] }]);
   assert.deepEqual(s.hooks.SessionStart, [{ matcher: 'startup|resume|clear|compact', hooks: [{ type: 'command', command: 'nativ hook context', timeout: 10 }] }]);
   assert.deepEqual(s.enabledMcpjsonServers, ['nativ']);
@@ -718,6 +718,28 @@ const doctorJson = async (root, options = {}) => {
   assert.equal(check(report, 'role-guides:missing'), undefined);
   assert.match(check(report, 'role-guides:edited').message, /backend\.md/);
   assert.match(check(report, 'learnings').message, /1 proposed lesson waits/);
+  assert.equal(check(report, 'learnings:unverified'), undefined);
+
+  // Aliases, URL look-alikes, local settings, unreadable settings, old specs, unsigned approvals.
+  const plan = readJson(root, '.ai/master_plan.json');
+  plan.milestones[0].tasks[0].assignedSubagent = 'backend-agent';
+  fs.writeFileSync(path.join(root, '.ai', 'master_plan.json'), JSON.stringify(plan));
+  fs.writeFileSync(path.join(root, '.ai', 'context.md'), 'open http://localhost:5173/@vite/client\n');
+  fs.rmSync(path.join(root, '.ai', 'notes.md'));
+  fs.writeFileSync(path.join(root, '.claude', 'settings.local.json'), JSON.stringify({ env: { KEY: fakeKey } }));
+  fs.writeFileSync(path.join(root, '.claude', 'settings.json'), '{ not json');
+  fs.writeFileSync(path.join(root, '.ai', 'ui_specs.md'), '# UI\n\n## Anti-Generic Checklist\n- [ ] No emojis.\n');
+  fs.writeFileSync(path.join(root, '.ai', 'learnings.json'), JSON.stringify({ version: '1.0.0', learnings: [
+    { id: 'learn-01', status: 'approved', insight: 'hand-approved', createdAt: '' },
+  ] }));
+  const second = await doctorJson(root);
+  assert.equal(check(second, 'role-guides:missing'), undefined, 'backend-agent uses backend.md');
+  assert.ok(!second.checks.some((c) => c.id.startsWith('secret:.ai/context.md')), 'a port plus an @ path is not a password');
+  assert.equal(check(second, 'secret:.claude/settings.local.json:Anthropic or OpenAI key').status, 'fail');
+  assert.equal(check(second, 'guardrail:.claude/settings.json:unreadable').status, 'warn');
+  assert.match(check(second, 'specs:marketing').message, /predates the Marketing pages/);
+  assert.match(check(second, 'learnings:unverified').message, /learn-01/);
+  assert.ok(!JSON.stringify(second).includes(fakeKey), 'still never prints the secret');
   cleanup(root);
   console.log('✔ Test 21: doctor flags disabled hooks, bypass mode, secrets in agent-read files, edited or missing role guides and waiting lessons');
 }

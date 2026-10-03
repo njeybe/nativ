@@ -90,7 +90,9 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
     const fm = frontmatter(agent);
     assert.equal(fm.name, file.replace('.md', ''), `${file} name`);
     assert.ok(fm.description.length > 30, `${file} has a description that tells Claude when to delegate`);
-    assert.match(fm.tools, /mcp__plugin_nativ_nativ\b/, `${file} uses the plugin's MCP tool prefix (mcp__plugin_<plugin>_<server>)`);
+    if (/\bmcp__nativ\b/.test(template)) {
+      assert.match(fm.tools, /mcp__plugin_nativ_nativ\b/, `${file} uses the plugin's MCP tool prefix (mcp__plugin_<plugin>_<server>)`);
+    }
     assert.ok(!/\bmcp__nativ\b/.test(fm.tools), `${file} must not use the project-scope prefix, which matches nothing inside a plugin`);
     assert.equal(agent, template.replace(/\bmcp__nativ\b/g, 'mcp__plugin_nativ_nativ'), `${file} differs from its template only by the tool prefix`);
   }
@@ -98,6 +100,7 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
     const tools = frontmatter(read(`${PLUGIN_DIR}/agents/${agent}.md`)).tools;
     assert.ok(!/\b(Edit|Write|MultiEdit|NotebookEdit)\b/.test(tools), `the ${agent} stays read-only`);
   }
+  assert.equal(frontmatter(read(`${PLUGIN_DIR}/agents/explorer.md`)).tools, 'Read, Grep, Glob', 'the explorer cannot run commands or nativ tools');
   console.log('✔ Test 5: plugin agents mirror the templates and use the plugin MCP prefix');
 }
 

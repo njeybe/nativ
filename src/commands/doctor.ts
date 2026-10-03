@@ -9,7 +9,8 @@ import { createProviders, providerCooldownRemaining } from '../providers/index.j
 import { checkHarnessIntegrity } from '../core/harness-integrity.js';
 import type { ProviderDeps } from '../providers/index.js';
 
-export type CheckStatus = 'ok' | 'warn' | 'fail' | 'info';
+export type { CheckStatus } from '../core/harness-integrity.js';
+import type { CheckStatus } from '../core/harness-integrity.js';
 
 export interface DoctorCheck {
   id: string;

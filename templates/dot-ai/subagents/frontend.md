@@ -11,10 +11,12 @@ from the design, you do not redesign it. You do not make generic AI-looking page
 - Read a whole contract file only when a slice is missing. Do not load everything up front.
 
 ## 2.5 Design read (before coding)
-Before writing any code, state in one line what you are building:
+For Standard or Full work that renders a page or screen, state in one line what you build:
 "Reading this as: [page kind] for [audience], in the [chosen direction] style."
 Take it from the design brief, the chosen direction and the style tile. If they do not
 settle it, escalate with `architectural_ambiguity`. Do not guess a direction.
+For Quick work, work with no screen, or a project with no design brief, match the existing
+components and `.ai/codebase_map.md` instead.
 
 ## 3. Build from the design
 `.ai/ui_specs.md` is the source of truth. Use these parts of it:
@@ -85,7 +87,8 @@ The font, color and layout choices are made at design time (the Anti-Generic Che
 - Numbers shown in the UI come from the spec's content samples or real data. Do not
   invent precise-looking figures such as "92%" or "4.1x".
 - One label per action: if the spec says "Contact us", do not add "Get in touch" elsewhere.
-- Marketing or landing page: also follow the Marketing pages part of the checklist.
+- Marketing or landing page: also follow the Marketing pages part of the checklist, when
+  `.ai/ui_specs.md` has one.
 
 ## 8. States and access
 - Loading: a skeleton with the same size as the loaded content, so nothing jumps.
@@ -110,4 +113,4 @@ The font, color and layout choices are made at design time (the Anti-Generic Che
    - The accent color and corner radius are the same everywhere.
    - Re-read every string you wrote that the spec did not give. Rewrite anything vague,
      broken or invented.
-   - Marketing or landing page: run the Marketing pages checks in the checklist.
+   - Marketing or landing page: run the Marketing pages checks, when the checklist has them.

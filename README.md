@@ -102,7 +102,7 @@ concrete result to the next.
 
 | Role | Job | Runs on | Never |
 | :--- | :--- | :--- | :--- |
-| **Explorer** | Maps components, routes, models, conventions and drift from the contracts | Sonnet · Haiku for quick lookups | Edits, designs or decides |
+| **Explorer** | Maps components, routes, models, conventions and drift from the contracts. Has only Read, Grep and Glob | Sonnet · Haiku for quick lookups | Edits, designs or decides |
 | **Architect** | Designs the database, API and UI contracts; resolves escalations | Opus | Writes application code |
 | **Project Manager** | Runs the task loop, delegates, reports back to you | Your main Claude Code session | Edits contracts or does tasks itself |
 | **Workers** | Build one task each: backend, frontend, database, QA, Flutter, DevOps, security, migration | Picked per task: Haiku, Sonnet or Opus | Touch files outside the task, or contracts |
@@ -440,7 +440,7 @@ nativ verify --all --json
 ] }
 ```
 
-With no phases configured, verification is just the task's command and the style check.
+With no phases configured, verification is just the task's command and the style check. The settings always come from the main checkout, never a task worktree's copy. If `.nativ/config.json` cannot be read, or a phase has no `name` or `run`, verification fails with a clear message instead of skipping the checks.
 
 [Back to contents](#contents)
 
@@ -478,12 +478,14 @@ nativ learn list [targetDir] [-s, --status proposed|approved|rejected] [--role <
 
 #### `nativ learn approve` / `reject`
 
-*You only.* An approved lesson travels with `nativ task next` to the tasks it fits: lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
+*You only, in an interactive terminal.* Both show the full lesson (insight, details, scope) and ask you to confirm; `-y` skips the question but not the terminal check, so a headless agent cannot run them.
 
 ```bash
-nativ learn approve learn-01 [-n "confirmed on two tasks"]
-nativ learn reject learn-02 [-n "one-off, not a rule"]
+nativ learn approve learn-01 [-n "confirmed on two tasks"] [-y]
+nativ learn reject learn-02 [-n "one-off, not a rule"] [-y]
 ```
+
+An approval is signed with a project key in `.nativ/approval.local.json`, which agents are denied from reading. Workers receive only lessons whose signature still matches, so a lesson edited or switched to approved by hand is not served (`nativ doctor` lists them). An approved lesson travels with `nativ task next` to the tasks it fits: lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
 
 [Back to contents](#contents)
 
@@ -662,6 +664,7 @@ Written by `setup`; every key is optional.
 | :--- | :--- | :--- |
 | `out_of_scope` | Workers and the project manager | The file is not in the active task's `targetFiles` |
 | `protected_path` | Everyone but the architect | Anything under `.ai/` |
+| `protected_path` | Everyone, architect included | Anything under `.nativ/`: the settings decide what the gate runs and how strict the hook is |
 | `secret_path` | Everyone, architect included | `.env`, `.env.*` (not `.env.example`), `.nativ/*.local.json`, `*.pem`, `*.key` |
 
 | Mode | Behaviour |
@@ -679,9 +682,11 @@ Start in `warn`, look at the log, then switch to `block`. Two limits: the hook w
 | Rule | Effect |
 | :--- | :--- |
 | Deny `nativ task unlock`, `nativ db sync`, `nativ task complete --no-verify` | Agents cannot lift their own guardrails or rewrite the schema |
-| Deny `nativ learn approve`, `nativ learn reject` | Agents cannot approve their own lessons |
+| Deny `nativ learn approve`, `nativ learn reject` | Agents cannot approve their own lessons (the commands also refuse to run without a terminal) |
 | Deny reading `.env*`, `*.pem`, `*.key` | Secrets stay out of agent context |
-| Ask before `Edit` or `Write` under `.ai/` | Every contract change needs your yes |
+| Ask before `Edit` or `Write` under `.ai/` and `.nativ/` | Every contract or settings change needs your yes |
+
+Studio's native runner applies the same limits itself: its shell refuses `learn approve`/`reject`, `task unlock`, `db sync`, `--no-verify` and any `.nativ/` path, and its editor cannot write `.ai/` or `.nativ/`.
 
 ### Air-gap
 

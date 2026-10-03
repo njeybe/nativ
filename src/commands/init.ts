@@ -156,5 +156,6 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   console.log(pc.white(` 1. Run ${pc.green('claude')} in this directory and ask the ${pc.magenta('architect')} agent to design your contracts (database, API, UI). You approve each step.`));
   console.log(pc.white(` 2. The architect writes ${pc.cyan('.ai/db_schema.json')}, ${pc.cyan('.ai/api_contracts.json')}, ${pc.cyan('.ai/ui_specs.md')}, and ${pc.cyan('.ai/master_plan.json')}.`));
   console.log(pc.white(` 3. Ask Claude to run ${pc.green('nativ task next')} and delegate each task to a ${pc.magenta('worker')} agent; use ${pc.magenta('verifier')} for an independent check.`));
+  console.log(pc.white(` On existing code, ask for the ${pc.magenta('explorer')} agent first: it maps the code for the architect.`));
   console.log(pc.dim(` Run ${pc.white('nativ doctor')} any time, and after updating Claude Code, to confirm the integration is intact.\n`));
 }
