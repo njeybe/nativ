@@ -677,4 +677,45 @@ const doctorJson = async (root, options = {}) => {
   console.log('✔ Test 20: CRLF templates and CRLF managed files produce the same LF output and are not treated as edits');
 }
 
+// Test 21: doctor checks the harness itself (overrides, secrets, role guides, waiting lessons)
+{
+  const root = tempProject();
+  applySetup(root, NATIV);
+  const check = (report, id) => report.checks.find((c) => c.id === id);
+  const clean = await doctorJson(root);
+  assert.equal(check(clean, 'integrity').status, 'ok');
+  assert.match(check(clean, 'role-guides:missing').message, /backend/, 'a role with no guide is called out');
+
+  fs.writeFileSync(path.join(root, '.claude', 'settings.local.json'), JSON.stringify({
+    disableAllHooks: true, permissions: { defaultMode: 'bypassPermissions' },
+  }));
+  // Built at runtime so this file never holds a token-shaped string.
+  const fakeKey = 'sk-' + 'ant-' + 'x'.repeat(30);
+  fs.writeFileSync(path.join(root, '.ai', 'context.md'), `# Context\nline two\nkey ${fakeKey}\n`);
+  fs.writeFileSync(path.join(root, '.ai', 'notes.md'), 'db postgres://user:hunter2@localhost/app\n');
+  fs.writeFileSync(path.join(root, '.ai', 'safe.md'), 'Use ${DATABASE_URL}, never postgres://user:${PASS}@host\n');
+  fs.mkdirSync(path.join(root, '.ai', 'subagents'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ai', 'subagents', 'backend.md'), '# My own backend guide\n');
+  fs.writeFileSync(path.join(root, '.ai', 'learnings.json'), JSON.stringify({ version: '1.0.0', learnings: [
+    { id: 'learn-01', status: 'proposed', insight: 'x', createdAt: '' },
+  ] }));
+
+  const report = await doctorJson(root);
+  assert.equal(report.ok, false);
+  assert.equal(check(report, 'integrity'), undefined, 'no all-clear when something is wrong');
+  assert.equal(check(report, 'guardrail:.claude/settings.local.json:hooks').status, 'fail');
+  assert.equal(check(report, 'guardrail:.claude/settings.local.json:bypass').status, 'warn');
+  const secret = check(report, 'secret:.ai/context.md:Anthropic or OpenAI key');
+  assert.equal(secret.status, 'fail');
+  assert.match(secret.message, /\.ai\/context\.md:3 /, 'names the file and line');
+  assert.ok(!JSON.stringify(report).includes(fakeKey), 'the secret itself is never printed');
+  assert.equal(check(report, 'secret:.ai/notes.md:connection string with a password').status, 'warn');
+  assert.ok(!report.checks.some((c) => c.id.startsWith('secret:.ai/safe.md')), 'env references are not secrets');
+  assert.equal(check(report, 'role-guides:missing'), undefined);
+  assert.match(check(report, 'role-guides:edited').message, /backend\.md/);
+  assert.match(check(report, 'learnings').message, /1 proposed lesson waits/);
+  cleanup(root);
+  console.log('✔ Test 21: doctor flags disabled hooks, bypass mode, secrets in agent-read files, edited or missing role guides and waiting lessons');
+}
+
 console.log('\n🎉 ALL SETUP & DOCTOR TESTS PASSED!');

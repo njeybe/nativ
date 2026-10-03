@@ -13,6 +13,10 @@
   dispatch. A failure names the phase.
 - **Escalation history.** `nativ task next --json` adds `priorEscalations`: the task's settled
   escalations with their resolution notes, so a worker does not raise a settled gap again.
+- **Harness checks in `nativ doctor`.** Flags `disableAllHooks` (fail) and `bypassPermissions`
+  (warning) in project or local Claude settings, well-known credential formats in files agents
+  read (file and line only, never the value), roles with no guide, hand-edited role guides, and
+  lessons waiting for approval.
 
 ### Changed
 

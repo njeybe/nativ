@@ -85,6 +85,8 @@ nativ doctor          # checks the MCP server, hooks, permissions, agents, provi
 nativ doctor --fix    # repairs what it can, idempotently
 ```
 
+It also checks the harness itself: a `disableAllHooks` or `bypassPermissions` setting that switches the guardrails off, credentials in files every agent reads (`AGENTS.md`, `.mcp.json`, `.claude/agents/`, `.ai/`; only the file and line are shown), tasks whose role has no guide, and lessons waiting for approval.
+
 Run it after updating Claude Code or nativ. It also asks Claude Code itself whether the `nativ` server connects, and warns when a `nativ` server registered in your user or local scope is shadowing the project's.
 
 ### 6. Update

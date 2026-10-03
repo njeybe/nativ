@@ -6,6 +6,7 @@ import { loadEnforcementMode, parseJsonLoose } from '../core/enforcement.js';
 import { resolveProjectRoot } from '../core/root-resolver.js';
 import { applySetup, defaultHasBinary, planSetup, type SetupOptions } from '../core/setup-assets.js';
 import { createProviders, providerCooldownRemaining } from '../providers/index.js';
+import { checkHarnessIntegrity } from '../core/harness-integrity.js';
 import type { ProviderDeps } from '../providers/index.js';
 
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'info';
@@ -148,6 +149,9 @@ export function collectChecks(root: string, options: DoctorOptions = {}): Doctor
   // Enforcement
   const mode = loadEnforcementMode(root);
   add('enforcement', mode === 'off' ? 'warn' : 'ok', mode === 'off' ? 'Role enforcement is off: nothing stops an agent editing outside its task.' : `Role enforcement is ${mode}`);
+
+  // The harness itself: guardrail overrides, secrets in agent-read files, role guides, waiting lessons
+  for (const f of checkHarnessIntegrity(root, { templatesDir: options.templatesDir })) add(f.id, f.status, f.message);
 
   // Providers
   const providers = createProviders(options.providerDeps);
