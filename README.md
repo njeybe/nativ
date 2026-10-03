@@ -70,19 +70,34 @@ Four roles, plus a read-only explorer for existing code. Each one has a single j
 concrete result to the next.
 
 ```
-  Explorer            maps the existing code
-     │
-     ▼  codebase map
-  Architect           designs the contracts        ◀── you approve each step
-     │
-     ▼  contracts + task plan
-  Project Manager     hands out one task at a time
-     │
-     ▼  one task + only the context it needs
-  Workers             build inside the task's files
-     │
-     ▼  finished change
-  Verifier            checks it independently
+┌──────────────────────────────────────┐
+│  EXPLORER                            │
+│  maps the existing code              │
+└───────────────────┬──────────────────┘
+                    │  codebase map
+                    ▼
+┌──────────────────────────────────────┐
+│  ARCHITECT                           │  ◀── you approve each step
+│  designs the contracts               │
+└───────────────────┬──────────────────┘
+                    │  contracts + task plan
+                    ▼
+┌──────────────────────────────────────┐
+│  PROJECT MANAGER                     │
+│  hands out one task at a time        │
+└───────────────────┬──────────────────┘
+                    │  one task + only its context
+                    ▼
+┌──────────────────────────────────────┐
+│  WORKERS                             │
+│  build inside the task's files       │
+└───────────────────┬──────────────────┘
+                    │  finished change
+                    ▼
+┌──────────────────────────────────────┐
+│  VERIFIER                            │
+│  checks the result independently     │
+└──────────────────────────────────────┘
 ```
 
 | Role | Job | Runs on | Never |
