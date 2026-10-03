@@ -135,7 +135,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 
 ### Command map
 
-**Who** says who should run it: **You** in a terminal, an **Agent** (directly or through MCP), or a Claude Code **Hook**. Commands marked *You only* are denied to agents by the permission rules `nativ setup` writes.
+**Who** says who should run it: **You** in a terminal, an **Agent** (directly or through MCP), or a Claude Code **Hook**. Commands marked *You only* refuse to run without an interactive terminal, and the permission rules `nativ setup` writes also deny them to agents.
 
 | Command | What it does | Who |
 | :--- | :--- | :--- |
@@ -354,7 +354,7 @@ nativ task complete <taskId> [targetDir] [options]
 | :--- | :--- |
 | `-n, --notes <notes>` | Completion notes |
 | `--timeout <ms>` | Verification timeout (default 120000) |
-| `--no-verify` | Skip verification. *You only*: denied to agents, and the MCP tool refuses it |
+| `--no-verify` | Skip verification. *You only*: needs an interactive terminal, is denied to agents, and the MCP tool refuses it |
 
 #### `nativ task block`
 
@@ -397,7 +397,7 @@ nativ task propose-patch <taskId> --target db_schema --op ADD \
 
 #### `nativ task unlock`
 
-*You only.* Lift the file-scope rule for one task when it genuinely must leave its `targetFiles`. Contracts and secrets stay protected.
+*You only, in an interactive terminal.* Lift the file-scope rule for one task when it genuinely must leave its `targetFiles`. Contracts and secrets stay protected. `--revoke` re-locks and works anywhere.
 
 ```bash
 nativ task unlock <taskId> [targetDir] -r "refactor touches a shared file"
@@ -485,7 +485,7 @@ nativ learn approve learn-01 [-n "confirmed on two tasks"] [-y]
 nativ learn reject learn-02 [-n "one-off, not a rule"] [-y]
 ```
 
-An approval is signed with a project key in `.nativ/approval.local.json`, which agents are denied from reading. Workers receive only lessons whose signature still matches, so a lesson edited or switched to approved by hand is not served (`nativ doctor` lists them). An approved lesson travels with `nativ task next` to the tasks it fits: lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
+If the lesson changed while you were reviewing it, nothing is decided and you are asked to run the command again. `.ai/learnings.json` is protected like the contracts: the hook flags agent edits and Claude Code asks you before any write under `.ai/`. An approved lesson travels with `nativ task next` to the tasks it fits: lessons scoped to the task's files first, then to its role, then project-wide ones, at most five.
 
 [Back to contents](#contents)
 
@@ -532,7 +532,7 @@ nativ db diff [--target prod|contract] [--exit-code]     # drift; --exit-code fa
 
 #### `nativ db sync`
 
-*You only.* Copy a live schema (structure only) into `.ai/db_schema.json`. It previews unless `--yes` is given; changing the contract is an architect decision you approve.
+*You only.* Copy a live schema (structure only) into `.ai/db_schema.json`. It previews unless `--yes` is given, and `--yes` needs an interactive terminal; changing the contract is an architect decision you approve.
 
 ```bash
 nativ db sync [-s dev|prod]          # preview
@@ -686,7 +686,7 @@ Start in `warn`, look at the log, then switch to `block`. Two limits: the hook w
 | Deny reading `.env*`, `*.pem`, `*.key` | Secrets stay out of agent context |
 | Ask before `Edit` or `Write` under `.ai/` and `.nativ/` | Every contract or settings change needs your yes |
 
-Studio's native runner applies the same limits itself: its shell refuses `learn approve`/`reject`, `task unlock`, `db sync`, `--no-verify` and any `.nativ/` path, and its editor cannot write `.ai/` or `.nativ/`.
+Studio's native runner runs headless, so the terminal-only commands refuse there too. Its editor cannot write `.ai/` or `.nativ/` (in any letter case), and its shell refuses commands that name `.nativ/`. The shell check is a best-effort guard against mistakes, not a sandbox: a worker that runs `node` or other programs can still reach any file the process can. Run untrusted work in a container or VM.
 
 ### Air-gap
 

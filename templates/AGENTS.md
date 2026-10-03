@@ -63,7 +63,7 @@ If you lost time on something specific to this project that the contracts do not
 nativ learn propose "Set the date picker locale before it mounts" --role frontend --files "src/components/forms/" --task <taskId>
 ```
 
-MCP: `nativ_learn_propose`. One line, a fact rather than a preference. A human approves it with `nativ learn approve` in an interactive terminal; agents cannot, and a lesson changed after approval is no longer served. A missing contract detail is an escalation, not a lesson.
+MCP: `nativ_learn_propose`. One line, a fact rather than a preference. A human approves it with `nativ learn approve` in an interactive terminal; agents cannot. A missing contract detail is an escalation, not a lesson.
 
 ## When the contract is wrong
 
