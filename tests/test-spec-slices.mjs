@@ -81,6 +81,74 @@ try {
   assert.equal(r.slices.length, 0);
   assert.equal(r.warnings.length, 2);
 
+  // Resilient specRefs resolution:
+  // 1. Shorthand heading numbers (#6, #15.1)
+  fs.writeFileSync(path.join(dir, '.ai', 'numbered_ui.md'), [
+    '# Specifications',
+    '## 6. Coach Direct Payment System',
+    'coach payment body',
+    '## 15. Terms & Privacy',
+    '### 15.1 Shared Pieces',
+    'shared pieces body',
+    '### 15.2 Register Form',
+    'register body',
+    '## 16. Dashboard',
+  ].join('\n'));
+  r = resolveSpecSlices(dir, [
+    'numbered_ui.md#6',
+    'numbered_ui.md#15',
+    'numbered_ui.md#15.1',
+    'numbered_ui.md#15.2',
+  ]);
+  assert.equal(r.warnings.length, 0);
+  assert.equal(r.slices.length, 4);
+  assert.ok(r.slices[0].text.includes('coach payment body'));
+  assert.ok(r.slices[1].text.includes('shared pieces body'));
+  assert.ok(r.slices[2].text.includes('shared pieces body'));
+  assert.ok(r.slices[3].text.includes('register body'));
+
+  // 2. JSON top-level properties without leading slash, dot paths, route names, mail events, and schema tables
+  fs.writeFileSync(path.join(dir, '.ai', 'full_contracts.json'), JSON.stringify({
+    confirmationPageContracts: { title: 'Confirmation Contract' },
+    nestedConfig: { subSetting: 'hello-nested' },
+    mailEvents: [
+      { trigger: 'Coach Lesson Booked', handler: 'CoachBookingController::store' },
+    ],
+    routingPolicy: {
+      playerRoutes: [
+        { name: 'coaches.payment-qr', path: '/coaches/{coach}/payment-qr' },
+      ],
+      venueScopedRoutes: [
+        { name: 'company.coaches.payment-qr', path: '/{company:slug}/coaches/{coach}/payment-qr' },
+      ],
+    },
+  }));
+  fs.writeFileSync(path.join(dir, '.ai', 'db_schema.json'), JSON.stringify({
+    relevantTables: [
+      { name: 'legal_documents', description: 'Terms and Privacy docs' },
+      { name: 'coach_bookings', description: 'Coach booking records' },
+    ],
+  }));
+
+  r = resolveSpecSlices(dir, [
+    'full_contracts.json#confirmationPageContracts',
+    'full_contracts.json#nestedConfig.subSetting',
+    'full_contracts.json#Coach Lesson Booked',
+    'full_contracts.json#coaches.payment-qr',
+    'full_contracts.json#company.coaches.payment-qr',
+    'db_schema.json#legal_documents',
+    'db_schema.json#coach_bookings',
+  ]);
+  assert.equal(r.warnings.length, 0);
+  assert.equal(r.slices.length, 7);
+  assert.equal(JSON.parse(r.slices[0].text).title, 'Confirmation Contract');
+  assert.equal(JSON.parse(r.slices[1].text), 'hello-nested');
+  assert.equal(JSON.parse(r.slices[2].text).trigger, 'Coach Lesson Booked');
+  assert.equal(JSON.parse(r.slices[3].text).name, 'coaches.payment-qr');
+  assert.equal(JSON.parse(r.slices[4].text).name, 'company.coaches.payment-qr');
+  assert.equal(JSON.parse(r.slices[5].text).name, 'legal_documents');
+  assert.equal(JSON.parse(r.slices[6].text).name, 'coach_bookings');
+
   // Size caps.
   r = resolveSpecSlices(dir, ['big.md#big'], { maxChars: 100 });
   assert.equal(r.slices[0].truncated, true);

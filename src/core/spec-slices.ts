@@ -39,9 +39,10 @@ function cap(text: string, max: number): { text: string; truncated: boolean } {
   return { text: text.slice(0, Math.max(0, max)) + TRUNCATION_MARKER, truncated: true };
 }
 
-function markdownSection(content: string, anchor: string): string | null {
-  const wanted = decodeURIComponent(anchor).toLowerCase();
-  const lines = content.split(/\r?\n/);
+function findSection(
+  lines: string[],
+  predicate: (slug: string, headingText: string) => boolean
+): string | null {
   const seen = new Map<string, number>();
   let inFence = false;
   let start = -1;
@@ -60,16 +61,39 @@ function markdownSection(content: string, anchor: string): string | null {
       if (hLevel <= level) return lines.slice(start, i).join('\n').trimEnd();
       continue;
     }
-    const base = slugifyHeading(m[2]);
+    const headingText = m[2];
+    const base = slugifyHeading(headingText);
     const count = seen.get(base) ?? 0;
     seen.set(base, count + 1);
     const slug = count === 0 ? base : `${base}-${count}`;
-    if (slug === wanted) {
+    if (predicate(slug, headingText)) {
       start = i;
       level = hLevel;
     }
   }
   return start >= 0 ? lines.slice(start).join('\n').trimEnd() : null;
+}
+
+function markdownSection(content: string, anchor: string): string | null {
+  const wanted = decodeURIComponent(anchor).trim().toLowerCase();
+  const lines = content.split(/\r?\n/);
+
+  // 1. Exact slug match (standard markdown anchor)
+  const exact = findSection(lines, (slug) => slug === wanted);
+  if (exact !== null) return exact;
+
+  // 2. Prefix / section number match (e.g. "6" or "15.1" matching "## 6. Coach..." or "### 15.1 Shared Pieces")
+  const prefixMatch = findSection(lines, (_slug, headingText) => {
+    const raw = headingText.trim().toLowerCase();
+    if (raw === wanted) return true;
+    if (raw.startsWith(`${wanted}.`) || raw.startsWith(`${wanted} `) || raw.startsWith(`${wanted}:`)) return true;
+    const base = slugifyHeading(headingText);
+    if (base.startsWith(`${wanted}-`) || base === wanted) return true;
+    return false;
+  });
+  if (prefixMatch !== null) return prefixMatch;
+
+  return null;
 }
 
 function jsonPointerValue(doc: unknown, pointer: string): { found: boolean; value?: unknown } {
@@ -94,6 +118,74 @@ function jsonPointerValue(doc: unknown, pointer: string): { found: boolean; valu
     }
   }
   return { found: true, value: current };
+}
+
+function getByDotPath(obj: any, pathStr: string): { found: boolean; value?: unknown } {
+  const parts = pathStr.split('.');
+  let cur = obj;
+  for (const p of parts) {
+    if (cur && typeof cur === 'object' && Object.prototype.hasOwnProperty.call(cur, p)) {
+      cur = cur[p];
+    } else {
+      return { found: false };
+    }
+  }
+  return { found: true, value: cur };
+}
+
+function findEntityInDoc(doc: any, ref: string): { found: boolean; value?: unknown } {
+  if (!doc || typeof doc !== 'object') return { found: false };
+
+  // 1. Direct table match in relevantTables or tables
+  const tables = Array.isArray(doc.relevantTables) ? doc.relevantTables : (Array.isArray(doc.tables) ? doc.tables : null);
+  if (tables) {
+    const table = tables.find((t: any) => t && (t.name === ref || t.tableName === ref || t.id === ref));
+    if (table) return { found: true, value: table };
+  }
+  if (doc.tables && typeof doc.tables === 'object' && !Array.isArray(doc.tables) && Object.prototype.hasOwnProperty.call(doc.tables, ref)) {
+    return { found: true, value: doc.tables[ref] };
+  }
+
+  // 2. Mail events trigger match
+  if (Array.isArray(doc.mailEvents)) {
+    const event = doc.mailEvents.find((m: any) => m && (m.trigger === ref || m.endpoint === ref || m.id === ref));
+    if (event) return { found: true, value: event };
+  }
+
+  // 3. Routes match in routingPolicy or routes
+  const routeLists: any[][] = [];
+  if (doc.routingPolicy && typeof doc.routingPolicy === 'object') {
+    if (Array.isArray(doc.routingPolicy.playerRoutes)) routeLists.push(doc.routingPolicy.playerRoutes);
+    if (Array.isArray(doc.routingPolicy.venueScopedRoutes)) routeLists.push(doc.routingPolicy.venueScopedRoutes);
+    if (Array.isArray(doc.routingPolicy.adminRoutes)) routeLists.push(doc.routingPolicy.adminRoutes);
+    if (Array.isArray(doc.routingPolicy.routes)) routeLists.push(doc.routingPolicy.routes);
+  }
+  if (Array.isArray(doc.routes)) routeLists.push(doc.routes);
+
+  for (const list of routeLists) {
+    const route = list.find((r: any) => r && (
+      r.name === ref ||
+      r.id === ref ||
+      (Array.isArray(r.routeNames) && r.routeNames.includes(ref))
+    ));
+    if (route) return { found: true, value: route };
+  }
+
+  // 4. Contract list items (e.g. confirmationPageContracts array)
+  for (const key of Object.keys(doc)) {
+    const val = doc[key];
+    if (Array.isArray(val)) {
+      const match = val.find((item: any) => item && typeof item === 'object' && (
+        item.name === ref ||
+        item.id === ref ||
+        item.trigger === ref ||
+        (Array.isArray(item.routeNames) && item.routeNames.includes(ref))
+      ));
+      if (match) return { found: true, value: match };
+    }
+  }
+
+  return { found: false };
 }
 
 function joinUrl(base: unknown, p: string): string {
@@ -130,8 +222,30 @@ function endpointValue(doc: any, fragment: string): { found: boolean; value?: un
 }
 
 function jsonRefValue(doc: unknown, fragment: string): { found: boolean; value?: unknown } {
-  if (fragment === '' || fragment.startsWith('/')) return jsonPointerValue(doc, fragment);
-  return endpointValue(doc, fragment);
+  if (fragment === '') return jsonPointerValue(doc, fragment);
+
+  // 1. Direct JSON pointer starting with /
+  if (fragment.startsWith('/')) {
+    const ptr = jsonPointerValue(doc, fragment);
+    if (ptr.found) return ptr;
+  } else {
+    // 2. JSON pointer or top-level property without leading slash (e.g. #confirmationPageContracts)
+    const ptr = jsonPointerValue(doc, `/${fragment}`);
+    if (ptr.found) return ptr;
+
+    // 3. Dot-path property navigation (e.g. #contract.section)
+    if (fragment.includes('.')) {
+      const dot = getByDotPath(doc, fragment);
+      if (dot.found) return dot;
+    }
+  }
+
+  // 4. Endpoint lookup by method + path or id
+  const endpoint = endpointValue(doc, fragment);
+  if (endpoint.found) return endpoint;
+
+  // 5. Named entity lookup: route names, mail event triggers, DB schema tables
+  return findEntityInDoc(doc, fragment);
 }
 
 /**

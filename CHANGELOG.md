@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.1
+
+### Fixed & Improved
+
+- **Resilient Spec Slices Resolution.** Enhanced `resolveSpecSlices` in `src/core/spec-slices.ts` to gracefully resolve non-standard and shorthand contract/spec references across `.ai/` contracts:
+  - **Shorthand Markdown Section Anchors:** Supports numeric and prefix section references (e.g. `ui_specs.md#6`, `ui_specs.md#15`, `ui_specs.md#15.1`) by matching section prefixes when exact heading slug matches are not found.
+  - **JSON Root Keys without Leading Slash:** Automatically resolves JSON references missing a leading slash (e.g. `api_contracts.json#confirmationPageContracts`, `api_contracts.json#legalDocumentsContract`) by falling back to root property pointers and dot-path navigation.
+  - **Route Names Lookup:** Resolves named route references (e.g. `api_contracts.json#coaches.payment-qr`, `company.coaches.payment-qr`) across `routingPolicy.playerRoutes`, `venueScopedRoutes`, and other route collections.
+  - **Mail Events by Trigger:** Resolves mail event references by trigger name (e.g. `api_contracts.json#Coach Lesson Booked`, `Coach Payment Proof Uploaded`).
+  - **Database Schema Tables:** Resolves table references directly by name in `relevantTables` and `tables` collections (e.g. `db_schema.json#legal_documents`, `db_schema.json#coach_bookings`, `db_schema.json#sports`).
+
 ## 2.4.0
 
 ### Added

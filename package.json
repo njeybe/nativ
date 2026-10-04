@@ -1,6 +1,6 @@
 {
   "name": "@njeybe/nativ",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Role-based multi-agent workflow harness: Claude Code by default, other AI agents pluggable",
   "type": "module",
   "main": "dist/index.js",
