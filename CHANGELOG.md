@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.5.0
+
+### Added
+
+- **Adaptive Ceremony Profiles.** Introduced `nativ profile [prototype | solo | enterprise]` to adapt framework rigor across all development stages:
+  - **`prototype`**: Zero-friction exploration for hackathons and day 1 greenfield projects. Relaxes scope enforcement, enables contract auto-adoption without escalation halts, and disables test integrity blocking.
+  - **`solo`**: Lightweight agility for solo microservices and utilities with advisory warnings and auto-evolving contracts.
+  - **`enterprise`**: Full production rigor with strict role boundaries, formal contract governor review, test integrity protection, and circuit breakers.
+- **Native CI/CD Headless Automation.** `refuseHeadless` now detects CI environments (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `NATIV_CI_OVERRIDE`) to permit headless test verification and automated pipeline gates without TTY failures.
+
+### Improved & Refactored
+
+- **Modular Architecture.** Decomposed large monolithic modules into focused, single-responsibility submodules adhering to the ~300-line standard:
+  - `src/commands/task/`: Split into `task-query`, `task-lifecycle`, `task-add`, `task-escalate`, and `task-common`.
+  - `src/core/verifier/`: Split into `executor`, `phases`, and `task-verifier`.
+  - `src/core/setup/`: Split into `types`, `config-merger`, `template-planner`, `setup-planner`, and `session-context`.
+  - `src/commands/db/`: Decoupled database introspection (`db-introspect`) and ANSI terminal presentation (`db-formatter`).
+  - `src/commands/triage/`: Decoupled triage persistence (`triage-store`) and interactive card UI (`triage-ui`).
+- **ESM Type Re-exports.** Fixed TypeScript interface re-exports in barrel files using explicit `export type` syntax.
+
 ## 2.4.1
 
 ### Fixed & Improved

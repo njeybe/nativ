@@ -34,6 +34,7 @@ cd your-project && nativ init    # scaffold .ai/ and the Claude Code configurati
 - **Contracts, not chat.** `.ai/db_schema.json`, `.ai/api_contracts.json` and `.ai/ui_specs.md` are the source of truth. Workers build against them and escalate gaps instead of improvising.
 - **Boundaries enforced by code.** A Claude Code hook checks every file write against the active task, the protected contracts and your secret files. It does not rely on the model remembering a rule.
 - **Independent verification.** A gatekeeper re-runs each task's checks before it can complete, and a separate verifier agent reviews the result.
+- **Adaptive ceremony.** Shift seamlessly between `prototype` velocity, balanced `solo` defaults, and strict `enterprise` compliance (`nativ profile`).
 - **A project that remembers.** Settled escalations and human-approved lessons travel with later tasks, so the same gap is not raised twice.
 - **Zero-credential air-gap.** Agents see database structure, never passwords, connection strings or rows.
 
@@ -141,6 +142,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | :--- | :--- | :--- |
 | [`init`](#nativ-init) | Scaffold `.ai/` and the Claude Code configuration | You |
 | [`setup`](#nativ-setup) | Write or merge the Claude Code configuration | You |
+| [`profile`](#nativ-profile) | Inspect or switch ceremony profile (`prototype`, `solo`, `enterprise`) | You, Agent |
 | [`doctor`](#nativ-doctor) | Check the integration and the harness; `--fix` repairs | You, Agent (read-only) |
 | [`update`](#nativ-update) | Refresh directives, role guides and agents to the latest templates | You |
 | [`validate`](#nativ-validate) | Check the contracts and role guides are well formed | You, Agent |
@@ -202,6 +204,28 @@ nativ setup [targetDir] [options]
 | `--dry-run` | Show what would change without writing |
 | `-f, --force` | Also replace agent and directive files you edited |
 | `--json` | Output the result as JSON |
+
+#### `nativ profile`
+
+Inspect or switch the active ceremony profile. Profiles adapt the rigor of the gatekeeper, governor, and enforcement hooks to the stage of your project:
+
+- `prototype`: Maximum velocity for hackathons and spikes. Auto-adopts additive contract patches, relaxes test-integrity guards, and warns on style/scope violations.
+- `solo`: Balanced defaults for solo developers and small teams (default). Enforces task file scope, requires verification commands, but uses lightweight reviews.
+- `enterprise`: Maximum governance for high-stakes production code. Strict blocking enforcement, mandatory verification phases, required test integrity, and strict human review.
+
+```bash
+nativ profile [profile] [targetDir] [options]
+```
+
+```bash
+nativ profile                         # Show current profile and resolved settings
+nativ profile solo                    # Switch to the solo profile
+nativ profile enterprise --json       # Switch and return config as JSON
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--json` | Output current or updated profile configuration as JSON |
 
 #### `nativ doctor`
 
@@ -620,6 +644,7 @@ Written by `setup`; every key is optional.
 
 ```json
 {
+  "profile": "solo",
   "enforcement": "warn",
   "workerModels": { "simple": "haiku", "standard": "sonnet", "complex": "opus" },
   "verifyPhases": [{ "name": "types", "run": "npx tsc --noEmit" }],
@@ -631,6 +656,7 @@ Written by `setup`; every key is optional.
 
 | Key | Default | Meaning |
 | :--- | :--- | :--- |
+| `profile` | `solo` | Active ceremony profile: `prototype`, `solo` or `enterprise`. See [`nativ profile`](#nativ-profile) |
 | `enforcement` | `warn` | Role enforcement mode: `warn`, `block` or `off`. See [Guardrails](#guardrails) |
 | `workerModels` | as above | Model per task `complexity`, returned as `recommendedModel` |
 | `verifyPhases` | none | Checks run before every task's own command. See [Verification](#verification) |
