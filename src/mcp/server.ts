@@ -1,8 +1,7 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
   runTaskList,
@@ -31,6 +30,19 @@ import { runTestGen } from '../commands/test-gen.js';
 import { runBench } from '../commands/bench.js';
 import { TEST_FRAMEWORKS } from '../core/test-generator-types.js';
 import { packageVersion } from '../core/version.js';
+import { captureOutput } from './capture.js';
+import { registerMcpResources, MCP_RESOURCES } from './resources.js';
+
+export { captureOutput } from './capture.js';
+export { registerMcpResources, MCP_RESOURCES } from './resources.js';
+
+export const ESCALATION_TYPES = [
+  'contract_drift',
+  'schema_flaw',
+  'missing_credential',
+  'dependency_conflict',
+  'architectural_ambiguity',
+] as const;
 
 /**
  * Native MCP (Model Context Protocol) server for Nativ over stdio.
@@ -40,61 +52,6 @@ import { packageVersion } from '../core/version.js';
  * Air-gap: only masked, structure-only commands are exposed. `db sync`, `db ui` and `init --force`
  * are intentionally absent, and every tool is bound to the server's project root.
  */
-
-const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
-
-const ESCALATION_TYPES = [
-  'contract_drift',
-  'schema_flaw',
-  'missing_credential',
-  'dependency_conflict',
-  'architectural_ambiguity',
-] as const;
-
-const RESOURCES = [
-  { name: 'context', uris: ['nativ://context'], file: 'context.md', mimeType: 'text/markdown', description: 'Project context, tech stack and guardrails (.ai/context.md)' },
-  { name: 'master-plan', uris: ['nativ://master-plan'], file: 'master_plan.json', mimeType: 'application/json', description: 'Milestones, tasks and their status (.ai/master_plan.json)' },
-  { name: 'db-schema', uris: ['nativ://db-schema'], file: 'db_schema.json', mimeType: 'application/json', description: 'Database schema contract (.ai/db_schema.json)' },
-  { name: 'api-contracts', uris: ['nativ://api-contracts'], file: 'api_contracts.json', mimeType: 'application/json', description: 'API route and schema contracts (.ai/api_contracts.json)' },
-  { name: 'escalation', uris: ['nativ://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
-  { name: 'telemetry', uris: ['nativ://telemetry'], file: 'telemetry.json', mimeType: 'application/json', description: 'Execution duration, token usage and cost telemetry (.ai/telemetry.json)' },
-] as const;
-
-// Handlers share global console/process.exitCode state, so captured runs are serialized.
-let captureQueue: Promise<unknown> = Promise.resolve();
-
-function captureOutput(fn: () => Promise<unknown>, options: { errorOnExitCode?: boolean } = {}): Promise<CallToolResult> {
-  const run = async (): Promise<CallToolResult> => {
-    const lines: string[] = [];
-    const collect = (...args: unknown[]) => {
-      lines.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a, null, 2))).join(' '));
-    };
-    const original = { log: console.log, error: console.error, warn: console.warn, info: console.info };
-    const previousExitCode = process.exitCode;
-    process.exitCode = undefined;
-    console.log = console.error = console.warn = console.info = collect;
-
-    let failed = false;
-    try {
-      await fn();
-      failed = options.errorOnExitCode !== false && process.exitCode !== undefined && process.exitCode !== 0;
-    } catch (err) {
-      failed = true;
-      lines.push(`Error: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      Object.assign(console, original);
-      process.exitCode = previousExitCode;
-    }
-
-    const text = lines.join('\n').replace(ANSI_PATTERN, '').trim() || '(no output)';
-    return { content: [{ type: 'text', text }], isError: failed || undefined };
-  };
-
-  const result = captureQueue.then(run, run);
-  captureQueue = result.catch(() => undefined);
-  return result;
-}
-
 export function createMcpServer(targetDirArg?: string): McpServer {
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const server = new McpServer({ name: 'nativ', version: packageVersion() });
@@ -192,7 +149,6 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     },
     ({ taskId, notes, skipVerify }) =>
       captureOutput(async () => {
-        // Kept in the schema so a stray value is refused instead of silently dropped.
         if (skipVerify !== undefined) {
           throw new Error('skipVerify is not allowed over MCP. Only a human at a terminal can skip verification.');
         }
@@ -366,7 +322,6 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         'Reports drift but never repairs it; repairing is `nativ doctor --fix` in a terminal.',
       inputSchema: {},
     },
-    // A report that lists problems is still a successful report, not a tool failure.
     () => captureOutput(async () => runDoctor(targetDir, { json: true }), { errorOnExitCode: false }),
   );
 
@@ -378,7 +333,6 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       description: 'Dev/Prod database connection health, engine, latency and table count. URLs are masked; no credentials are returned.',
       inputSchema: {},
     },
-    // An offline database is a valid status report, not a tool failure.
     () => captureOutput(() => runDbStatus(targetDir, { json: true }), { errorOnExitCode: false }),
   );
 
@@ -450,46 +404,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       captureOutput(() => runBench(targetDir, { scenario, concurrency, json: true })),
   );
 
-  // ─── Contract resources ────────────────────────────────────────────────────
-
-  for (const res of RESOURCES) {
-    for (const uriStr of res.uris) {
-      server.registerResource(
-        res.name,
-        uriStr,
-        { mimeType: res.mimeType, description: res.description },
-        async (uri): Promise<ReadResourceResult> => {
-          const filePath = path.join(targetDir, '.ai', res.file);
-          let text: string;
-          if (fs.existsSync(filePath)) {
-            text = fs.readFileSync(filePath, 'utf8');
-          } else if (res.name === 'escalation') {
-            text = JSON.stringify({ escalations: [] }, null, 2);
-          } else if (res.name === 'telemetry') {
-            text = JSON.stringify(
-              {
-                version: '1.0.0',
-                summary: {
-                  totalTasksCompleted: 0,
-                  totalDurationMs: 0,
-                  estimatedTotalTokens: 0,
-                  estimatedTotalCostUsd: 0,
-                  verificationPassRate: 1.0,
-                  circuitBreakerTrips: 0,
-                },
-                tasks: [],
-              },
-              null,
-              2
-            );
-          } else {
-            throw new Error(`.ai/${res.file} not found in ${targetDir}. Run nativ_init first.`);
-          }
-          return { contents: [{ uri: uri.href, mimeType: res.mimeType, text }] };
-        },
-      );
-    }
-  }
+  registerMcpResources(server, targetDir);
 
   return server;
 }

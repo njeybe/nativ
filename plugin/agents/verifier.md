@@ -18,7 +18,7 @@ You did not write this code, and that is the point: check it as a skeptic would.
    - table, column, route and schema names match `.ai/db_schema.json` and `.ai/api_contracts.json`
    - only the task's `targetFiles` changed, and no tests were deleted or weakened
    - no secrets, connection strings or data in code, logs, tests or commits
-   - the `## Code style` rules in `AGENTS.md` are followed (lines over 120 characters, comments over 2 lines, oversized files or UI files with several components); report violations as findings
+   - the `## Code style` rules in `AGENTS.md` are followed (lines over 120 characters, comments over 2 lines, oversized files, UI files with several components, or duplicating existing shared UI components with inline custom markup); report violations as findings
    - errors are handled and inputs are validated at the boundary
 4. Report in short findings, most serious first. For each: the file and line, what is wrong, and why it matters. Separate confirmed problems from suspicions and say which is which.
 5. If you find nothing, say what you checked so the result can be trusted.

@@ -29,6 +29,18 @@ async function asHuman(fn) {
   }
 }
 
+/** Runs fn as if without an interactive terminal: verifies human-only commands refuse to run headless. */
+async function asHeadless(fn) {
+  const before = [process.stdin.isTTY, process.stdout.isTTY];
+  process.stdin.isTTY = false;
+  process.stdout.isTTY = false;
+  try {
+    return await fn();
+  } finally {
+    [process.stdin.isTTY, process.stdout.isTTY] = before;
+  }
+}
+
 import { recordRoleViolation, MAX_ROLE_VIOLATIONS } from '../dist/core/telemetry.js';
 
 console.log('--- Starting Role Enforcement Tests ---');
@@ -231,7 +243,7 @@ const payload = (root, tool, filePath, extra = {}) => ({
   console.log = (...a) => logs.push(a.join(' '));
   try {
     process.exitCode = undefined;
-    await runTaskUnlock('task-a', root, { reason: 'headless' });
+    await asHeadless(() => runTaskUnlock('task-a', root, { reason: 'headless' }));
     assert.equal(process.exitCode, 1, 'a headless unlock is refused');
     assert.equal(isTaskUnlocked(root, 'task-a'), false);
     process.exitCode = undefined;

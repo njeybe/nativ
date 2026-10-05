@@ -22,6 +22,18 @@ async function asHuman(fn) {
   }
 }
 
+/** Runs fn as if without an interactive terminal: verifies human-only commands refuse to run headless. */
+async function asHeadless(fn) {
+  const before = [process.stdin.isTTY, process.stdout.isTTY];
+  process.stdin.isTTY = false;
+  process.stdout.isTTY = false;
+  try {
+    return await fn();
+  } finally {
+    [process.stdin.isTTY, process.stdout.isTTY] = before;
+  }
+}
+
 
 function createFixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-verify-test-'));
@@ -131,7 +143,7 @@ async function runTests() {
   // Test 4: Task with failing verification command can be bypassed via skipVerify
   {
     process.exitCode = undefined;
-    await runTaskComplete('task-fail', dir, { skipVerify: true });
+    await asHeadless(() => runTaskComplete('task-fail', dir, { skipVerify: true }));
     assert.equal(process.exitCode, 1, 'headless --no-verify is refused');
     assert.equal(readPlan(dir).milestones[0].tasks.find((item) => item.id === 'task-fail').status, 'in_progress');
     process.exitCode = undefined;
