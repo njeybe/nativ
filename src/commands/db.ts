@@ -2,27 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import pc from 'picocolors';
-import type { DatabaseEnv, DatabaseStatus, SchemaDiff, TableSchema } from '../db/types.js';
-import { resolveConnections } from '../db/env-parser.js';
-import { disconnectedStatus, introspectDatabase, type IntrospectionResult } from '../db/introspector.js';
+import type { DatabaseEnv, TableSchema } from '../db/types.js';
 import { diffSchemas, loadContractTables } from '../db/diff.js';
 import { DEFAULT_STUDIO_PORT, startStudioServer, writeContractSchema } from '../server/studio-server.js';
 import { renderStudioHtml } from '../server/studio-ui.js';
 import { refuseHeadless } from '../core/human-gate.js';
-
-/**
- * `nativ db` command handlers.
- * Air-gap: raw connection URLs are resolved in-process and never printed; all output
- * (text and --json) uses masked URLs and structural metadata only.
- */
-
-const ENGINE_LABEL: Record<string, string> = {
-  postgresql: 'PostgreSQL',
-  mysql: 'MySQL',
-  sqlite: 'SQLite',
-  mongodb: 'MongoDB',
-  firestore: 'Firebase Firestore',
-};
+import { resolveConnections } from '../db/env-parser.js';
+import { introspectEnv, keyFamily } from './db/db-introspect.js';
+import { printStatusLine, printDiff, printInspectTables } from './db/db-formatter.js';
 
 function resolveDir(targetDirArg?: string): string {
   return path.resolve(targetDirArg || process.cwd());
@@ -46,175 +33,6 @@ function parseEnvOption(value: string | undefined, fallback: DatabaseEnv): Datab
   return null;
 }
 
-async function introspectEnv(targetDir: string, env: DatabaseEnv): Promise<IntrospectionResult> {
-  const conns = resolveConnections(targetDir);
-  const conn = conns[env];
-  if (!conn) {
-    const missingKey = conns.templateInfo?.missingKeys.find((k) => k.targetEnv === env);
-    if (missingKey) {
-      const engineLabel = missingKey.engine ? ` (${ENGINE_LABEL[missingKey.engine] ?? missingKey.engine})` : '';
-      const templateName = conns.templateInfo?.templateFile ?? '.env.example';
-      const suggestion = `Found "${missingKey.key}"${engineLabel} in ${templateName}, but it is not set in your .env`;
-      return {
-        status: disconnectedStatus(
-          `No ${env} database configured. ${suggestion}`,
-          missingKey.engine ?? 'postgresql',
-          '',
-          {
-            sourceKey: missingKey.key,
-            detectedFromExample: true,
-            exampleFile: templateName,
-            suggestion,
-          },
-        ),
-        tables: [],
-      };
-    }
-    const key = env === 'dev' ? 'DEV_DATABASE_URL (or DATABASE_URL)' : 'PROD_DATABASE_URL';
-    return { status: disconnectedStatus(`No ${env} database configured. Set ${key} in .env`), tables: [] };
-  }
-  const result = await introspectDatabase(conn.url);
-  result.status.sourceKey = conn.sourceKey;
-  result.status.detectedFromExample = conn.detectedFromExample;
-  result.status.exampleFile = conn.exampleFile;
-  if (conn.synthesized) result.status.synthesized = true;
-  if (!result.status.connected) {
-    const fragmentedKeys = env === 'dev' && conn.synthesized ? conns.templateInfo.fragmentedConfig?.sourceKeys : undefined;
-    const diagnostic = localStackDiagnostic(conn.url, conn.engine, result.status, fragmentedKeys ?? (conn.synthesized ? [conn.sourceKey] : undefined));
-    if (diagnostic) result.status.suggestion = diagnostic;
-  }
-  return result;
-}
-
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
-
-/**
- * Actionable hint when a local MySQL/PostgreSQL server refuses the connection, e.g. MySQL not started in
- * the XAMPP Control Panel. Only host/port are read from the URL; credentials are never touched.
- */
-function localStackDiagnostic(url: string, engine: string, status: DatabaseStatus, fragmentedKeys?: string[]): string | null {
-  if (engine !== 'mysql' && engine !== 'postgresql') return null;
-  if (!/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|connection refused/i.test(status.error ?? '')) return null;
-  let host = '';
-  let port = engine === 'mysql' ? 3306 : 5432;
-  try {
-    const parsed = new URL(url);
-    host = parsed.hostname;
-    if (parsed.port) port = Number(parsed.port);
-  } catch {
-    return null;
-  }
-  const label = ENGINE_LABEL[engine];
-  const isLocal = LOCAL_HOSTS.has(host);
-  const action =
-    engine === 'mysql'
-      ? isLocal
-        ? 'Ensure MySQL is started in XAMPP Control Panel.'
-        : `Ensure the MySQL server at ${host}:${port} is running and reachable.`
-      : `Ensure the PostgreSQL service is running on ${host}:${port}.`;
-
-  if (fragmentedKeys?.length) {
-    const shown = fragmentedKeys.filter((k) => /HOST|DATABASE|_DB$|DB_NAME$/.test(k));
-    return `Detected fragmented ${label} config (${(shown.length ? shown : fragmentedKeys).join(', ')}). ${action}`;
-  }
-  return isLocal ? `${label} refused connections on ${host}:${port}. ${action}` : null;
-}
-
-/** DB_HOST -> DB_*, PROD_DB_HOST -> PROD_DB_*, PGHOST -> PG*. */
-function keyFamily(key: string): string {
-  const m = /^(.*_)[^_]*$/.exec(key);
-  return m ? `${m[1]}*` : `${key.slice(0, 2)}*`;
-}
-
-function printStatusLine(env: DatabaseEnv, s: DatabaseStatus): void {
-  const label = pc.bold(env.toUpperCase().padEnd(4));
-  const synthBadge = s.synthesized && s.sourceKey ? ` ${pc.magenta(`[synthesized from ${keyFamily(s.sourceKey)}]`)}` : '';
-  if (!s.connected) {
-    console.log(`  ${pc.red('●')} ${label} ${pc.red('[OFFLINE]')}${synthBadge} ${pc.dim(s.error ?? 'Unknown error')}`);
-    if (s.suggestion) {
-      const isDiagnostic = /Ensure (MySQL|the MySQL|the PostgreSQL)/.test(s.suggestion);
-      console.log(`         ${pc.yellow(isDiagnostic ? `[DIAGNOSTIC] ${s.suggestion}` : `Tip: ${s.suggestion}`)}`);
-    }
-    if (s.maskedUrl) console.log(pc.dim(`         ${s.maskedUrl}`));
-    return;
-  }
-  const count = s.entityCount ?? s.tableCount;
-  const isCollection = s.entityType === 'collection';
-  const entityWord = isCollection ? (count === 1 ? 'collection' : 'collections') : (count === 1 ? 'table' : 'tables');
-  const sourceInfo = synthBadge
-    ? synthBadge
-    : s.detectedFromExample && s.sourceKey
-      ? pc.cyan(` (via ${s.sourceKey} from ${s.exampleFile ?? '.env.example'})`)
-      : s.sourceKey
-        ? pc.dim(` (via ${s.sourceKey})`)
-        : '';
-  console.log(
-    `  ${pc.green('●')} ${label} ${pc.green('[ONLINE]')} ${ENGINE_LABEL[s.engine] ?? s.engine}` +
-      `${s.database ? ` · ${s.database}` : ''} ${pc.dim(`(${s.pingMs}ms)`)} – ${count} ${entityWord}${sourceInfo}`,
-  );
-  console.log(pc.dim(`         ${s.maskedUrl}`));
-}
-
-function describeColumn(c: TableSchema['columns'][number]): string {
-  const flags: string[] = [];
-  if (c.primaryKey) flags.push('PK');
-  if (c.isMedia) flags.push('[IMAGE]');
-  if (c.isSubcollection) flags.push('[SUBCOLLECTION]');
-  const flagStr = flags.length ? ` ${pc.magenta(flags.join(' '))}` : '';
-  return `${c.type}${c.nullable ? '' : ' NOT NULL'}${c.default != null ? ` DEFAULT ${c.default}` : ''}${flagStr}`;
-}
-
-function printDiff(diff: SchemaDiff, targetLabel: string): void {
-  const s = diff.summary;
-  console.log(pc.bold(pc.cyan(`\nSchema Drift: Dev → ${targetLabel}`)));
-  console.log(
-    `  ${pc.green(`+${s.addedTablesCount} added`)}  ${pc.yellow(`~${s.alteredTablesCount} altered`)}  ` +
-      `${pc.red(`-${s.droppedTablesCount} dropped`)}  ${pc.dim(`${s.unchangedTablesCount} unchanged`)}`,
-  );
-
-  if (!s.addedTablesCount && !s.alteredTablesCount && !s.droppedTablesCount) {
-    console.log(pc.green(`\n✔ In sync: Dev matches ${targetLabel}.\n`));
-    return;
-  }
-
-  for (const t of diff.addedTables) {
-    const isCol = t.entityType === 'collection';
-    const tag = isCol ? '[NEW COLLECTION]' : '[NEW TABLE]';
-    const fieldWord = isCol ? 'fields' : 'columns';
-    console.log(`\n  ${pc.green(tag)} ${pc.bold(t.name)} ${pc.dim(`(${t.columns.length} ${fieldWord})`)}`);
-  }
-
-  for (const t of diff.alteredTables) {
-    console.log(`\n  ${pc.yellow('[ALTERED]')} ${pc.bold(t.name)}${t.isDestructive ? ` ${pc.red('[DESTRUCTIVE]')}` : ''}`);
-    for (const c of t.addedColumns) console.log(pc.green(`    + ${c.name}: ${describeColumn(c)}`));
-    for (const ch of t.alteredColumns) {
-      console.log(pc.yellow(`    ~ ${ch.name} (${ch.changedFields.join(', ')}): ${describeColumn(ch.before)} → ${describeColumn(ch.after)}`));
-    }
-    for (const c of t.droppedColumns) console.log(pc.red(`    - ${c.name}: ${describeColumn(c)}`));
-    for (const i of t.addedIndexes) console.log(pc.green(`    + index ${i.name} (${i.columns.join(', ')})${i.unique ? ' unique' : ''}`));
-    for (const i of t.droppedIndexes) console.log(pc.red(`    - index ${i.name} (${i.columns.join(', ')})`));
-    for (const f of t.addedForeignKeys) console.log(pc.green(`    + FK ${f.column} → ${f.referencedTable}.${f.referencedColumn}`));
-    for (const f of t.droppedForeignKeys) console.log(pc.red(`    - FK ${f.column} → ${f.referencedTable}.${f.referencedColumn}`));
-  }
-
-  for (const t of diff.droppedTables) {
-    const isCol = t.entityType === 'collection';
-    const tag = isCol ? '[DROPPED COLLECTION]' : '[DROPPED]';
-    const fieldWord = isCol ? 'fields' : 'columns';
-    console.log(`\n  ${pc.red(tag)} ${pc.bold(t.name)} ${pc.dim(`(${t.columns.length} ${fieldWord})`)}`);
-  }
-
-  if (s.hasDestructiveChanges) {
-    console.log(
-      pc.bgRed(pc.white(pc.bold(' HIGH SEVERITY '))) +
-        pc.red(` Destructive changes detected against ${targetLabel}. Applying them would drop data or fail on existing rows.`),
-    );
-  }
-  console.log('');
-}
-
-// ─── nativ db status ─────────────────────────────────────────────────────────
-
 export async function runDbStatus(targetDirArg?: string, options: { json?: boolean } = {}): Promise<void> {
   const targetDir = resolveDir(targetDirArg);
   const [dev, prod] = await Promise.all([introspectEnv(targetDir, 'dev'), introspectEnv(targetDir, 'prod')]);
@@ -230,8 +48,6 @@ export async function runDbStatus(targetDirArg?: string, options: { json?: boole
   console.log('');
   if (!dev.status.connected && !prod.status.connected) process.exitCode = 1;
 }
-
-// ─── nativ db inspect ────────────────────────────────────────────────────────
 
 export async function runDbInspect(
   targetDirArg?: string,
@@ -269,34 +85,8 @@ export async function runDbInspect(
     return;
   }
 
-  console.log(pc.bold(pc.cyan(`\n${env.toUpperCase()} Schema (${entityWord})`)) + pc.dim(` · ${result.status.maskedUrl}`));
-  for (const t of tables) {
-    const isCol = t.entityType === 'collection' || isCollection;
-    const fieldWord = isCol ? 'fields' : 'columns';
-    const tag = isCol ? pc.green('[COLLECTION] ') : '';
-    console.log(`\n  ${tag}${pc.bold(t.name)} ${pc.dim(`(${t.columns.length} ${fieldWord})`)}`);
-    if (t.description) console.log(pc.dim(`    ${t.description}`));
-    const fkByColumn = new Map(t.foreignKeys.map((f) => [f.column.toLowerCase(), f]));
-    const nameWidth = Math.max(...t.columns.map((c) => c.name.length), 4);
-    for (const c of t.columns) {
-      const fk = fkByColumn.get(c.name.toLowerCase());
-      const flags: string[] = [];
-      if (c.primaryKey) flags.push(pc.magenta('PK'));
-      if (c.isMedia) flags.push(pc.magenta('[IMAGE]'));
-      if (c.isSubcollection) flags.push(pc.cyan('[SUBCOLLECTION]'));
-      if (fk) flags.push(pc.cyan(`FK→${fk.referencedTable}.${fk.referencedColumn}`));
-      const tags = flags.join(' ');
-      console.log(
-        `    ${c.name.padEnd(nameWidth)}  ${c.type}${c.nullable ? '' : pc.dim(' NOT NULL')}` +
-          `${c.default != null ? pc.dim(` DEFAULT ${c.default}`) : ''}${tags ? `  ${tags}` : ''}`,
-      );
-    }
-    for (const i of t.indexes) console.log(pc.dim(`    index ${i.name} (${i.columns.join(', ')})${i.unique ? ' unique' : ''}`));
-  }
-  console.log('');
+  printInspectTables(env, result.status.maskedUrl, tables, entityWord, isCollection);
 }
-
-// ─── nativ db diff ───────────────────────────────────────────────────────────
 
 export async function runDbDiff(
   targetDirArg?: string,
@@ -342,8 +132,6 @@ export async function runDbDiff(
   if (options.exitCode && s.addedTablesCount + s.alteredTablesCount + s.droppedTablesCount > 0) process.exitCode = 1;
 }
 
-// ─── nativ db sync ───────────────────────────────────────────────────────────
-
 /** Exports a live schema into .ai/db_schema.json. Previews unless --yes is passed. */
 export async function runDbSync(targetDirArg?: string, options: { source?: string; yes?: boolean } = {}): Promise<void> {
   const source = parseEnvOption(options.source, 'dev');
@@ -380,8 +168,6 @@ export async function runDbSync(targetDirArg?: string, options: { source?: strin
   const entityWord = isCollection ? (count === 1 ? 'collection' : 'collections') : (count === 1 ? 'table' : 'tables');
   console.log(pc.green(`✔ Wrote ${count} ${entityWord} (structure only, no credentials) to ${path.relative(targetDir, filePath)}\n`));
 }
-
-// ─── nativ db ui ─────────────────────────────────────────────────────────────
 
 function openBrowser(url: string): void {
   const [cmd, args] =
