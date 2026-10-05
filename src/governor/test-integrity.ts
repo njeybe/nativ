@@ -128,6 +128,18 @@ export class TestIntegrityGuard {
       ...(skippedReason ? { skippedReason } : {}),
     });
 
+    try {
+      const cfgPath = path.join(targetDir, '.nativ', 'config.json');
+      if (fs.existsSync(cfgPath)) {
+        const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        if (raw.testIntegrity === 'off' || raw.profile === 'prototype') {
+          return pass('Test integrity check disabled by profile or testIntegrity: off');
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+
     if (!git(targetDir, ['rev-parse', '--is-inside-work-tree']).ok) return pass('Not a git repository; test integrity cannot be checked.');
 
     const recorded = CircuitBreaker.getBaseline(targetDir, taskId);

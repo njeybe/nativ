@@ -31,6 +31,7 @@ import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
 import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
+import { runProfileCommand } from './commands/profile.js';
 import { packageVersion } from './core/version.js';
 
 export function createProgram(): Command {
@@ -128,6 +129,14 @@ export function createProgram(): Command {
     .option('--json', 'Output raw benchmark metrics as JSON')
     .action(async (targetDir, options) => {
       await runBench(targetDir, options);
+    });
+
+  program
+    .command('profile [profile] [targetDir]')
+    .description('Inspect or switch adaptive ceremony profiles (prototype, solo, enterprise)')
+    .option('--json', 'Output profile configuration as JSON')
+    .action(async (profile, targetDir, options) => {
+      await runProfileCommand(profile, targetDir, options);
     });
 
   const task = program

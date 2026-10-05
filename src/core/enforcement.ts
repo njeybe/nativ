@@ -75,8 +75,10 @@ interface PlanTaskLite {
 
 export function loadEnforcementMode(root: string): EnforcementMode {
   try {
-    const raw = parseJsonLoose<{ enforcement?: unknown }>(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
+    const raw = parseJsonLoose<{ enforcement?: unknown; profile?: unknown }>(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
     if (raw.enforcement === 'off' || raw.enforcement === 'warn' || raw.enforcement === 'block') return raw.enforcement;
+    if (raw.profile === 'prototype') return 'off';
+    if (raw.profile === 'solo') return 'warn';
   } catch {
     // Missing or corrupt config means the default.
   }

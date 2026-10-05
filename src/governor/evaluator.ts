@@ -130,8 +130,22 @@ export class ContractGovernor {
         ? evaluateDbPatch(patch, contractData)
         : evaluateApiPatch(patch, contractData);
 
+    // Check governor mode: auto_adopt allows non-destructive or prototype changes without blocking
+    let isAutoAdopt = false;
+    try {
+      const cfgPath = path.join(targetDir, '.nativ', 'config.json');
+      if (fs.existsSync(cfgPath)) {
+        const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        if (raw.governorMode === 'auto_adopt' || raw.profile === 'prototype') {
+          isAutoAdopt = true;
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+
     // 5. Handle approval vs rejection
-    if (evalResult.approved && evalResult.blastRadius === 'LOW_ADDITIVE') {
+    if ((evalResult.approved && evalResult.blastRadius === 'LOW_ADDITIVE') || (isAutoAdopt && evalResult.blastRadius !== 'HIGH_DESTRUCTIVE')) {
       // Apply patch
       const patchedData =
         patch.target === 'db_schema'
