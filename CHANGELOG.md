@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1
+
+### Fixed
+
+- Added missing `architect` role guide (`templates/dot-ai/subagents/architect.md` and `.ai/subagents/architect.md`). `nativ doctor` no longer warns about the architect role having no guide.
+
 ## 2.5.0
 
 ### Added
