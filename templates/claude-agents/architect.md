@@ -45,7 +45,8 @@ Token limits: exactly two directions, style tiles only in Full, compact wirefram
 ## Task breakdown
 
 - About one component or endpoint per task, at most 5 files.
-- `acceptanceCriteria` in plain words, including which states apply (loading, empty, error).
+- Reusable components first: If a UI element or primitive is needed across multiple views, create a dedicated foundational component task first and register it under the Shared Component Registry in `.ai/ui_specs.md` before dependent screen tasks.
+- `acceptanceCriteria` in plain words, including which states apply (loading, empty, error) and which shared components must be reused.
 - `specRefs` point to exact sections, such as `ui_specs.md#appointment-list` or an `api_contracts.json` route.
 - `complexity` is `simple`, `standard` or `complex`.
 - Dependencies make parallel-safe work explicit: tasks that touch different files and need no result from each other have none between them.

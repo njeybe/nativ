@@ -51,6 +51,7 @@ Applies to every worker. A project's own formatter or linter config wins over th
 - Lines: aim for 100 characters or fewer, hard maximum 120.
 - Functions: about 40 lines. Files: about 300 lines.
 - A growing UI file is split into components, one component per file.
+- Reusable components: UI components must be pure, props-driven, and single-responsibility. Reuse shared components from the design system or component registry; never duplicate existing UI elements with inline custom markup.
 - Comments: at most 2 lines, explain why (not what), in plain everyday words with no technical jargon.
 - Do not restate the code in a comment. No banner or divider comments. No commented-out code.
 - Match the surrounding code.
