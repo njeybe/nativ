@@ -59,6 +59,15 @@ export const triageScript = String.raw`  // ─── Tier 1 AI Strategist (/api
     ($('t1-auto').disabled ? menu : $('t1-auto')).focus();
   }
 
+  function checkAutoTriage() {
+    if (!pipe.triage || !pipe.triage.autoTriageEnabled) return;
+    (pipe.escalations || []).forEach(function (e) {
+      if (e && e.status === 'pending_review' && !e.triage && !pipe.triageRunning[e.id]) {
+        runTriage(e);
+      }
+    });
+  }
+
   function setAutoTriage(enabled) {
     if (pipe.busy.triageConfig) return;
     pipe.busy.triageConfig = true;
@@ -66,6 +75,7 @@ export const triageScript = String.raw`  // ─── Tier 1 AI Strategist (/api
     postJson('/api/pipeline/triage/config', { autoTriageEnabled: enabled }).then(function (body) {
       pipe.triage = Object.assign({}, pipe.triage || {}, { autoTriageEnabled: !!(body.config && body.config.autoTriageEnabled) });
       toast(enabled ? 'Autonomous Auto-Triage on: fixes Tier 1 proves safe are applied without asking' : 'Autonomous Auto-Triage off: every fix waits for your approval', 'ok');
+      if (enabled) checkAutoTriage();
     }, function (e) {
       toast('Could not change Autonomous Auto-Triage: ' + e.message);
     }).then(function () {

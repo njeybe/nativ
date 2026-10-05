@@ -1646,7 +1646,7 @@ function handleTriageEvaluate(
 const RISK_THRESHOLDS = ['safe_contracts_only', 'all_non_destructive'];
 
 /** POST /api/pipeline/triage/config: session-only auto-triage settings, validated before they reach the liaison. */
-function handleTriageConfig(liaison: Tier1Liaison, body: Record<string, unknown>) {
+function handleTriageConfig(liaison: Tier1Liaison, body: Record<string, unknown>, onToggle?: () => void) {
   if (typeof body.autoTriageEnabled !== 'boolean') {
     throw new HttpError(400, 'VALIDATION_ERROR', '"autoTriageEnabled" must be a boolean');
   }
@@ -1655,7 +1655,34 @@ function handleTriageConfig(liaison: Tier1Liaison, body: Record<string, unknown>
   }
   const result = liaison.updateConfig({ autoTriageEnabled: body.autoTriageEnabled, riskThreshold: body.riskThreshold });
   if (!result.ok) throw new HttpError(400, 'VALIDATION_ERROR', result.error);
+  if (body.autoTriageEnabled && onToggle) onToggle();
   return result;
+}
+
+/** Automatically triages pending escalations when autoTriage is enabled. */
+async function runAutoTriageQueue(
+  root: string,
+  liaison: Tier1Liaison,
+  inFlight: Map<string, Promise<ReturnType<typeof triageView>>>,
+): Promise<void> {
+  const status = liaison.getStatus();
+  if (!status.autoTriageEnabled) return;
+
+  const data = readEscalationFile(root);
+  if (!data?.escalations) return;
+
+  const pending = data.escalations.filter(
+    (e) => e && e.status === 'pending_review' && !e.triage,
+  );
+
+  for (const esc of pending) {
+    if (inFlight.has(esc.id)) continue;
+    try {
+      await handleTriageEvaluate(root, liaison, inFlight, { escalationId: esc.id });
+    } catch {
+      // Background auto-triage gracefully ignores individual failures
+    }
+  }
 }
 
 /**
@@ -1678,7 +1705,10 @@ class PipelineEventHub {
   constructor(
     private readonly aiDir: string,
     private readonly heartbeatMs: number,
-  ) {}
+    private readonly onFileChange?: (file: string) => void,
+  ) {
+    this.startWatcher();
+  }
 
   subscribe(res: http.ServerResponse): void {
     if (this.closed) {
@@ -1698,15 +1728,27 @@ class PipelineEventHub {
     this.clients.add(res);
     res.on('close', () => {
       this.clients.delete(res);
-      if (this.clients.size === 0) this.stop();
+      if (this.clients.size === 0 && this.heartbeat) {
+        clearInterval(this.heartbeat);
+        this.heartbeat = null;
+      }
     });
-    this.start();
+    if (!this.heartbeat) {
+      this.heartbeat = setInterval(() => this.broadcast('heartbeat', { at: new Date().toISOString() }), this.heartbeatMs);
+      this.heartbeat.unref();
+    }
+    this.startWatcher();
   }
 
   /** Pushes an agent-supervisor event (`runner_status`, `runner_log`, `runner_token_usage`) to every connected client. */
   publish(event: 'runner_status' | 'runner_log' | 'runner_token_usage', data: unknown): void {
     if (this.closed || this.clients.size === 0) return;
     this.broadcast(event, data);
+  }
+
+  publishPlanChange(files: string[] = ['escalation.json']): void {
+    if (this.closed || this.clients.size === 0) return;
+    this.broadcast('plan_change', { files, at: new Date().toISOString() });
   }
 
   /** SSE responses never finish on their own; drop them so http.Server#close() can complete. */
@@ -1718,10 +1760,10 @@ class PipelineEventHub {
   }
 
   private start(): void {
-    if (!this.heartbeat) {
-      this.heartbeat = setInterval(() => this.broadcast('heartbeat', { at: new Date().toISOString() }), this.heartbeatMs);
-      this.heartbeat.unref();
-    }
+    this.startWatcher();
+  }
+
+  private startWatcher(): void {
     if (this.watcher || this.pollers.length) return;
     try {
       this.watcher = fs.watch(this.aiDir, { persistent: false }, (_event, filename) => {
@@ -1729,7 +1771,7 @@ class PipelineEventHub {
       });
       this.watcher.on('error', () => {
         this.closeWatcher();
-        if (this.clients.size) this.startPolling();
+        this.startPolling();
       });
     } catch {
       // .ai/ is missing (studio started before `nativ init`) or not watchable: poll the files instead.
@@ -1765,6 +1807,11 @@ class PipelineEventHub {
   }
 
   private queue(file: string): void {
+    try {
+      this.onFileChange?.(file);
+    } catch {
+      // Ignore consumer callback error
+    }
     const event = WATCHED_FILES.get(file);
     if (!event) return;
     const files = this.pending.get(event) ?? new Set<string>();
@@ -1824,8 +1871,26 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
 
   // Pipeline endpoints read the project that owns .ai/ (climbing out of .worktrees/task-* when needed).
   const root = resolveProjectRoot(cwd);
+  // Tier 1 strategist: settings and counters live for this server session only.
+  const liaison = new Tier1Liaison(root, options.triage);
+  const triageInFlight = new Map<string, Promise<ReturnType<typeof triageView>>>();
+
+  let autoTriageTimer: NodeJS.Timeout | null = null;
+  const scheduleAutoTriage = () => {
+    if (autoTriageTimer) clearTimeout(autoTriageTimer);
+    autoTriageTimer = setTimeout(() => {
+      autoTriageTimer = null;
+      runAutoTriageQueue(root, liaison, triageInFlight).catch(() => {});
+    }, 150);
+    autoTriageTimer.unref();
+  };
+
   const heartbeatMs = options.heartbeatMs && options.heartbeatMs > 0 ? options.heartbeatMs : DEFAULT_HEARTBEAT_MS;
-  const events = new PipelineEventHub(path.join(root, AI_DIR), heartbeatMs);
+  const events = new PipelineEventHub(path.join(root, AI_DIR), heartbeatMs, (file) => {
+    if (file === 'escalation.json') {
+      scheduleAutoTriage();
+    }
+  });
 
   // Background agent runs: lifecycle phases, stdout/stderr chunks and per-turn token usage
   // (native engine) fan out over /api/events.
@@ -1833,10 +1898,6 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   supervisor.on('runner_status', (record: RunnerRecord) => events.publish('runner_status', runView(record)));
   supervisor.on('runner_log', (entry: unknown) => events.publish('runner_log', entry));
   supervisor.on('runner_token_usage', (usage: RunnerTokenUsageEvent) => events.publish('runner_token_usage', usage));
-
-  // Tier 1 strategist: settings and counters live for this server session only.
-  const liaison = new Tier1Liaison(root, options.triage);
-  const triageInFlight = new Map<string, Promise<ReturnType<typeof triageView>>>();
 
   // Concurrent "Run Benchmark" requests share one in-flight run.
   let benchmarkRun: Promise<BenchmarkReport> | null = null;
@@ -1941,7 +2002,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
         case 'GET /api/pipeline/triage/status':
           return sendJson(res, 200, liaison.getStatus());
         case 'POST /api/pipeline/triage/config':
-          return sendJson(res, 200, handleTriageConfig(liaison, await readJsonBody(req)));
+          return sendJson(res, 200, handleTriageConfig(liaison, await readJsonBody(req), scheduleAutoTriage));
         case 'GET /favicon.ico':
           res.writeHead(204).end();
           return;

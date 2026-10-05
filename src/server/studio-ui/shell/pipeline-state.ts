@@ -83,9 +83,11 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
       pipe.escalations = Array.isArray(body.escalations) ? body.escalations : [];
       syncHealTab();
       renderTriageChip();
+      if (typeof checkAutoTriage === 'function') checkAutoTriage();
     } else if (part === 'triage') {
       pipe.triage = body;
       renderTriageChip();
+      if (typeof checkAutoTriage === 'function') checkAutoTriage();
     }
   }
 

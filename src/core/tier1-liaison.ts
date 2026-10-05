@@ -206,6 +206,66 @@ function loadContracts(root: string): ContractSet {
   };
 }
 
+interface NativConfigFile {
+  triage?: {
+    autoTriageEnabled?: boolean;
+    riskThreshold?: RiskThreshold;
+    model?: string;
+  };
+  [key: string]: unknown;
+}
+
+export function loadTriageConfig(root: string): Partial<TriageConfig> {
+  const configFile = path.join(root, '.nativ', 'config.json');
+  try {
+    if (!fs.existsSync(configFile)) return {};
+    const parsed = JSON.parse(fs.readFileSync(configFile, 'utf8')) as NativConfigFile;
+    if (parsed && typeof parsed === 'object' && parsed.triage) {
+      const res: Partial<TriageConfig> = {};
+      if (typeof parsed.triage.autoTriageEnabled === 'boolean') {
+        res.autoTriageEnabled = parsed.triage.autoTriageEnabled;
+      }
+      if (parsed.triage.riskThreshold === 'safe_contracts_only' || parsed.triage.riskThreshold === 'all_non_destructive') {
+        res.riskThreshold = parsed.triage.riskThreshold;
+      }
+      if (typeof parsed.triage.model === 'string' && parsed.triage.model.trim()) {
+        res.model = parsed.triage.model.trim();
+      }
+      return res;
+    }
+  } catch {
+    // Ignore corrupt or unreadable config file
+  }
+  return {};
+}
+
+export function saveTriageConfig(root: string, update: Partial<TriageConfig>): void {
+  const nativDir = path.join(root, '.nativ');
+  const configFile = path.join(nativDir, 'config.json');
+  try {
+    if (!fs.existsSync(nativDir)) fs.mkdirSync(nativDir, { recursive: true });
+    let existing: Record<string, unknown> = {};
+    if (fs.existsSync(configFile)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(configFile, 'utf8')) as Record<string, unknown>;
+      } catch {
+        existing = {};
+      }
+    }
+    const currentTriage = (existing.triage && typeof existing.triage === 'object') ? (existing.triage as Record<string, unknown>) : {};
+    if (typeof update.autoTriageEnabled === 'boolean') currentTriage.autoTriageEnabled = update.autoTriageEnabled;
+    if (update.riskThreshold) currentTriage.riskThreshold = update.riskThreshold;
+    if (update.model) currentTriage.model = update.model;
+    existing.triage = currentTriage;
+
+    const tmp = `${configFile}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+    fs.renameSync(tmp, configFile);
+  } catch {
+    // Ignore write failures gracefully
+  }
+}
+
 /**
  * Tier 1 AI Strategist Liaison instance managing escalation evaluation,
  * auto-patch application, and configuration.
@@ -222,11 +282,12 @@ export class Tier1Liaison {
     private readonly root: string,
     private readonly options: Tier1LiaisonOptions = {},
   ) {
+    const saved = loadTriageConfig(root);
     this.config = {
       // Off by default: even a fix classified as safe waits for confirmation unless auto-triage is enabled.
-      autoTriageEnabled: options.config?.autoTriageEnabled ?? false,
-      riskThreshold: options.config?.riskThreshold ?? 'safe_contracts_only',
-      model: options.model ?? DEFAULT_MODEL,
+      autoTriageEnabled: options.config?.autoTriageEnabled ?? saved.autoTriageEnabled ?? false,
+      riskThreshold: options.config?.riskThreshold ?? saved.riskThreshold ?? 'safe_contracts_only',
+      model: options.model ?? saved.model ?? DEFAULT_MODEL,
     };
   }
 
@@ -274,6 +335,10 @@ export class Tier1Liaison {
     if (body.riskThreshold === 'safe_contracts_only' || body.riskThreshold === 'all_non_destructive') {
       this.config.riskThreshold = body.riskThreshold;
     }
+    if (typeof body.model === 'string' && body.model.trim()) {
+      this.config.model = body.model.trim();
+    }
+    saveTriageConfig(this.root, this.config);
     return { ok: true, config: { ...this.config } };
   }
 

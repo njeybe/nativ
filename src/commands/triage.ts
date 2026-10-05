@@ -329,7 +329,10 @@ export async function runTriage(
 
   const liaison = new Tier1Liaison(root, {
     ...options.liaison,
-    config: { autoTriageEnabled: Boolean(options.apply), riskThreshold: (threshold as RiskThreshold | undefined) ?? 'safe_contracts_only' },
+    config: {
+      ...(options.apply !== undefined ? { autoTriageEnabled: Boolean(options.apply) } : {}),
+      ...(threshold ? { riskThreshold: threshold as RiskThreshold } : {}),
+    },
   });
   const interactive = !options.json && (options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY));
   const reader = interactive ? createLineReader(options.input ?? process.stdin, output) : null;
