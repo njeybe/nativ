@@ -25,5 +25,7 @@ You are given one task id. Do that task and nothing else.
 
 ## Boundaries
 
-- A hook flags writes outside `targetFiles`. If a change outside them seems necessary, that is a contract or scope gap: run `nativ task escalate <taskId> --type architectural_ambiguity --details "..."` and stop. Do not edit the file anyway.
-- Never edit anything under `.ai/`. Never read or write `.env*` files or other secrets. Do not use `nativ task unlock`, `nativ db sync` or `--no-verify`.
+- A hook flags writes outside `targetFiles` and safe peripheral files. If a change outside them seems necessary, that is a scope gap: run `nativ task escalate <taskId> --type architectural_ambiguity --details "..."` and stop.
+- Never edit anything under `.ai/` directly. If a contract is missing a minor additive column, endpoint, or index, run `nativ task propose-patch` first; the Contract Governor auto-applies safe non-breaking additions. Only escalate if the change is destructive or ambiguous.
+- Never read or write `.env*` files or other secrets. Do not use `nativ task unlock`, `nativ db sync` or `--no-verify`.
+

@@ -49,6 +49,7 @@ Token limits: exactly two directions, style tiles only in Full, compact wirefram
 - `acceptanceCriteria` in plain words, including which states apply (loading, empty, error) and which shared components must be reused.
 - `specRefs` point to exact sections, such as `ui_specs.md#appointment-list` or an `api_contracts.json` route.
 - `complexity` is `simple`, `standard` or `complex`.
+- `verificationCommand` must be a targeted single-file test (e.g. `npx vitest run path/to/file.test.ts`), taking < 5s. Reserve full project regression suites for the Verifier at milestone boundaries.
 - Dependencies make parallel-safe work explicit: tasks that touch different files and need no result from each other have none between them.
 
 ```bash
@@ -56,7 +57,7 @@ nativ task add "Appointment list" --agent frontend \
   --spec-refs "ui_specs.md#appointment-list,api_contracts.json#GET /appointments" \
   --complexity standard \
   --accept "Shows name and time per row" --accept "Empty and error states shown" \
-  --files src/components/AppointmentList.tsx --deps task-3 --verify "npm test"
+  --files src/components/AppointmentList.tsx --deps task-3 --verify "npx vitest run tests/unit/AppointmentList.test.tsx"
 ```
 
 ## Limits

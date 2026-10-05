@@ -83,6 +83,18 @@ export function loadEnforcementMode(root: string): EnforcementMode {
   return DEFAULT_ENFORCEMENT_MODE;
 }
 
+export function loadSafePeripherals(root: string): string[] {
+  try {
+    const raw = parseJsonLoose<{ safePeripherals?: unknown }>(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
+    if (Array.isArray(raw.safePeripherals)) {
+      return raw.safePeripherals.filter((p): p is string => typeof p === 'string' && Boolean(p.trim()));
+    }
+  } catch {
+    // Missing or invalid config
+  }
+  return [];
+}
+
 interface UnlockFile {
   unlocks: Array<{ taskId: string; at: string; reason?: string }>;
 }
@@ -303,6 +315,9 @@ export function checkWrite(input: WriteCheckInput): WriteCheckResult {
   const taskIds = tasks.map((t) => t.id);
   if (tasks.some((t) => isTaskUnlocked(mainRoot, t.id))) return { ...allow, taskIds };
   if (tasks.some((t) => t.targetFiles.some((target) => matchesTarget(relPath, target)))) return { ...allow, taskIds };
+
+  const safePeripherals = loadSafePeripherals(mainRoot);
+  if (safePeripherals.some((pattern) => matchesTarget(relPath, pattern))) return { ...allow, taskIds };
 
   const label = taskIds.length === 1 ? `task ${taskIds[0]}` : `tasks ${taskIds.join(', ')}`;
   const scope = tasks.flatMap((t) => t.targetFiles);
