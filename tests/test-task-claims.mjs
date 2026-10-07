@@ -94,6 +94,57 @@ try {
     console.log('✔ Test 4: --force is refused headless and works with a human override');
   }
 
+  // Test 5: reclaim frees stale claims only, reports unknown ages, and honours --dry-run
+  {
+    const dir = project([
+      task('old', { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(6) }),
+      task('fresh', { status: 'in_progress', claimedBy: 'agent-b', claimedAt: hoursAgo(1) }),
+      task('legacy', { status: 'in_progress' }),
+      task('idle'),
+    ]);
+    const dry = nativ(dir, ['task', 'reclaim', dir, '--dry-run', '--json']);
+    assert.equal(dry.status, 0, dry.stderr);
+    const dryJson = JSON.parse(dry.stdout);
+    assert.deepEqual(dryJson.reclaimed.map((r) => r.id), ['old']);
+    assert.deepEqual(dryJson.unknownAge, ['legacy']);
+    assert.equal(get(dir, 'old').status, 'in_progress', '--dry-run changes nothing');
+
+    const run = JSON.parse(nativ(dir, ['task', 'reclaim', dir, '--json']).stdout);
+    assert.equal(run.reclaimed[0].claimedBy, 'agent-a');
+    assert.equal(get(dir, 'old').status, 'pending');
+    assert.equal(get(dir, 'old').claimedBy, undefined);
+    assert.equal(get(dir, 'fresh').status, 'in_progress', 'a fresh claim is kept');
+    assert.equal(get(dir, 'legacy').status, 'in_progress', 'an unknown age is never reclaimed implicitly');
+
+    assert.equal(JSON.parse(nativ(dir, ['task', 'reclaim', dir, '--older-than', '0.5', '--json']).stdout).reclaimed[0].id, 'fresh', '--older-than sets the age');
+    assert.equal(nativ(dir, ['task', 'reclaim', 'legacy', dir]).status, 0, 'a task with no claim time is reclaimed by id');
+    assert.equal(get(dir, 'legacy').status, 'pending');
+    console.log('✔ Test 5: reclaim frees stale claims, keeps fresh ones, and needs an id for unknown ages');
+  }
+
+  // Test 6: a named fresh claim needs a human; a task that is not in progress is an error
+  {
+    const dir = project([task('t1', { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.2) }), task('t2')]);
+    const fresh = nativ(dir, ['task', 'reclaim', 't1', dir]);
+    assert.equal(fresh.status, 1);
+    assert.match(fresh.stderr, /claimed by agent-a 0\.2h ago/);
+    assert.equal(nativ(dir, ['task', 'reclaim', 't1', dir, '--force']).status, 1, '--force is refused headless');
+    assert.equal(get(dir, 't1').status, 'in_progress');
+    const idle = nativ(dir, ['task', 'reclaim', 't2', dir]);
+    assert.equal(idle.status, 1);
+    assert.match(idle.stderr, /not in_progress/);
+    assert.equal(nativ(dir, ['task', 'reclaim', dir, '--older-than', '-1']).status, 1, 'a negative age is rejected');
+    console.log('✔ Test 6: fresh named claims need a human; reclaiming an idle task is an error');
+  }
+
+  // Test 7: the SessionStart orientation flags stale tasks
+  {
+    const dir = project([task('t1', { status: 'in_progress', claimedAt: hoursAgo(7) })]);
+    const ctx = spawnSync(process.execPath, [CLI, 'hook', 'context', dir], { encoding: 'utf8', env: HEADLESS_ENV });
+    assert.match(JSON.parse(ctx.stdout).hookSpecificOutput.additionalContext, /stale in_progress: t1 \(7h\): run `nativ task reclaim`/);
+    console.log('✔ Test 7: the session orientation lists stale tasks');
+  }
+
   console.log('\n🎉 ALL TASK CLAIM TESTS PASSED!');
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });

@@ -9,6 +9,7 @@ import {
   runTaskStart,
   runTaskComplete,
   runTaskBlock,
+  runTaskReclaim,
   runTaskEscalate,
   runTaskAdd,
   runTaskProposePatch,
@@ -183,6 +184,20 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       },
     },
     ({ taskId, reason }) => captureOutput(() => runTaskBlock(taskId, reason, targetDir)),
+  );
+
+  registerNativTool(
+    'task_reclaim',
+    {
+      description: 'Put in_progress tasks whose agent stopped (claim older than olderThanHours, default 4) back to pending. Pass taskId to reclaim one task that has a stale or unrecorded claim.',
+      inputSchema: {
+        taskId: z.string().optional().describe('Reclaim only this task'),
+        olderThanHours: z.number().positive().optional().describe('Age at which a claim counts as abandoned'),
+        dryRun: z.boolean().optional().describe('Report without changing the plan'),
+      },
+    },
+    ({ taskId, olderThanHours, dryRun }) =>
+      captureOutput(() => runTaskReclaim(taskId, targetDir, { olderThan: olderThanHours, dryRun, json: true })),
   );
 
   registerNativTool(

@@ -21,6 +21,8 @@ export {
   runTaskBlock,
   runTaskUnlock,
 } from './task/task-lifecycle.js';
+export { runTaskReclaim } from './task/task-reclaim.js';
+export type { TaskReclaimOptions, TaskReclaimResult } from './task/task-reclaim.js';
 export {
   FAST_PATH_MILESTONE_NAME,
   generateNextTaskId,

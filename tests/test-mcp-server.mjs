@@ -18,6 +18,7 @@ const EXPECTED_TOOLS = [
   'nativ_task_start',
   'nativ_task_complete',
   'nativ_task_block',
+  'nativ_task_reclaim',
   'nativ_task_escalate',
   'nativ_learn_propose',
   'nativ_init',

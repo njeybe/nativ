@@ -3,6 +3,7 @@ import path from 'node:path';
 import { ROLE_ENV, loadEnforcementMode, parseJsonLoose } from '../enforcement.js';
 import { resolveProjectRoot } from '../root-resolver.js';
 import { loadEscalationFile } from '../../governor/store.js';
+import { DEFAULT_STALE_HOURS, claimAgeHours, isStaleClaim } from '../task-claims.js';
 
 interface PlanTask {
   id: string;
@@ -10,6 +11,7 @@ interface PlanTask {
   status: string;
   dependencies: string[];
   targetFiles: string[];
+  claimedAt?: string;
 }
 
 function readPlanTasks(root: string): PlanTask[] {
@@ -27,6 +29,7 @@ function readPlanTasks(root: string): PlanTask[] {
             status: typeof t.status === 'string' ? t.status : 'pending',
             dependencies: Array.isArray(t.dependencies) ? t.dependencies : [],
             targetFiles: Array.isArray(t.targetFiles) ? t.targetFiles : [],
+            ...(typeof t.claimedAt === 'string' ? { claimedAt: t.claimedAt } : {}),
           });
         }
       }
@@ -46,9 +49,14 @@ function openItems(root: string, tasks: PlanTask[]): string | null {
     // An unreadable escalation file must not hide the rest of the orientation.
   }
   const blocked = tasks.filter((t) => t.status === 'blocked').map((t) => t.id);
-  if (!pending && !blocked.length) return null;
+  const stale = tasks.filter((t) => isStaleClaim(t, DEFAULT_STALE_HOURS));
+  if (!pending && !blocked.length && !stale.length) return null;
   const parts = [];
   if (blocked.length) parts.push(`blocked: ${blocked.slice(0, 5).join(', ')}${blocked.length > 5 ? ` +${blocked.length - 5}` : ''}`);
+  if (stale.length) {
+    const list = stale.slice(0, 5).map((t) => `${t.id} (${Math.floor(claimAgeHours(t) ?? 0)}h)`).join(', ');
+    parts.push(`stale in_progress: ${list}: run \`nativ task reclaim\``);
+  }
   if (pending) parts.push(`${pending} escalation(s) pending: run \`nativ triage --all --apply --json\``);
   return `Open: ${parts.join('; ')}.`;
 }

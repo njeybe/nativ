@@ -8,6 +8,7 @@ import {
   runTaskStart,
   runTaskComplete,
   runTaskBlock,
+  runTaskReclaim,
   runTaskEscalate,
   runTaskAdd,
   runTaskProposePatch,
@@ -217,6 +218,17 @@ export function createProgram(): Command {
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
+    });
+
+  task
+    .command('reclaim [taskId] [targetDir]')
+    .description('Put in_progress tasks whose agent stopped back to pending (claims older than --older-than hours)')
+    .option('--older-than <hours>', 'Age at which a claim counts as abandoned (default 4)', parseFloat)
+    .option('--dry-run', 'List what would be reclaimed without changing the plan')
+    .option('--force', 'Human override: reclaim the named task even though its claim is fresh')
+    .option('--json', 'Output the result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskReclaim(taskId, targetDir, { olderThan: options.olderThan, dryRun: options.dryRun, force: options.force, json: options.json });
     });
 
   task
