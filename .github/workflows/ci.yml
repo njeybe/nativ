@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20, 22]
+        exclude:
+          - os: windows-latest
+            node: 20
+    env:
+      # The Studio suites run through `npx tsx`; let npx fetch it without a prompt.
+      npm_config_yes: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Git identity for tests that commit
+        run: |
+          git config --global user.name "nativ CI"
+          git config --global user.email "ci@nativ.invalid"
+      - run: npm ci
+      - run: npm run build
+      - name: Plugin is in sync with the templates
+        run: node scripts/sync-plugin.mjs --check
+      - run: npm test

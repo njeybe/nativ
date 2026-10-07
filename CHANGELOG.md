@@ -27,6 +27,7 @@
 - **Unknown escalation types are refused.** `nativ task escalate --type` used to turn a typo into `architectural_ambiguity` silently; it now lists the valid types and writes nothing. The CLI and MCP share one list.
 - **`nativ init` writes the architect guide.** It copied a fixed list of eight guides and skipped `architect.md`; it now copies every guide in the templates. `nativ validate` checks the architect guide when present.
 - **Windows paths in `.mcp.json` count as machine-specific on every OS.** A `C:/...` command was treated as portable when setup ran on Linux or macOS.
+- **Continuous integration.** `.github/workflows/ci.yml` builds, checks the plugin sync and runs every suite on Ubuntu (Node 20 and 22) and Windows (Node 22) for pushes to `main` and `dev` and for pull requests. The test runner clears `CI` and the headless overrides for each suite, so tests behave the same on a laptop and in CI.
 - **`npm test` runs every suite.** `tests/run-all.mjs` keeps going after a failure and lists every failed suite at the end.
 
 ## 2.5.1

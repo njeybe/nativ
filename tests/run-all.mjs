@@ -23,9 +23,14 @@ const suites = [
   ...TSX_SUITES.map((name) => ({ name, cmd: 'npx', args: ['tsx', `tests/test-${name}.mjs`] })),
 ].filter((s) => !filter || s.name.includes(filter));
 
+// CI runners set CI=true, which nativ reads as permission for human-only overrides. Suites that test that set it
+// themselves; every other suite must see the plain headless agent it expects, on a laptop or in CI alike.
+const env = { ...process.env };
+for (const key of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE']) delete env[key];
+
 const failed = [];
 for (const s of suites) {
-  const r = spawnSync(s.cmd, s.args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' && s.cmd === 'npx' });
+  const r = spawnSync(s.cmd, s.args, { cwd: root, env, stdio: 'inherit', shell: process.platform === 'win32' && s.cmd === 'npx' });
   if (r.status !== 0) failed.push(s.name);
 }
 
