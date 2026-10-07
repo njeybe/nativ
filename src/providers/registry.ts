@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeJsonAtomicSync } from '../core/lock-manager.js';
 import { createClaudeApiProvider } from './claude-api.js';
 import { createClaudeCliProvider, DEFAULT_LIMIT_COOLDOWN_MS } from './claude-cli.js';
 import { createGeminiProvider } from './gemini.js';
@@ -80,11 +81,7 @@ function readCooldowns(root: string): CooldownState {
 
 function writeCooldowns(root: string, cooldownUntil: CooldownState): void {
   try {
-    const file = path.join(root, STATE_FILE);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ cooldownUntil }, null, 2), 'utf8');
-    fs.renameSync(tmp, file);
+    writeJsonAtomicSync(path.join(root, STATE_FILE), { cooldownUntil });
   } catch {
     // Cooldown is an optimisation; failing to persist it must never fail the call.
   }

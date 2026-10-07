@@ -37,14 +37,7 @@ export async function withFileLock<T>(
 ): Promise<T> {
   const mergedOptions = { ...DEFAULT_LOCK_OPTIONS, ...options };
 
-  // proper-lockfile requires the target file to exist
-  if (!fs.existsSync(filePath)) {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(filePath, '', 'utf8');
-  }
+  ensureLockable(filePath, mergedOptions);
 
   const release = await lockfile.lock(filePath, mergedOptions as any);
   try {
@@ -185,23 +178,8 @@ export async function withPlanLock<T>(
  */
 export function withFileLockSync<T>(filePath: string, fn: () => T, options: LockOptions = {}): T {
   const { retries: _ignored, ...syncOptions } = { ...DEFAULT_LOCK_OPTIONS, ...options };
-  if (!fs.existsSync(filePath)) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, '', 'utf8');
-  }
-
-  let release: (() => void) | null = null;
-  // ~5s of contention before giving up: parallel agents trip the breaker at the same moment.
-  const maxAttempts = 200;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      release = lockfile.lockSync(filePath, syncOptions as any);
-      break;
-    } catch (err: any) {
-      if (attempt === maxAttempts - 1 || err.code !== 'ELOCKED') throw err;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
-    }
-  }
+  ensureLockable(filePath, syncOptions);
+  const release = acquireLockSync(filePath, syncOptions);
 
   try {
     return fn();
@@ -239,6 +217,53 @@ export function writeJsonAtomicSync(filePath: string, data: unknown): void {
 }
 
 /**
+ * With `realpath: false` (the default) the lock is a sibling `<file>.lock` directory, so the file itself need not
+ * exist; creating an empty one would leave JSON readers a file they cannot parse. Only the parent must exist.
+ */
+function ensureLockable(filePath: string, options: LockOptions): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  if (options.realpath && !fs.existsSync(filePath)) fs.writeFileSync(filePath, '', 'utf8');
+}
+
+/** ~5s of contention before giving up: parallel agents finish, fail and trip the breaker at the same moments. */
+const SYNC_LOCK_ATTEMPTS = 200;
+
+function acquireLockSync(filePath: string, options: LockOptions): () => void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return lockfile.lockSync(filePath, options as any);
+    } catch (err: any) {
+      if (attempt >= SYNC_LOCK_ATTEMPTS - 1 || err.code !== 'ELOCKED') throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+}
+
+/**
+ * Read-modify-write of a JSON object file under its lock, written atomically, so concurrent writers never drop
+ * each other's keys. A missing or empty file starts from `{}`; a file that does not parse is left alone and the
+ * write throws, because overwriting it would discard whatever a person wrote there.
+ */
+export function mutateJsonFileSync<T extends Record<string, unknown>>(filePath: string, mutator: (current: T) => void): void {
+  withFileLockSync(filePath, () => {
+    let current = {} as T;
+    const text = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '') : '';
+    if (text.trim()) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch (err) {
+        throw new Error(`${filePath} is not valid JSON (${(err as Error).message}); fix or delete it, then retry.`);
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${filePath} must hold a JSON object.`);
+      current = parsed as T;
+    }
+    mutator(current);
+    writeJsonAtomicSync(filePath, current);
+  });
+}
+
+/**
  * Synchronous variant of withPlanLock using proper-lockfile lockSync.
  */
 export function withPlanLockSync<T>(
@@ -251,22 +276,7 @@ export function withPlanLockSync<T>(
   }
   const { retries: _ignored, ...syncOptions } = { ...DEFAULT_LOCK_OPTIONS, ...options };
 
-  let release: (() => void) | null = null;
-  const maxAttempts = 15;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      release = lockfile.lockSync(planPath, syncOptions as any);
-      break;
-    } catch (err: any) {
-      if (attempt === maxAttempts - 1 || err.code !== 'ELOCKED') {
-        throw err;
-      }
-      // Brief synchronous pause
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
-    }
-  }
-
-  if (!release) return null;
+  const release = acquireLockSync(planPath, syncOptions);
 
   try {
     const plan = loadPlan(planPath, { silent: true });

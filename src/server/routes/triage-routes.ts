@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { withFileLock, withPlanLock } from '../../core/lock-manager.js';
+import { withFileLock, withPlanLock, writeJsonAtomicSync } from '../../core/lock-manager.js';
 import {
   CircuitBreaker,
   applySelfHealingProposal,
@@ -40,7 +40,7 @@ export function readEscalationFile(root: string): EscalationFile | null {
   } catch {
     return null;
   }
-  // withFileLock creates the file empty when it takes the first lock.
+  // Older versions left an empty file behind when they first took its lock.
   if (!raw.trim()) return null;
   try {
     const parsed = JSON.parse(raw) as EscalationFile;
@@ -53,21 +53,7 @@ export function readEscalationFile(root: string): EscalationFile | null {
 
 /** tmp-file + rename so the SSE watcher and concurrent readers never observe a half-written file. */
 export function writeJsonAtomic(file: string, data: unknown): void {
-  const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  for (let attempt = 0; ; attempt++) {
-    try {
-      fs.renameSync(tmp, file);
-      return;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (attempt >= 10 || (code !== 'EPERM' && code !== 'EBUSY')) {
-        fs.rmSync(tmp, { force: true });
-        throw err;
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-    }
-  }
+  writeJsonAtomicSync(file, data);
 }
 
 /** Moves a blocked task back to pending so it can be dispatched again. False when it was not blocked. */
