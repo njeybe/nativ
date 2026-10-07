@@ -3,6 +3,7 @@ import pc from 'picocolors';
 import {
   EscalationRecord,
   EscalationType,
+  ESCALATION_TYPES,
   MasterPlanTask,
 } from '../../scanner/types.js';
 import {
@@ -22,6 +23,14 @@ export async function runTaskEscalate(
     affected?: string;
   } = {}
 ) {
+  const requestedType = options.type?.trim();
+  if (requestedType && !(ESCALATION_TYPES as readonly string[]).includes(requestedType)) {
+    console.error(pc.red(`\n✖ Unknown escalation type "${requestedType}". Use one of: ${ESCALATION_TYPES.join(', ')}\n`));
+    process.exitCode = 1;
+    return;
+  }
+  const escType = (requestedType || 'architectural_ambiguity') as EscalationType;
+
   const { targetDir, planPath } = getPlanPath(targetDirArg);
   return withPlanLock(planPath, (plan, ctx) => {
     let foundTask: MasterPlanTask | null = null;
@@ -39,17 +48,6 @@ export async function runTaskEscalate(
       process.exitCode = 1;
       return;
     }
-
-    const validTypes: EscalationType[] = [
-      'contract_drift',
-      'schema_flaw',
-      'missing_credential',
-      'dependency_conflict',
-      'architectural_ambiguity',
-    ];
-    const escType = (options.type && validTypes.includes(options.type as EscalationType))
-      ? (options.type as EscalationType)
-      : 'architectural_ambiguity';
 
     const affectedContracts = options.affected
       ? options.affected.split(',').map((s) => s.trim())

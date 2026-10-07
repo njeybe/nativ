@@ -15,7 +15,7 @@ import {
   runTaskAdd,
   runTaskProposePatch,
 } from '../commands/task.js';
-import { SUBAGENT_TYPES } from '../scanner/types.js';
+import { SUBAGENT_TYPES, ESCALATION_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
 import { runTriage } from '../commands/triage.js';
 import { runStatus } from '../commands/status.js';
@@ -39,13 +39,7 @@ import { registerMcpResources, MCP_RESOURCES } from './resources.js';
 export { captureOutput } from './capture.js';
 export { registerMcpResources, MCP_RESOURCES } from './resources.js';
 
-export const ESCALATION_TYPES = [
-  'contract_drift',
-  'schema_flaw',
-  'missing_credential',
-  'dependency_conflict',
-  'architectural_ambiguity',
-] as const;
+export { ESCALATION_TYPES } from '../scanner/types.js';
 
 /**
  * Native MCP (Model Context Protocol) server for Nativ over stdio.

@@ -138,12 +138,15 @@ export interface MasterPlan {
   milestones: MasterPlanMilestone[];
 }
 
-export type EscalationType =
-  | 'contract_drift'
-  | 'schema_flaw'
-  | 'missing_credential'
-  | 'dependency_conflict'
-  | 'architectural_ambiguity';
+export const ESCALATION_TYPES = [
+  'contract_drift',
+  'schema_flaw',
+  'missing_credential',
+  'dependency_conflict',
+  'architectural_ambiguity',
+] as const;
+
+export type EscalationType = (typeof ESCALATION_TYPES)[number];
 
 export interface EscalationRecord {
   id: string;
