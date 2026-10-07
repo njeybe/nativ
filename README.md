@@ -152,6 +152,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | [`task list`](#nativ-task-list) / `tasks` | List tasks with filters | You, Agent |
 | [`task add`](#nativ-task-add) | Add a task | Architect |
 | [`task start`](#nativ-task-start) | Mark a task in progress | Agent |
+| [`task reclaim`](#nativ-task-reclaim) | Free tasks left in progress by a stopped agent | You, Agent |
 | [`task complete`](#nativ-task-complete) | Complete a task through the gatekeeper | Agent |
 | [`task block`](#nativ-task-block) | Block a task with a reason | Agent |
 | [`task escalate`](#nativ-task-escalate) | Escalate a contract gap to the architect | Agent |
@@ -361,10 +362,18 @@ nativ task add "Appointment list" -a frontend --complexity standard \
 #### `nativ task start`
 
 ```bash
-nativ task start <taskId> [targetDir]
+nativ task start <taskId> [targetDir] [--agent <id>] [--force]
 ```
 
-Marks the task `in_progress` and records the baseline the test-integrity guard compares against.
+Claims the task, marks it `in_progress` and records the baseline the test-integrity guard compares against. The task must be pending and its dependencies completed; a blocked task goes through `nativ triage` first, and only a person can override with `--force`. The claim records `claimedBy` (`--agent` or `$NATIV_AGENT_ID`) and `claimedAt`, so a parallel agent cannot take a task another agent holds. Running `task start` again on your own task refreshes the claim; a claim older than 4 hours counts as abandoned.
+
+#### `nativ task reclaim`
+
+```bash
+nativ task reclaim [taskId] [targetDir] [--older-than <hours>] [--dry-run] [--json]
+```
+
+Puts `in_progress` tasks whose agent stopped (a crash or a closed session) back to `pending`. Without a task id it reclaims every claim older than `--older-than` hours (default 4). Tasks started before claims were recorded have no claim time; name them to reclaim them. A fresh claim is refused unless a person passes `--force`. The SessionStart orientation lists stale tasks. The previous agent may have left partial changes, so review the working tree before restarting.
 
 #### `nativ task complete`
 
@@ -777,7 +786,7 @@ Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched fi
 | Tools | Purpose |
 | :--- | :--- |
 | `nativ_task_next`, `nativ_task_list`, `nativ_task_add` | Find and add work |
-| `nativ_task_start`, `nativ_task_complete`, `nativ_task_block` | Move a task through its lifecycle (complete always runs the gatekeeper) |
+| `nativ_task_start`, `nativ_task_complete`, `nativ_task_block`, `nativ_task_reclaim` | Move a task through its lifecycle (complete always runs the gatekeeper; reclaim frees stale claims) |
 | `nativ_task_escalate`, `nativ_task_propose_patch` | Escalate a gap or propose a governed patch |
 | `nativ_learn_propose` | Propose a lesson; you approve it in a terminal |
 | `nativ_verify`, `nativ_status`, `nativ_bench`, `nativ_test_gen` | Verification, progress, benchmarks, test generation |

@@ -61,7 +61,7 @@ export async function runTriage(
     output.write(`${line}\n`);
   };
   const fail = (message: string): TriageRunResult[] => {
-    if (options.json) print(JSON.stringify({ ok: false, error: message }, null, 2));
+    if (options.json) print(JSON.stringify({ ok: false, error: message }));
     else print(pc.red(`\nTriage failed: ${message}\n`));
     process.exitCode = 1;
     return [];
@@ -117,7 +117,7 @@ export async function runTriage(
       print(pc.dim('No AI provider is available (sign in to Claude Code, or set ANTHROPIC_API_KEY or GEMINI_API_KEY): using the offline rules engine.'));
     }
     if (!targets.length) {
-      if (options.json) print(JSON.stringify({ ok: true, evaluations: [] }, null, 2));
+      if (options.json) print(JSON.stringify({ ok: true, evaluations: [] }));
       else if (!pending.length) print(pc.green('\nNo pending escalations. Nothing to triage.\n'));
       return [];
     }
@@ -158,7 +158,7 @@ export async function runTriage(
     }
 
     if (options.json) {
-      print(JSON.stringify({ ok: results.every((r) => r.evaluation.ok), evaluations: results }, null, 2));
+      print(JSON.stringify({ ok: results.every((r) => r.evaluation.ok), evaluations: results }));
     } else {
       const evaluated = results.filter((r) => r.evaluation.ok).map((r) => r.evaluation as TriageEvaluation);
       const safe = evaluated.filter((e) => e.classification === 'AUTO_RESOLVE').length;

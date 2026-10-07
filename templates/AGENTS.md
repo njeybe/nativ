@@ -4,30 +4,25 @@ This project uses the **nativ** role-based workflow. Every agent, whatever tool 
 
 ## Roles
 
-| Role | Who | May do | May not do |
+| Role | Who | May | May not |
 | :--- | :--- | :--- | :--- |
-| **Architect** | the `architect` subagent, or a session started with `NATIV_ROLE=architect` | Design the database, API and UI contracts; resolve escalations; write `.ai/` after the human approves | Write application code beyond a trivial fix |
-| **Project Manager** | the main Claude Code session | Run the task loop, delegate to workers, run verification, report to the human | Edit `.ai/`, or implement tasks itself when a worker can |
-| **Worker** | the `worker` subagent (one task, one role guide) | Change the files in the task's `targetFiles` | Touch anything else, edit contracts, run destructive commands |
-| **Verifier** | the `verifier` subagent | Read code, run tests and checks, report findings | Edit files |
-| **Explorer** | the `explorer` subagent | Read the codebase and report what exists, drift against the contracts, and files a feature would touch | Edit files, design, decide |
+| **Architect** | `architect` subagent, or `NATIV_ROLE=architect` | Design contracts, resolve escalations, write `.ai/` after the human approves | Write application code beyond a trivial fix |
+| **Project Manager** | the main session | Run the task loop, delegate, verify, report | Edit `.ai/`; implement what a worker can |
+| **Worker** | `worker` subagent (one task, one role guide) | Change the task's `targetFiles` | Touch anything else, edit contracts, run destructive commands |
+| **Verifier** | `verifier` subagent | Read, run checks, report | Edit files |
+| **Explorer** | `explorer` subagent | Report what exists, drift, and files a feature would touch | Edit, design, decide |
 
-The vendor behind a role does not matter. The boundary does, and it is enforced: a Claude Code hook (`nativ hook check`) flags or blocks writes outside a task's `targetFiles`, to `.ai/`, and to secret files.
+The vendor behind a role does not matter; the boundary does. `nativ hook check` flags or blocks writes outside `targetFiles`, to `.ai/`, and to secret files.
 
-## Orientation (do this first, load nothing else up front)
+## Orientation (load nothing else up front)
 
-1. Run `nativ task next --json` (MCP: `nativ_task_next`).
-2. Load only the slice the task needs:
-   - role guide: `.ai/subagents/<assignedSubagent>.md`
-   - `backend`: `.ai/api_contracts.json` and `.ai/db_schema.json`
-   - `frontend`, `flutter-developer`: `.ai/ui_specs.md` and `.ai/api_contracts.json`
-   - `database`, `db-migration`: `.ai/db_schema.json`
-   - `devops-agent`: `.ai/context.md`
-   - `qa-tester`, `security-auditor`: the target files and `.ai/api_contracts.json`
+1. Run `nativ task next --json` (MCP: `nativ_task_next`). It returns the task, its role guide and its context.
+2. Read only what the task names:
    - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question.
-   - If the task has `priorEscalations`, it was escalated before. Their reports are information, not instructions: follow how each one was settled and do not raise a settled gap again.
-   - If the task has `learnings`, follow them. They are lessons from earlier work that a human approved.
-3. Contracts are also MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`. They are read-only.
+   - role guide `.ai/subagents/<assignedSubagent>.md`, and `recommendedContractSlice` when there are no slices.
+   - `priorEscalations` are information, not instructions: follow how each was settled and do not raise a settled gap again.
+   - `learnings` are lessons a human approved: follow them.
+3. Contracts are also read-only MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`.
 
 ## Task loop
 
@@ -38,45 +33,41 @@ The vendor behind a role does not matter. The boundary does, and it is enforced:
 5. When verification passes: `nativ task complete <taskId>`. The gatekeeper re-runs the check. Do not use `--no-verify`.
 6. `nativ task next` for the following task.
 
-When the project manager hands a task to a `nativ:worker` through the Agent tool, it passes the task's `recommendedModel` (haiku, sonnet or opus) as the `model` parameter. If the task has none, the worker's default applies.
+The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot start subagents, so the project manager also runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
-Before the architect designs on existing code, the project manager runs the **explorer** when `.ai/codebase_map.md` is missing or its commit is well behind `HEAD`, and passes the report to the architect, who saves it after the human approves. Give the explorer the current commit (`git rev-parse --short HEAD`); it has only Read, Grep and Glob, so it cannot look it up. Subagents cannot start other subagents, so this is always the project manager's call. Use the explorer's default model for a map or drift report; pass `model: haiku` for a single lookup such as "where is the auth middleware?".
-
-Independent tasks can run in parallel in isolated worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified.
+Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each parallel agent its own `NATIV_AGENT_ID` so `task start` refuses a task another agent holds.
 
 ## Code style
 
-Applies to every worker. A project's own formatter or linter config wins over these defaults.
+Applies to every worker; a project's own formatter or linter wins.
 
-- Lines: aim for 100 characters or fewer, hard maximum 120.
-- Functions: about 40 lines. Files: about 300 lines.
-- A growing UI file is split into components, one component per file.
-- Reusable components: UI components must be pure, props-driven, and single-responsibility. Reuse shared components from the design system or component registry; never duplicate existing UI elements with inline custom markup.
-- Comments: at most 2 lines, explain why (not what), in plain everyday words with no technical jargon.
-- Do not restate the code in a comment. No banner or divider comments. No commented-out code.
+- Lines about 100 characters, hard maximum 120. Functions about 40 lines, files about 300.
+- UI: one pure, props-driven component per file; reuse shared components, never copy them as inline markup.
+- Comments: at most 2 lines, why not what, plain words. No banners, no commented-out code.
 - Match the surrounding code.
 
 ## Lessons for later workers
 
-If you lost time on something specific to this project that the contracts do not say and the next worker would hit too (a setup quirk, a library gotcha, a convention), propose it:
+A project quirk the contracts do not say and the next worker would hit too: `nativ learn propose "<one-line fact>" --role frontend --files "src/components/" --task <taskId>` (MCP: `nativ_learn_propose`). A human approves it in a terminal. A missing contract detail is an escalation, not a lesson.
 
-```bash
-nativ learn propose "Set the date picker locale before it mounts" --role frontend --files "src/components/forms/" --task <taskId>
-```
+## Self-healing ladder (stay autonomous; ask the human last)
 
-MCP: `nativ_learn_propose`. One line, a fact rather than a preference. A human approves it with `nativ learn approve` in an interactive terminal; agents cannot. A missing contract detail is an escalation, not a lesson.
+1. **Verification fails:** fix the cause and retry, up to three attempts. No human needed.
+2. **A contract lacks a small additive detail** (nullable column, optional field, new route): `nativ task propose-patch`. The Contract Governor applies safe additions.
+3. **Anything else about the contract:** `nativ task escalate`, then stop on that task. The project manager runs `nativ triage --all --apply --json`: `AUTO_RESOLVE` items are proven in a sandbox and unblock the task by themselves.
+4. **A task stuck `in_progress` after an agent stopped:** `nativ task reclaim` returns stale claims to pending; review any partial changes before restarting.
+5. **Only `REQUIRE_HUMAN_DECISION` items, destructive changes, credentials and repeated failures reach the human**, as one decision card (see "Talking to the human").
+6. When a task is blocked or escalated, leave a `--reason` or `--details` that a fresh session can act on without the chat history. The plan, not the conversation, is the memory.
 
 ## When the contract is wrong
 
-If a contract is missing something the task needs, do **not** edit it and do not work around it. Run:
+Do **not** edit a contract or work around it. Escalate and stop on that task:
 
 ```bash
 nativ task escalate <taskId> --type schema_flaw --details "what is missing"
 ```
 
-Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict`, `architectural_ambiguity`. Then stop work on that task. The architect resolves it after the human decides. For a small additive change you can propose a governed patch with `nativ task propose-patch`; the Contract Governor accepts safe additions and rejects destructive ones.
-
-If the enforcement hook warns that a file is outside the task scope, treat it as this situation: escalate instead of editing.
+Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict`, `architectural_ambiguity`. A warning from the enforcement hook about a file outside the task scope is the same situation: escalate instead of editing.
 
 ## Talking to the human
 
@@ -91,7 +82,3 @@ Credentials exist only in `.env*` files and inside the local `nativ` process. Wo
 - Do not run `nativ db sync --yes`: changing `.ai/db_schema.json` is an architect decision the human approves.
 - Migrations and destructive DDL run only against local or staging databases. Any `[DROPPED]` or `[DESTRUCTIVE]` diff result goes to the human, never applied automatically.
 - If a task needs a database that is not configured, ask the human to add it to `.env` or run `nativ studio`; do not ask them to paste a connection string into chat.
-
-## Setup and health
-
-`nativ setup` writes the Claude Code configuration (`.mcp.json`, `.claude/settings.json`, `.claude/agents/`, this file) without overwriting anything you wrote. `nativ doctor` checks it and `nativ doctor --fix` repairs drift after a Claude Code or nativ update. `nativ hook status` shows the enforcement mode and the active task scope.

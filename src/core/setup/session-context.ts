@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROLE_ENV, loadEnforcementMode, parseJsonLoose } from '../enforcement.js';
 import { resolveProjectRoot } from '../root-resolver.js';
+import { loadEscalationFile } from '../../governor/store.js';
+import { DEFAULT_STALE_HOURS, claimAgeHours, isStaleClaim } from '../task-claims.js';
 
 interface PlanTask {
   id: string;
@@ -9,6 +11,7 @@ interface PlanTask {
   status: string;
   dependencies: string[];
   targetFiles: string[];
+  claimedAt?: string;
 }
 
 function readPlanTasks(root: string): PlanTask[] {
@@ -26,6 +29,7 @@ function readPlanTasks(root: string): PlanTask[] {
             status: typeof t.status === 'string' ? t.status : 'pending',
             dependencies: Array.isArray(t.dependencies) ? t.dependencies : [],
             targetFiles: Array.isArray(t.targetFiles) ? t.targetFiles : [],
+            ...(typeof t.claimedAt === 'string' ? { claimedAt: t.claimedAt } : {}),
           });
         }
       }
@@ -34,6 +38,27 @@ function readPlanTasks(root: string): PlanTask[] {
   } catch {
     return [];
   }
+}
+
+/** Pending escalations and blocked tasks, so a fresh session resumes where the last one stopped. */
+function openItems(root: string, tasks: PlanTask[]): string | null {
+  let pending = 0;
+  try {
+    pending = loadEscalationFile(root, path.basename(root)).escalations.filter((e) => e?.status === 'pending_review').length;
+  } catch {
+    // An unreadable escalation file must not hide the rest of the orientation.
+  }
+  const blocked = tasks.filter((t) => t.status === 'blocked').map((t) => t.id);
+  const stale = tasks.filter((t) => isStaleClaim(t, DEFAULT_STALE_HOURS));
+  if (!pending && !blocked.length && !stale.length) return null;
+  const parts = [];
+  if (blocked.length) parts.push(`blocked: ${blocked.slice(0, 5).join(', ')}${blocked.length > 5 ? ` +${blocked.length - 5}` : ''}`);
+  if (stale.length) {
+    const list = stale.slice(0, 5).map((t) => `${t.id} (${Math.floor(claimAgeHours(t) ?? 0)}h)`).join(', ');
+    parts.push(`stale in_progress: ${list}: run \`nativ task reclaim\``);
+  }
+  if (pending) parts.push(`${pending} escalation(s) pending: run \`nativ triage --all --apply --json\``);
+  return `Open: ${parts.join('; ')}.`;
 }
 
 /** A few lines of orientation for a new Claude Code session, or null when this is not a nativ project. */
@@ -48,8 +73,8 @@ export function buildSessionContext(cwd: string, env: NodeJS.ProcessEnv = proces
   const role = (env[ROLE_ENV] ?? '').trim().toLowerCase() || 'project manager';
 
   const lines = [
-    'This is a nativ project (role-based multi-agent workflow).',
-    `Session role: ${role}. Enforcement: ${loadEnforcementMode(root)}. Edits outside the active task's targetFiles are flagged, and .ai/ contracts are architect-only.`,
+    'nativ project (role-based workflow).',
+    `Session role: ${role}. Enforcement: ${loadEnforcementMode(root)}. Writes outside the task's targetFiles are flagged; .ai/ is architect-only.`,
   ];
   if (active.length) {
     for (const t of active) lines.push(`In progress: ${t.id} "${t.title}" (targetFiles: ${t.targetFiles.join(', ') || 'none'})`);
@@ -58,6 +83,8 @@ export function buildSessionContext(cwd: string, env: NodeJS.ProcessEnv = proces
   } else {
     lines.push('No task is in progress or ready.');
   }
+  const open = openItems(root, tasks);
+  if (open) lines.push(open);
   lines.push('Prefer the nativ_* MCP tools (or the `nativ` CLI). Do not edit .ai/ directly: escalate contract gaps with `nativ task escalate`.');
   return lines.join('\n');
 }

@@ -16,6 +16,8 @@ export async function runTaskList(
     milestone?: string;
     fastPath?: boolean;
     json?: boolean;
+    /** JSON only: id, title, status, role, dependencies and files; leaves out long prose fields. */
+    brief?: boolean;
   } = {}
 ) {
   const { planPath } = getPlanPath(targetDirArg);
@@ -71,15 +73,19 @@ export async function runTaskList(
   }
 
   if (options.json) {
-    const jsonOutput = results.map(({ task, milestoneId, milestoneName, isAvailable }) => ({
-      ...task,
-      milestoneId,
-      milestoneName,
-      isAvailable,
-      roleGuide: getRoleGuide(task.assignedSubagent),
-      contractSlice: getRecommendedContractSlice(task.assignedSubagent),
-    }));
-    console.log(JSON.stringify(jsonOutput, null, 2));
+    const jsonOutput = results.map(({ task, milestoneId, milestoneName, isAvailable }) =>
+      options.brief
+        ? briefTask(task, milestoneId, isAvailable)
+        : {
+            ...task,
+            milestoneId,
+            milestoneName,
+            isAvailable,
+            roleGuide: getRoleGuide(task.assignedSubagent),
+            contractSlice: getRecommendedContractSlice(task.assignedSubagent),
+          },
+    );
+    console.log(JSON.stringify(jsonOutput));
     return;
   }
 
@@ -135,6 +141,20 @@ export async function runTaskList(
     pc.yellow(`${inProgressCount} in progress`) + pc.dim(', ') +
     pc.gray(`${pendingCount} pending`) + pc.dim(', ') +
     pc.red(`${blockedCount} blocked`) + '\n');
+}
+
+function briefTask(t: MasterPlanTask, milestoneId: string, isAvailable: boolean) {
+  return {
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    role: t.assignedSubagent,
+    milestoneId,
+    isAvailable,
+    ...(t.dependencies?.length ? { dependencies: t.dependencies } : {}),
+    ...(t.targetFiles?.length ? { targetFiles: t.targetFiles } : {}),
+    ...(t.status === 'blocked' && t.notes ? { notes: t.notes } : {}),
+  };
 }
 
 /** What a worker needs from a lesson; status and audit fields stay in .ai/learnings.json. */
@@ -201,7 +221,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
 
     if (!activeMilestone) {
       if (options.json) {
-        console.log(JSON.stringify({ status: 'all_milestones_completed', activeTask: null }, null, 2));
+        console.log(JSON.stringify({ status: 'all_milestones_completed', activeTask: null }));
       } else {
         console.log(pc.bold(pc.green('\n🎉 All milestones and tasks are completed!\n')));
         console.log(pc.dim('Run `nativ status` to inspect final project statistics.\n'));
@@ -230,7 +250,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
           milestoneId: activeMilestone.id,
           milestoneName: activeMilestone.name,
           activeTask: null,
-        }, null, 2));
+        }));
       } else {
         if (hasBlocked) {
           console.log(pc.bold(pc.red(`\n✖ Milestone [${activeMilestone.id}] has blocked tasks.`)));
@@ -267,7 +287,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         ...(learnings.length ? { learnings: learnings.map(toTaskLearning) } : {}),
         ...(priorEscalations.length ? { priorEscalations } : {}),
       }
-    }, null, 2));
+    }));
     return;
   }
 

@@ -8,6 +8,7 @@ import {
   runTaskStart,
   runTaskComplete,
   runTaskBlock,
+  runTaskReclaim,
   runTaskEscalate,
   runTaskAdd,
   runTaskProposePatch,
@@ -187,9 +188,11 @@ export function createProgram(): Command {
 
   task
     .command('start <taskId> [targetDir]')
-    .description('Mark a task as in_progress')
-    .action(async (taskId, targetDir) => {
-      await runTaskStart(taskId, targetDir);
+    .description('Claim a pending task whose dependencies are done and mark it in_progress')
+    .option('--agent <id>', 'Who claims the task (default: $NATIV_AGENT_ID)')
+    .option('--force', 'Human override: start a blocked task or one with unfinished dependencies')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskStart(taskId, targetDir, { agent: options.agent, force: options.force });
     });
 
   task
@@ -215,6 +218,17 @@ export function createProgram(): Command {
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
+    });
+
+  task
+    .command('reclaim [taskId] [targetDir]')
+    .description('Put in_progress tasks whose agent stopped back to pending (claims older than --older-than hours)')
+    .option('--older-than <hours>', 'Age at which a claim counts as abandoned (default 4)', parseFloat)
+    .option('--dry-run', 'List what would be reclaimed without changing the plan')
+    .option('--force', 'Human override: reclaim the named task even though its claim is fresh')
+    .option('--json', 'Output the result as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskReclaim(taskId, targetDir, { olderThan: options.olderThan, dryRun: options.dryRun, force: options.force, json: options.json });
     });
 
   task

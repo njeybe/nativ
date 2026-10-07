@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Improved: token usage and autonomy
+
+- **Leaner directives.** `AGENTS.md` (-17%), `CLAUDE.md` (-20%) and the worker and verifier agents are shorter. Subagents no longer re-read `AGENTS.md`, which already reaches them through `CLAUDE.md`. The human-communication rules now live in one place.
+- **Compact JSON.** `task next`, `task list` and `triage --json` print single-line JSON. `recommendedContractSlice` is a bare file list.
+- **Brief task list over MCP.** `nativ_task_list` returns a short summary per task; pass `full: true` for every field.
+- **Self-healing ladder.** `AGENTS.md` and `CLAUDE.md` tell agents to retry, patch additively, then run `nativ triage --all --apply --json`; only `REQUIRE_HUMAN_DECISION` items, destructive changes, credentials and repeated failures reach the human.
+- **Resumable sessions.** The SessionStart orientation lists blocked tasks and pending escalations.
+- **Budget guard.** `tests/test-token-budget.mjs` fails when an always-loaded file outgrows its token budget.
+
+### Fixed
+
+- **Tasks are claimed, not just started.** `task start` refuses a completed or blocked task and one whose dependencies are unfinished, and records `claimedBy` (`--agent` or `NATIV_AGENT_ID`) and `claimedAt`. Another agent cannot start a task with a fresh claim; a claim older than 4 hours can be taken over. Complete and block release the claim. A person can override with `--force`. `nativ_task_start` takes an optional `agent`.
+- **Stuck tasks recover.** `nativ task reclaim` (and `nativ_task_reclaim`) returns `in_progress` tasks with a claim older than 4 hours (`--older-than`) to pending, so a crashed agent no longer leaves a task stuck forever. `--dry-run` reports only. The SessionStart orientation lists stale tasks, and the self-healing ladder covers them.
+- **`nativ init` writes the architect guide.** It copied a fixed list of eight guides and skipped `architect.md`; it now copies every guide in the templates. `nativ validate` checks the architect guide when present.
+- **Windows paths in `.mcp.json` count as machine-specific on every OS.** A `C:/...` command was treated as portable when setup ran on Linux or macOS.
+- **`npm test` runs every suite.** `tests/run-all.mjs` keeps going after a failure and lists every failed suite at the end.
+
 ## 2.5.1
 
 ### Fixed

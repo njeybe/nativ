@@ -9,6 +9,7 @@ import {
   runTaskStart,
   runTaskComplete,
   runTaskBlock,
+  runTaskReclaim,
   runTaskEscalate,
   runTaskAdd,
   runTaskProposePatch,
@@ -84,10 +85,11 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional().describe('Filter by task status'),
         milestone: z.string().optional().describe('Filter by milestone ID or name'),
         fastPath: z.boolean().optional().describe('Only fast-path tasks'),
+        full: z.boolean().optional().describe('Return every task field; the default is a short summary per task'),
       },
     },
-    ({ available, status, milestone, fastPath }) =>
-      captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true })),
+    ({ available, status, milestone, fastPath, full }) =>
+      captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true, brief: !full })),
   );
 
   registerNativTool(
@@ -131,10 +133,13 @@ export function createMcpServer(targetDirArg?: string): McpServer {
   registerNativTool(
     'task_start',
     {
-      description: 'Mark a task as in_progress.',
-      inputSchema: { taskId: z.string().min(1).describe('Task ID, e.g. task-12') },
+      description: 'Claim a task and mark it in_progress. Refused when it is blocked, completed, waits on unfinished dependencies, or another agent holds a fresh claim. Calling it again on your own task refreshes the claim.',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        agent: z.string().optional().describe('Your agent id, so parallel agents do not take the same task'),
+      },
     },
-    ({ taskId }) => captureOutput(() => runTaskStart(taskId, targetDir)),
+    ({ taskId, agent }) => captureOutput(() => runTaskStart(taskId, targetDir, { agent })),
   );
 
   registerNativTool(
@@ -179,6 +184,20 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       },
     },
     ({ taskId, reason }) => captureOutput(() => runTaskBlock(taskId, reason, targetDir)),
+  );
+
+  registerNativTool(
+    'task_reclaim',
+    {
+      description: 'Put in_progress tasks whose agent stopped (claim older than olderThanHours, default 4) back to pending. Pass taskId to reclaim one task that has a stale or unrecorded claim.',
+      inputSchema: {
+        taskId: z.string().optional().describe('Reclaim only this task'),
+        olderThanHours: z.number().positive().optional().describe('Age at which a claim counts as abandoned'),
+        dryRun: z.boolean().optional().describe('Report without changing the plan'),
+      },
+    },
+    ({ taskId, olderThanHours, dryRun }) =>
+      captureOutput(() => runTaskReclaim(taskId, targetDir, { olderThan: olderThanHours, dryRun, json: true })),
   );
 
   registerNativTool(

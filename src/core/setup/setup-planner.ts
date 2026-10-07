@@ -10,6 +10,7 @@ import {
   SetupPlan,
   SetupResult,
   resolveCliInvocation,
+  isMachineBoundPath,
   stampManaged,
   managedState,
 } from './types.js';
@@ -56,7 +57,7 @@ export function configuredInvocation(root: string): CliInvocation | null {
     const args = Array.isArray(server.args) ? server.args : [];
     if (args.length === 0 || args[args.length - 1] !== 'mcp' || !args.every((a) => typeof a === 'string')) return null;
     const prefixArgs = args.slice(0, -1) as string[];
-    return { command: server.command, prefixArgs, portable: ![server.command, ...prefixArgs].some((p) => path.isAbsolute(p)) };
+    return { command: server.command, prefixArgs, portable: ![server.command, ...prefixArgs].some(isMachineBoundPath) };
   } catch {
     return null;
   }

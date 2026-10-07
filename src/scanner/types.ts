@@ -78,6 +78,9 @@ export interface MasterPlanTask {
   complexity?: TaskComplexity;
   /** Plain-language "done when" lines. */
   acceptanceCriteria?: string[];
+  /** Set by `task start` while in_progress: who claimed it (NATIV_AGENT_ID or --agent) and when. */
+  claimedBy?: string;
+  claimedAt?: string;
 }
 
 export type TaskComplexity = 'simple' | 'standard' | 'complex';
