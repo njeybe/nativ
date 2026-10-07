@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- **Tasks are claimed, not just started.** `task start` refuses a completed or blocked task and one whose dependencies are unfinished, and records `claimedBy` (`--agent` or `NATIV_AGENT_ID`) and `claimedAt`. Another agent cannot start a task with a fresh claim; a claim older than 4 hours can be taken over. Complete and block release the claim. A person can override with `--force`. `nativ_task_start` takes an optional `agent`.
 - **`nativ init` writes the architect guide.** It copied a fixed list of eight guides and skipped `architect.md`; it now copies every guide in the templates. `nativ validate` checks the architect guide when present.
 - **Windows paths in `.mcp.json` count as machine-specific on every OS.** A `C:/...` command was treated as portable when setup ran on Linux or macOS.
 - **`npm test` runs every suite.** `tests/run-all.mjs` keeps going after a failure and lists every failed suite at the end.

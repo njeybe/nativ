@@ -187,9 +187,11 @@ export function createProgram(): Command {
 
   task
     .command('start <taskId> [targetDir]')
-    .description('Mark a task as in_progress')
-    .action(async (taskId, targetDir) => {
-      await runTaskStart(taskId, targetDir);
+    .description('Claim a pending task whose dependencies are done and mark it in_progress')
+    .option('--agent <id>', 'Who claims the task (default: $NATIV_AGENT_ID)')
+    .option('--force', 'Human override: start a blocked task or one with unfinished dependencies')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskStart(taskId, targetDir, { agent: options.agent, force: options.force });
     });
 
   task

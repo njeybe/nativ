@@ -11,14 +11,24 @@ import { loadPlan, withPlanLock } from '../../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../../core/telemetry.js';
 import { addTaskUnlock, removeTaskUnlock } from '../../core/enforcement.js';
 import { refuseHeadless } from '../../core/human-gate.js';
+import { resolveAgentId, startRefusal } from '../../core/task-claims.js';
 import {
   getPlanPath,
   TaskUnlockOptions,
   TaskCompleteOptions,
 } from './task-common.js';
 
-export async function runTaskStart(taskId: string, targetDirArg?: string) {
+export interface TaskStartOptions {
+  /** Who claims the task; defaults to NATIV_AGENT_ID. */
+  agent?: string;
+  /** Human override: start a blocked task or one whose dependencies are unfinished. */
+  force?: boolean;
+}
+
+export async function runTaskStart(taskId: string, targetDirArg?: string, options: TaskStartOptions = {}) {
+  if (options.force && refuseHeadless('nativ task start --force')) return;
   const { targetDir, planPath } = getPlanPath(targetDirArg);
+  const agent = resolveAgentId(options.agent);
   return withPlanLock(planPath, async (plan, ctx) => {
     let foundTask: MasterPlanTask | null = null;
     let foundMilestone: any = null;
@@ -39,7 +49,19 @@ export async function runTaskStart(taskId: string, targetDirArg?: string) {
       return;
     }
 
+    const refusal = options.force ? null : startRefusal(plan, foundTask, agent);
+    if (refusal) {
+      ctx.abort();
+      console.error(pc.red(`\n✖ ${refusal}\n`));
+      process.exitCode = 1;
+      return;
+    }
+
+    const resumed = foundTask.status === 'in_progress';
     foundTask.status = 'in_progress';
+    foundTask.claimedAt = new Date().toISOString();
+    if (agent) foundTask.claimedBy = agent;
+    else if (!resumed) delete foundTask.claimedBy;
     if (foundMilestone.status === 'pending') {
       foundMilestone.status = 'in_progress';
     }
@@ -224,6 +246,8 @@ export async function runTaskComplete(
     }
 
     taskToComplete.status = 'completed';
+    delete taskToComplete.claimedBy;
+    delete taskToComplete.claimedAt;
     if (options.notes) {
       taskToComplete.notes = options.notes;
     }
@@ -288,6 +312,8 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
 
     foundTask.status = 'blocked';
     foundTask.notes = reason.trim();
+    delete foundTask.claimedBy;
+    delete foundTask.claimedAt;
 
     console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] marked as `) + pc.red('✖ blocked'));
     console.log(pc.dim(`  Reason: ${foundTask.notes}\n`));

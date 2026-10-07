@@ -35,7 +35,7 @@ The vendor behind a role does not matter; the boundary does. `nativ hook check` 
 
 The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot start subagents, so the project manager also runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
-Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified.
+Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each parallel agent its own `NATIV_AGENT_ID` so `task start` refuses a task another agent holds.
 
 ## Code style
 

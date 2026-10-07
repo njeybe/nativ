@@ -132,10 +132,13 @@ export function createMcpServer(targetDirArg?: string): McpServer {
   registerNativTool(
     'task_start',
     {
-      description: 'Mark a task as in_progress.',
-      inputSchema: { taskId: z.string().min(1).describe('Task ID, e.g. task-12') },
+      description: 'Claim a task and mark it in_progress. Refused when it is blocked, completed, waits on unfinished dependencies, or another agent holds a fresh claim. Calling it again on your own task refreshes the claim.',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+        agent: z.string().optional().describe('Your agent id, so parallel agents do not take the same task'),
+      },
     },
-    ({ taskId }) => captureOutput(() => runTaskStart(taskId, targetDir)),
+    ({ taskId, agent }) => captureOutput(() => runTaskStart(taskId, targetDir, { agent })),
   );
 
   registerNativTool(

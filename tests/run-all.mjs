@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NODE_SUITES = [
   'profiles', 'task-router', 'task-fields', 'design-templates', 'spec-slices', 'learnings', 'contract-generator',
   'verify-gatekeeper', 'mcp-server', 'data-studio', 'fragmented-env', 'env-example-detection', 'contract-governor',
-  'worktree-lifecycle', 'agent-supervisor', 'concurrency-locks', 'telemetry-engine', 'benchmark-suite',
+  'worktree-lifecycle', 'agent-supervisor', 'concurrency-locks', 'task-claims', 'telemetry-engine', 'benchmark-suite',
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
   'model-routing', 'token-budget', 'v2-e2e',
 ];

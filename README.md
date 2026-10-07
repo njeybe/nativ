@@ -361,10 +361,10 @@ nativ task add "Appointment list" -a frontend --complexity standard \
 #### `nativ task start`
 
 ```bash
-nativ task start <taskId> [targetDir]
+nativ task start <taskId> [targetDir] [--agent <id>] [--force]
 ```
 
-Marks the task `in_progress` and records the baseline the test-integrity guard compares against.
+Claims the task, marks it `in_progress` and records the baseline the test-integrity guard compares against. The task must be pending and its dependencies completed; a blocked task goes through `nativ triage` first, and only a person can override with `--force`. The claim records `claimedBy` (`--agent` or `$NATIV_AGENT_ID`) and `claimedAt`, so a parallel agent cannot take a task another agent holds. Running `task start` again on your own task refreshes the claim; a claim older than 4 hours counts as abandoned.
 
 #### `nativ task complete`
 
