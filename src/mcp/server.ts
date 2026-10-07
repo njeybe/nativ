@@ -84,10 +84,11 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional().describe('Filter by task status'),
         milestone: z.string().optional().describe('Filter by milestone ID or name'),
         fastPath: z.boolean().optional().describe('Only fast-path tasks'),
+        full: z.boolean().optional().describe('Return every task field; the default is a short summary per task'),
       },
     },
-    ({ available, status, milestone, fastPath }) =>
-      captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true })),
+    ({ available, status, milestone, fastPath, full }) =>
+      captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true, brief: !full })),
   );
 
   registerNativTool(

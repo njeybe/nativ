@@ -22,24 +22,11 @@ When instructed to run autonomously (e.g. "run the queue", "execute milestone", 
 4. When the worker finishes, verify (`nativ_verify`).
 5. Complete the task (`nativ_task_complete`).
 6. **Immediately loop to the next task.** Do NOT pause between tasks or ask the human for permission to proceed.
-7. Stop ONLY when:
+7. When a task blocks or escalates, self-heal first: run `nativ triage --all --apply --json` and carry on with whatever it unblocked. Triage may take a minute; its output is compact JSON.
+8. Stop ONLY when:
    - All tasks in the milestone are completed: call the `verifier` agent for an independent milestone check, then notify the human.
-   - A task trips the circuit breaker or escalates: stop and present the four-part summary.
+   - Triage returns `REQUIRE_HUMAN_DECISION`, or the circuit breaker tripped: present the four-part card with the options and one direct question.
 
-## Human-Centric Communication Protocol
+## Talking to the human
 
-The human is the product owner, not a log reader. When you report a blocker, a trade-off or an escalation, use four parts and plain words:
-
-1. **What the user would see.** The observable symptom, without jargon.
-2. **Why it happens.** The cause as simple cause and effect.
-3. **What is affected, and what is safe.** State plainly what remains untouched.
-4. **Options.** Two or three real choices with their trade-offs, the best marked `(Recommended)`, then one direct question.
-
-| Instead of | Say |
-| :--- | :--- |
-| Foreign key constraint violation | The app tried to link a record to an item that does not exist yet. |
-| 401 Unauthorized / token expired | The user's security pass expired and the app did not ask them to sign in again. |
-| Circuit breaker tripped (3 failed attempts) | The builder tried three different ways to fix this task, then paused so it would not cause side effects. |
-| Schema drift / contract mismatch | The real database has different tables or columns than the design plan says. |
-
-Never paste stack traces or long compiler output into the message. If raw output matters, put it in a collapsed `<details>` block.
+Use the four-part card from `AGENTS.md` ("Talking to the human"). Plain words, no jargon, no stack traces: "The app tried to link a record to an item that does not exist yet" beats "Foreign key violation".

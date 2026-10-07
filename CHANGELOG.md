@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Improved: token usage and autonomy
+
+- **Leaner directives.** `AGENTS.md` (-17%), `CLAUDE.md` (-20%) and the worker and verifier agents are shorter. Subagents no longer re-read `AGENTS.md`, which already reaches them through `CLAUDE.md`. The human-communication rules now live in one place.
+- **Compact JSON.** `task next`, `task list` and `triage --json` print single-line JSON. `recommendedContractSlice` is a bare file list.
+- **Brief task list over MCP.** `nativ_task_list` returns a short summary per task; pass `full: true` for every field.
+- **Self-healing ladder.** `AGENTS.md` and `CLAUDE.md` tell agents to retry, patch additively, then run `nativ triage --all --apply --json`; only `REQUIRE_HUMAN_DECISION` items, destructive changes, credentials and repeated failures reach the human.
+- **Resumable sessions.** The SessionStart orientation lists blocked tasks and pending escalations.
+- **Budget guard.** `tests/test-token-budget.mjs` fails when an always-loaded file outgrows its token budget.
+
 ## 2.5.1
 
 ### Fixed

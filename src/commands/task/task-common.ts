@@ -30,22 +30,22 @@ export function getRoleGuide(assignedSubagent: SubagentType): string {
 export function getRecommendedContractSlice(assignedSubagent: SubagentType): string {
   const sub = assignedSubagent.toLowerCase();
   if (sub.includes('frontend') || sub.includes('flutter')) {
-    return '.ai/ui_specs.md (UI tokens & hierarchy) + .ai/api_contracts.json (Client endpoint integration)';
+    return '.ai/ui_specs.md + .ai/api_contracts.json';
   }
   if (sub.includes('backend')) {
-    return '.ai/api_contracts.json (Endpoint routes, request/response schemas) + .ai/db_schema.json (Models)';
+    return '.ai/api_contracts.json + .ai/db_schema.json';
   }
   if (sub.includes('database') || sub.includes('db-migration')) {
-    return '.ai/db_schema.json (Database schema contract & models)';
+    return '.ai/db_schema.json';
   }
   if (sub.includes('devops')) {
-    return '.ai/context.md (Infrastructure, runtime & deployment guardrails)';
+    return '.ai/context.md';
   }
   if (sub.includes('security')) {
-    return 'Target files & dependency manifests (.ai/context.md security guardrails)';
+    return 'targetFiles + dependency manifests + .ai/context.md';
   }
   if (sub.includes('qa')) {
-    return 'Target files, .ai/api_contracts.json, and verification test suite';
+    return 'targetFiles + .ai/api_contracts.json';
   }
   return '.ai/context.md';
 }
