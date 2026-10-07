@@ -60,7 +60,8 @@ export function createGeminiProvider(deps: ProviderDeps = {}): Provider {
       } catch (err) {
         const name = (err as { name?: string } | null)?.name ?? '';
         if (name === 'TimeoutError' || name === 'AbortError') throw new ProviderError('TIMEOUT', `Gemini did not answer within ${timeout}ms.`);
-        throw new ProviderError('BAD_RESPONSE', err instanceof Error ? err.message : String(err));
+        // fetch only throws here when the request never got an answer: DNS, refused or reset connection.
+        throw new ProviderError('TRANSIENT', err instanceof Error ? err.message : String(err));
       }
 
       if (res.status === 429) {
@@ -68,6 +69,7 @@ export function createGeminiProvider(deps: ProviderDeps = {}): Provider {
         throw new ProviderError('RATE_LIMITED', 'Gemini rate limit reached.', Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined);
       }
       if (res.status === 401 || res.status === 403) throw new ProviderError('NO_CREDENTIALS', 'The Gemini API key was rejected.');
+      if (res.status >= 500) throw new ProviderError('TRANSIENT', `Gemini responded with HTTP ${res.status}.`);
       if (!res.ok) throw new ProviderError('BAD_RESPONSE', `Gemini responded with HTTP ${res.status}.`);
 
       let body: GeminiBody;

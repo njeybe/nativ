@@ -132,10 +132,19 @@ export function resolveProvider(role: ProviderRole, root: string, options: Regis
 }
 
 /**
- * Runs the request against each provider in turn. A rate limit puts that provider on cooldown, and any
- * ProviderError falls through to the next one. Throws NO_CREDENTIALS when nothing is available and the
+ * Runs the request against each provider in turn. A TRANSIENT failure (network, 5xx) is retried on the same
+ * provider up to MAX_TRANSIENT_RETRIES times with jittered backoff. A rate limit puts that provider on cooldown, and
+ * any other ProviderError falls through to the next one. Throws NO_CREDENTIALS when nothing is available and the
  * last error when every provider failed, so the caller can drop to its deterministic path.
  */
+export const MAX_TRANSIENT_RETRIES = 2;
+
+/** 0.5s, then 1s, each plus up to 50% jitter so parallel agents do not retry in lockstep. */
+export function transientBackoffMs(attempt: number, random: () => number = Math.random): number {
+  const base = 500 * 2 ** attempt;
+  return Math.round(base + base * 0.5 * random());
+}
+
 export async function completeWithChain(
   role: ProviderRole,
   root: string,
@@ -149,15 +158,24 @@ export async function completeWithChain(
   const now = options.deps?.now ?? Date.now;
   let lastError: ProviderError | null = null;
 
+  const sleep = options.deps?.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
   for (const provider of chain) {
     const model = request.model ?? models[provider.id] ?? provider.defaultModel;
-    try {
-      const text = await provider.complete({ ...request, model }, root);
-      return { provider: provider.id, model, text };
-    } catch (err) {
-      const failure = err instanceof ProviderError ? err : new ProviderError('BAD_RESPONSE', err instanceof Error ? err.message : String(err));
-      if (failure.code === 'RATE_LIMITED') setProviderCooldown(root, provider.id, failure.retryAfterMs ?? DEFAULT_LIMIT_COOLDOWN_MS, now());
-      lastError = failure;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const text = await provider.complete({ ...request, model }, root);
+        return { provider: provider.id, model, text };
+      } catch (err) {
+        const failure = err instanceof ProviderError ? err : new ProviderError('BAD_RESPONSE', err instanceof Error ? err.message : String(err));
+        lastError = failure;
+        if (failure.code === 'TRANSIENT' && attempt < MAX_TRANSIENT_RETRIES) {
+          await sleep(transientBackoffMs(attempt));
+          continue;
+        }
+        if (failure.code === 'RATE_LIMITED') setProviderCooldown(root, provider.id, failure.retryAfterMs ?? DEFAULT_LIMIT_COOLDOWN_MS, now());
+        break;
+      }
     }
   }
   throw lastError ?? new ProviderError('BAD_RESPONSE', 'Every provider failed.');
