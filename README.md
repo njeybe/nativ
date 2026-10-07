@@ -527,7 +527,7 @@ If the lesson changed while you were reviewing it, nothing is decided and you ar
 
 ### Escalations and triage
 
-A worker that finds a contract gap escalates (`nativ task escalate`) and stops. The gap is then resolved by the architect, or first assessed by triage.
+A worker that finds a contract gap escalates (`nativ task escalate`) and stops. The gap is then resolved by the architect, or first assessed by triage. [docs/self-healing.md](docs/self-healing.md) walks through the whole hands-free loop: claims, retries, triage, reclaiming stuck tasks and notifications.
 
 #### `nativ triage`
 
