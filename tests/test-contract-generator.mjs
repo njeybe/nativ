@@ -190,8 +190,13 @@ function startFixtureApi({ broken = false } = {}) {
 /** Runs generated node:test files and returns pass/fail/skip counts from the TAP summary. */
 async function runNodeTests(cwd, pattern, env = {}) {
   let stdout = '';
+  // `node --test` expands globs only from Node 21; list the files so Node 20 (the supported minimum) runs them too.
+  const [dir, glob] = pattern.split('/');
+  const suffix = glob.replace(/^\*/, '');
+  const files = fs.readdirSync(path.join(cwd, dir)).filter((f) => f.endsWith(suffix)).sort().map((f) => `${dir}/${f}`);
+  assert.ok(files.length, `no ${pattern} files in ${cwd}`);
   try {
-    ({ stdout } = await execFileAsync(process.execPath, ['--test', '--test-reporter=tap', pattern], {
+    ({ stdout } = await execFileAsync(process.execPath, ['--test', '--test-reporter=tap', ...files], {
       cwd,
       env: { ...process.env, ...env },
       timeout: 120000,

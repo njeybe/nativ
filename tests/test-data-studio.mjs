@@ -1,11 +1,27 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { startStudioServer } from '../dist/server/studio-server.js';
 import { renderStudioHtml } from '../dist/server/studio-ui.js';
 
 console.log('--- Starting Live Data Studio & Production Safeguard Verification ---');
+
+// node:sqlite ships with Node.js 22.5+. On older supported runtimes the Studio must say so plainly instead of crashing.
+const sqlite = await import('node:sqlite').catch(() => null);
+if (!sqlite) {
+  const studio = await startStudioServer({ port: 0, connections: { dev: 'sqlite:./missing.sqlite', prod: 'sqlite:./missing.sqlite' }, cwd: process.cwd() });
+  try {
+    const res = await fetch(`${studio.url}/api/data?env=dev&entity=users&limit=10`);
+    const body = await res.text();
+    assert.ok(res.status >= 400, `a SQLite request fails on ${process.version}`);
+    assert.match(body, /SQLite databases need Node\.js 22\.5 or newer/, `the failure explains the runtime requirement: ${body}`);
+  } finally {
+    await studio.close();
+  }
+  console.log(`✔ On ${process.version} (no node:sqlite) the Studio explains that SQLite needs Node.js 22.5+; the SQLite data checks need that runtime.`);
+  process.exit(0);
+}
+const { DatabaseSync } = sqlite;
 
 // 1. Create temporary SQLite databases for Dev and Prod
 const tmpDir = path.join(process.cwd(), '.nativ', 'test_tmp');
