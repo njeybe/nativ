@@ -20,6 +20,7 @@ import { runInit } from '../commands/init.js';
 import { runTriage } from '../commands/triage.js';
 import { runStatus } from '../commands/status.js';
 import { runDoctor } from '../commands/doctor.js';
+import { runValidate } from '../commands/validate.js';
 import {
   runWorktreeCreate,
   runWorktreeList,
@@ -354,6 +355,23 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       inputSchema: {},
     },
     () => captureOutput(() => runStatus(targetDir)),
+  );
+
+  registerNativTool(
+    'validate',
+    {
+      description:
+        'Read-only integrity check of the .ai/ contracts, master plan, spec references and role guides. ' +
+        'Returns only problems (✖ errors, ⚠ warnings) and the verdict; an error result means a contract is missing or malformed.',
+      inputSchema: {},
+    },
+    async () => {
+      const result = await captureOutput(() => runValidate(targetDir));
+      const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
+      const problems = text.split('\n').filter((line) => /[✖⚠]/.test(line) && !/validation failed with errors/i.test(line)).map((line) => line.trim());
+      const verdict = result.isError ? 'Validation failed.' : 'All contracts are valid.';
+      return { ...result, content: [{ type: 'text', text: [...problems, verdict].join('\n') }] };
+    },
   );
 
   registerNativTool(

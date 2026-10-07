@@ -20,6 +20,7 @@ const EXPECTED_TOOLS = [
   'nativ_task_block',
   'nativ_task_reclaim',
   'nativ_triage',
+  'nativ_validate',
   'nativ_task_escalate',
   'nativ_learn_propose',
   'nativ_init',
@@ -284,6 +285,27 @@ try {
   const unknownEsc = await server.callTool('nativ_triage', { escalationId: 'esc-99' });
   assert.equal(unknownEsc.result.isError, true);
   check('nativ_triage evaluates escalations over MCP and returns the decision card');
+
+  // 7c. nativ_validate reports only problems and the verdict
+  const incomplete = await server.callTool('nativ_validate', {});
+  assert.equal(incomplete.result.isError, true);
+  assert.match(toolText(incomplete), /✖ Missing: \.ai\/ui_specs\.md/);
+  assert.equal(toolText(incomplete).match(/failed/gi).length, 1, 'the verdict is stated once');
+  fs.writeFileSync(path.join(projectDir, '.ai', 'ui_specs.md'), '# UI\n');
+  fs.mkdirSync(path.join(projectDir, '.ai', 'subagents'), { recursive: true });
+  for (const guide of ['database', 'backend', 'frontend', 'qa-tester']) fs.writeFileSync(path.join(projectDir, '.ai', 'subagents', `${guide}.md`), `# ${guide}\n`);
+  const valid = await server.callTool('nativ_validate', {});
+  assert.notEqual(valid.result.isError, true, toolText(valid));
+  assert.match(toolText(valid), /All contracts are valid\.$/);
+  assert.ok(!/✔/.test(toolText(valid)), 'passing checks are left out to keep the reply short');
+  const apiPath = path.join(projectDir, '.ai', 'api_contracts.json');
+  const apiBefore = fs.readFileSync(apiPath, 'utf8');
+  fs.writeFileSync(apiPath, '{ broken');
+  const invalid = await server.callTool('nativ_validate', {});
+  fs.writeFileSync(apiPath, apiBefore);
+  assert.equal(invalid.result.isError, true);
+  assert.match(toolText(invalid), /✖ Malformed JSON in \.ai\/api_contracts\.json[\s\S]*Validation failed\./);
+  check('nativ_validate returns only problems and a verdict');
 
   // 8. stdout carries JSON-RPC frames only
   for (const line of server.rawStdoutLines) {
