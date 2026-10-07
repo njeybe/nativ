@@ -16,6 +16,7 @@ import path from 'node:path';
 import { MASK } from '../db/env-parser.js';
 import { escalationPath, loadEscalationFile } from '../governor/store.js';
 import { applySelfHealingProposal } from '../governor/index.js';
+import { notifyHuman } from './notify.js';
 import type { CandidatePatch, SelfHealingEscalationRecord, SelfHealingProposal } from '../governor/circuit-breaker.js';
 import {
   CLAUDE_CLI_DEFAULT_MODEL,
@@ -486,6 +487,16 @@ Respond with strictly valid JSON:
     this.stats.totalEvaluated++;
     if (autoPatchApplied) this.stats.autoResolved++;
     else if (classification === 'REQUIRE_HUMAN_DECISION') this.stats.escalatedToHuman++;
+
+    if (classification === 'REQUIRE_HUMAN_DECISION' && !autoPatchApplied) {
+      await notifyHuman(this.root, {
+        event: 'human_decision',
+        taskId,
+        escalationId,
+        summary: record.summary || 'A decision is needed',
+        ...(humanCard ? { question: humanCard.symptom, options: humanCard.options.map((o) => o.label) } : {}),
+      }).catch(() => {});
+    }
 
     const latencyMs = Date.now() - startTime;
 

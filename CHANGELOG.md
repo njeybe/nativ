@@ -11,6 +11,10 @@
 - **Resumable sessions.** The SessionStart orientation lists blocked tasks and pending escalations.
 - **Budget guard.** `tests/test-token-budget.mjs` fails when an always-loaded file outgrows its token budget.
 
+### Added
+
+- **Notifications when nativ needs you.** A `notify` webhook (Slack, Discord, ntfy, any JSON endpoint) or command in `.nativ/config.json` is called when triage returns `REQUIRE_HUMAN_DECISION` or the circuit breaker blocks a task, once per escalation. Webhooks must be https. `nativ notify test` sends a sample. Failures are recorded, never fatal.
+
 ### Fixed
 
 - **Tasks are claimed, not just started.** `task start` refuses a completed or blocked task and one whose dependencies are unfinished, and records `claimedBy` (`--agent` or `NATIV_AGENT_ID`) and `claimedAt`. Another agent cannot start a task with a fresh claim; a claim older than 4 hours can be taken over. Complete and block release the claim. A person can override with `--force`. `nativ_task_start` takes an optional `agent`.

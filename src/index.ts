@@ -31,6 +31,7 @@ import { runVerify } from './commands/verify.js';
 import { runTestGen, TEST_GEN_FRAMEWORK_HELP } from './commands/test-gen.js';
 import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
+import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
 import { runProfileCommand } from './commands/profile.js';
 import { packageVersion } from './core/version.js';
@@ -475,6 +476,15 @@ export function createProgram(): Command {
     .option('--json', 'Output evaluations as JSON (no prompts)')
     .action(async (escalationId, targetDir, options) => {
       await runTriage(escalationId, targetDir, options);
+    });
+
+  program
+    .command('notify')
+    .description('Human notifications (webhook or command) for decisions and circuit-breaker trips')
+    .command('test [targetDir]')
+    .description('Send a sample notification through the configured webhook or command')
+    .action(async (targetDir) => {
+      await runNotifyTest(targetDir);
     });
 
   program

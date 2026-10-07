@@ -10,7 +10,7 @@ const NODE_SUITES = [
   'verify-gatekeeper', 'mcp-server', 'data-studio', 'fragmented-env', 'env-example-detection', 'contract-governor',
   'worktree-lifecycle', 'agent-supervisor', 'concurrency-locks', 'task-claims', 'telemetry-engine', 'benchmark-suite',
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
-  'model-routing', 'token-budget', 'v2-e2e',
+  'model-routing', 'notify', 'token-budget', 'v2-e2e',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',

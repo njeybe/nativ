@@ -9,6 +9,7 @@ import {
 import { EscalationRecord, EscalationType } from '../scanner/types.js';
 import { withPlanLockSync } from '../core/lock-manager.js';
 import { recordCircuitBreakerTrip } from '../core/telemetry.js';
+import { notifyHuman } from '../core/notify.js';
 import { appendEscalation, loadLedger, mutateLedger, type LedgerEntry } from './store.js';
 
 const MAX_FAILURE_THRESHOLD = 3;
@@ -129,6 +130,16 @@ function tryMutateLedger(targetDir: string, mutator: Parameters<typeof mutateLed
   } catch {
     // Non-fatal
   }
+}
+
+/** Fire-and-forget: the verdict is synchronous, and an open request keeps a CLI process alive until it settles. */
+function notifyTrip(targetDir: string, taskId: string, escalationId: string | undefined, ruleId: string): void {
+  notifyHuman(targetDir, {
+    event: 'circuit_breaker_tripped',
+    taskId,
+    escalationId,
+    summary: `Task ${taskId} failed ${MAX_FAILURE_THRESHOLD} times in a row (${ruleId}) and is now blocked`,
+  }).catch(() => {});
 }
 
 export class CircuitBreaker {
@@ -252,6 +263,7 @@ export class CircuitBreaker {
     }));
     this.blockTask(targetDir, taskId, `Circuit breaker tripped by Governor: ${ruleResult.ruleId} (${escalationId ?? 'escalation not recorded'})`);
     recordCircuitBreakerTrip(targetDir, taskId).catch(() => {});
+    notifyTrip(targetDir, taskId, escalationId ?? undefined, ruleResult.ruleId);
 
     return { state, escalationId: escalationId ?? undefined, proposal };
   }
@@ -320,6 +332,7 @@ export class CircuitBreaker {
     this.blockTask(targetDir, taskId, `Circuit breaker tripped by Governor: ${ruleResult.ruleId} (${escalationId})`);
 
     recordCircuitBreakerTrip(targetDir, taskId).catch(() => {});
+    notifyTrip(targetDir, taskId, escalationId === 'unrecorded' ? undefined : escalationId, ruleResult.ruleId);
 
     return {
       escalationId,
