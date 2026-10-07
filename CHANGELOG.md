@@ -11,6 +11,12 @@
 - **Resumable sessions.** The SessionStart orientation lists blocked tasks and pending escalations.
 - **Budget guard.** `tests/test-token-budget.mjs` fails when an always-loaded file outgrows its token budget.
 
+### Fixed
+
+- **`nativ init` writes the architect guide.** It copied a fixed list of eight guides and skipped `architect.md`; it now copies every guide in the templates. `nativ validate` checks the architect guide when present.
+- **Windows paths in `.mcp.json` count as machine-specific on every OS.** A `C:/...` command was treated as portable when setup ran on Linux or macOS.
+- **`npm test` runs every suite.** `tests/run-all.mjs` keeps going after a failure and lists every failed suite at the end.
+
 ## 2.5.1
 
 ### Fixed

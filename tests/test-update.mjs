@@ -78,7 +78,13 @@ const line = (out, rel) => out.split('\n').find((l) => l.includes(rel)) ?? '';
     assert.ok(hashes.length >= 1, `${key} has at least one shipped version`);
     for (const h of hashes) assert.match(h, /^[0-9a-f]{16}$/, `${key} hash shape`);
   }
+  // Guides added once files carried the managed marker (v2.0, f3afb4c) are stamped when written, so need no fingerprint.
+  const STAMPED_FROM_THE_START = new Set(['architect.md']);
   for (const file of fs.readdirSync(path.join(TEMPLATES, 'dot-ai', 'subagents'))) {
+    if (STAMPED_FROM_THE_START.has(file)) {
+      assert.ok(!(`subagents/${file}` in LEGACY_TEMPLATE_HASHES), `subagents/${file} never shipped unmarked`);
+      continue;
+    }
     assert.ok(`subagents/${file}` in LEGACY_TEMPLATE_HASHES, `subagents/${file} is covered`);
   }
   assert.equal(legacyTemplateHash('a\r\nb  \n'), legacyTemplateHash('a\nb'), 'hashing normalises line endings and trailing space');

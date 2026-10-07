@@ -87,6 +87,7 @@ export async function runValidate(targetDirArg?: string) {
 
   console.log(pc.dim('  Specialized Units:'));
   const specializedProfiles = [
+    'architect.md',
     'flutter-developer.md',
     'devops-agent.md',
     'security-auditor.md',

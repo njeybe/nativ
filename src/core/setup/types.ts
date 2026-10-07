@@ -16,7 +16,12 @@ export const PRE_TOOL_USE_MATCHER = 'Write|Edit|MultiEdit|NotebookEdit';
 export const SESSION_START_MATCHER = 'startup|resume|clear|compact';
 export const HOOK_TIMEOUT_SECONDS = 10;
 
-export type AssetAction = 'created' | 'updated' | 'unchanged' | 'skipped';
+/** `.mcp.json` is shared between machines, so a path absolute on either OS ties it to one machine. */
+export function isMachineBoundPath(p: string): boolean {
+  return path.posix.isAbsolute(p) || path.win32.isAbsolute(p);
+}
+
+export type AssetAction ='created' | 'updated' | 'unchanged' | 'skipped';
 
 export interface AssetChange {
   /** Path relative to the project root, forward slashes. */
@@ -84,7 +89,7 @@ export function resolveCliInvocation(options: { command?: string; hasBinary?: (n
   const explicit = options.command?.trim();
   if (explicit) {
     const [command, ...prefixArgs] = explicit.split(/\s+/);
-    return { command, prefixArgs, portable: ![command, ...prefixArgs].some((p) => path.isAbsolute(p)) };
+    return { command, prefixArgs, portable: ![command, ...prefixArgs].some(isMachineBoundPath) };
   }
   if ((options.hasBinary ?? defaultHasBinary)('nativ')) return { command: 'nativ', prefixArgs: [], portable: true };
   // Not installed globally: fall back to this very build, which only works on this machine.

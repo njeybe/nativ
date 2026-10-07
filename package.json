@@ -22,7 +22,7 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && node scripts/sync-plugin.mjs --check",
     "start": "node bin/cli.js",
-    "test": "node tests/test-profiles.mjs && node tests/test-task-router.mjs && node tests/test-task-fields.mjs && node tests/test-design-templates.mjs && node tests/test-spec-slices.mjs && node tests/test-learnings.mjs && node tests/test-contract-generator.mjs && node tests/test-verify-gatekeeper.mjs && node tests/test-mcp-server.mjs && node tests/test-data-studio.mjs && node tests/test-fragmented-env.mjs && node tests/test-env-example-detection.mjs && node tests/test-contract-governor.mjs && node tests/test-worktree-lifecycle.mjs && node tests/test-agent-supervisor.mjs && node tests/test-concurrency-locks.mjs && node tests/test-telemetry-engine.mjs && node tests/test-benchmark-suite.mjs && node tests/test-providers.mjs && node tests/test-tier1-liaison.mjs && node tests/test-enforcement.mjs && node tests/test-setup-doctor.mjs && node tests/test-update.mjs && node tests/test-validate.mjs && node tests/test-plugin-manifest.mjs && node tests/test-code-shape.mjs && node tests/test-model-routing.mjs && node tests/test-token-budget.mjs && node tests/test-v2-e2e.mjs && npx tsx tests/test-studio-pipeline-api.mjs && npx tsx tests/test-studio-light-ui.mjs && npx tsx tests/test-studio-shell.mjs && npx tsx tests/test-studio-home.mjs && npx tsx tests/test-studio-tasks-view.mjs && npx tsx tests/test-studio-flow.mjs && npx tsx tests/test-studio-team.mjs && npx tsx tests/test-studio-redesign-e2e.mjs"
+    "test": "node tests/run-all.mjs"
   },
   "keywords": [
     "ai",
