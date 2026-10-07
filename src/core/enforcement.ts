@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EXAMPLE_ENV_FILES } from '../db/env-parser.js';
 import { resolveMainRoot, resolveProjectRoot } from './root-resolver.js';
+import { mutateJsonFileSync } from './lock-manager.js';
 
 export type EnforcementMode = 'off' | 'warn' | 'block';
 export type ViolationRule = 'protected_path' | 'secret_path' | 'out_of_scope';
@@ -97,8 +98,14 @@ export function loadSafePeripherals(root: string): string[] {
   return [];
 }
 
+interface UnlockEntry {
+  taskId: string;
+  at: string;
+  reason?: string;
+}
+
 interface UnlockFile {
-  unlocks: Array<{ taskId: string; at: string; reason?: string }>;
+  unlocks: UnlockEntry[];
 }
 
 function readUnlocks(root: string): UnlockFile {
@@ -111,12 +118,20 @@ function readUnlocks(root: string): UnlockFile {
   return { unlocks: [] };
 }
 
-function writeUnlocks(root: string, data: UnlockFile): void {
-  const file = path.join(root, UNLOCK_FILE);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, file);
+/** Applies `change` to the unlock list under its lock; returns whether anything changed. */
+function mutateUnlocks(root: string, change: (unlocks: UnlockEntry[]) => UnlockEntry[] | null): boolean {
+  let changed = false;
+  mutateJsonFileSync<Record<string, unknown>>(path.join(root, UNLOCK_FILE), (file) => {
+    const current = Array.isArray(file.unlocks) ? (file.unlocks as UnlockEntry[]) : [];
+    const next = change(current);
+    if (next) {
+      file.unlocks = next;
+      changed = true;
+    } else {
+      file.unlocks = current;
+    }
+  });
+  return changed;
 }
 
 export function isTaskUnlocked(root: string, taskId: string): boolean {
@@ -125,18 +140,13 @@ export function isTaskUnlocked(root: string, taskId: string): boolean {
 
 /** Lifts scope enforcement for one task until it is revoked or the task stops being in progress. */
 export function addTaskUnlock(root: string, taskId: string, reason?: string): void {
-  const data = readUnlocks(root);
-  if (data.unlocks.some((u) => u.taskId === taskId)) return;
-  data.unlocks.push({ taskId, at: new Date().toISOString(), ...(reason ? { reason } : {}) });
-  writeUnlocks(root, data);
+  mutateUnlocks(root, (unlocks) =>
+    unlocks.some((u) => u.taskId === taskId) ? null : [...unlocks, { taskId, at: new Date().toISOString(), ...(reason ? { reason } : {}) }],
+  );
 }
 
 export function removeTaskUnlock(root: string, taskId: string): boolean {
-  const data = readUnlocks(root);
-  const next = data.unlocks.filter((u) => u.taskId !== taskId);
-  if (next.length === data.unlocks.length) return false;
-  writeUnlocks(root, { unlocks: next });
-  return true;
+  return mutateUnlocks(root, (unlocks) => (unlocks.some((u) => u.taskId === taskId) ? unlocks.filter((u) => u.taskId !== taskId) : null));
 }
 
 // ─── Path handling ─────────────────────────────────────────────────────────────────────────────────

@@ -163,6 +163,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | [`learn list`](#nativ-learn-list) | List lessons | You, Agent |
 | [`learn approve` / `reject`](#nativ-learn-approve--reject) | Decide on a lesson | *You only* |
 | [`triage`](#nativ-triage) | Evaluate pending escalations; decision cards for you | You |
+| [`notify test`](#nativ-notify-test) | Check the webhook or command that tells you a decision is waiting | You |
 | [`db status` / `inspect` / `diff`](#nativ-db-status--inspect--diff) | Masked, structure-only database checks | You, Agent |
 | [`db sync`](#nativ-db-sync) | Copy a live schema into `.ai/db_schema.json` | *You only* |
 | [`worktree create` / `list` / `merge` / `remove`](#nativ-worktree) | Isolated worktrees for parallel tasks | You, Agent |
@@ -526,7 +527,7 @@ If the lesson changed while you were reviewing it, nothing is decided and you ar
 
 ### Escalations and triage
 
-A worker that finds a contract gap escalates (`nativ task escalate`) and stops. The gap is then resolved by the architect, or first assessed by triage.
+A worker that finds a contract gap escalates (`nativ task escalate`) and stops. The gap is then resolved by the architect, or first assessed by triage. [docs/self-healing.md](docs/self-healing.md) walks through the whole hands-free loop: claims, retries, triage, reclaiming stuck tasks and notifications.
 
 #### `nativ triage`
 
@@ -544,6 +545,16 @@ nativ triage [escalationId] [targetDir] [options]
 | `--json` | Output evaluations as JSON (no prompts) |
 
 When an escalation is settled, its resolution notes reach the next worker on that task as `priorEscalations`.
+
+#### `nativ notify test`
+
+nativ can tell you when it needs you: when triage returns `REQUIRE_HUMAN_DECISION`, and when the circuit breaker blocks a task. Each escalation is announced once. Add a webhook (Slack, Discord, ntfy or any JSON endpoint) or a local command to `.nativ/config.json`, which git ignores, so a webhook token stays on your machine:
+
+```json
+{ "notify": { "webhook": "https://hooks.slack.com/services/...", "events": ["human_decision", "circuit_breaker_tripped"] } }
+```
+
+The webhook receives JSON with `text` (Slack, ntfy), `content` (Discord), and the task, escalation, question, options and next step as fields. Webhooks must use `https://` (plain `http://` only to `localhost`). A `"command"` receives the same JSON on stdin and in `NATIV_NOTIFY_JSON`, e.g. `"command": "notify-send nativ \"$(jq -r .text)\""`. `nativ notify test` sends a sample; delivery failures never stop the workflow and are recorded in `.nativ/notify-state.json`.
 
 [Back to contents](#contents)
 
@@ -674,12 +685,15 @@ Written by `setup`; every key is optional.
 | `codeStyle.maxCommentLines` | `2` | Longest allowed comment block |
 | `providers` | see [Providers](#providers) | Provider order per role: `architect`, `pm`, `worker`, `verifier`, `triage` |
 | `models` | provider default | Model per provider |
+| `notify` | off | `webhook`, `command` and `events` for human notifications. See [`nativ notify test`](#nativ-notify-test) |
 
 ### Environment variables
 
 | Variable | Used for |
 | :--- | :--- |
 | `NATIV_ROLE` | Session role; `NATIV_ROLE=architect` lets a whole session write `.ai/` |
+| `NATIV_AGENT_ID` | Who claims a task on `task start`, so parallel agents never take the same task |
+| `NATIV_NOTIFY_WEBHOOK`, `NATIV_NOTIFY_COMMAND` | Override the `notify` webhook or command from `.nativ/config.json` |
 | `ANTHROPIC_API_KEY` | The `claude-api` provider and the Studio native runner |
 | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The `gemini` provider |
 | `NATIV_DEV_DATABASE_URL`, `DEV_DATABASE_URL`, `DATABASE_URL` | Dev database for `nativ db`, checked in that order, read from your `.env*` files. MongoDB (`MONGODB_URI`) and Firestore variants work too, and names declared in `.env.example` are checked first |
@@ -787,6 +801,8 @@ Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched fi
 | :--- | :--- |
 | `nativ_task_next`, `nativ_task_list`, `nativ_task_add` | Find and add work |
 | `nativ_task_start`, `nativ_task_complete`, `nativ_task_block`, `nativ_task_reclaim` | Move a task through its lifecycle (complete always runs the gatekeeper; reclaim frees stale claims) |
+| `nativ_validate` | Check the `.ai/` contracts, plan and role guides; returns only problems and a verdict |
+| `nativ_triage` | Self-heal: evaluate pending escalations, apply sandbox-proven safe fixes, return decision cards for the rest |
 | `nativ_task_escalate`, `nativ_task_propose_patch` | Escalate a gap or propose a governed patch |
 | `nativ_learn_propose` | Propose a lesson; you approve it in a terminal |
 | `nativ_verify`, `nativ_status`, `nativ_bench`, `nativ_test_gen` | Verification, progress, benchmarks, test generation |

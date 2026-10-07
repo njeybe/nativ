@@ -10,7 +10,8 @@ export type ProviderId = 'claude-cli' | 'claude-api' | 'gemini';
 /** Roles a provider can be assigned to in `.nativ/config.json`. */
 export type ProviderRole = 'architect' | 'pm' | 'worker' | 'verifier' | 'triage';
 
-export type ProviderErrorCode = 'NO_CREDENTIALS' | 'TIMEOUT' | 'RATE_LIMITED' | 'BAD_RESPONSE';
+/** TRANSIENT: a network failure or a 5xx answer, worth retrying on the same provider after a short wait. */
+export type ProviderErrorCode = 'NO_CREDENTIALS' | 'TIMEOUT' | 'RATE_LIMITED' | 'TRANSIENT' | 'BAD_RESPONSE';
 
 /** Typed failure so callers can fall through the provider chain without string matching. */
 export class ProviderError extends Error {
@@ -69,6 +70,8 @@ export interface ProviderDeps {
   anthropicClient?: () => AnthropicLike;
   env?: NodeJS.ProcessEnv;
   now?: () => number;
+  /** Waits between retries; injectable so tests do not sleep. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface AnthropicLike {

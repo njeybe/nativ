@@ -62,7 +62,7 @@ A project quirk the contracts do not say and the next worker would hit too: `nat
 
 1. **Verification fails:** fix the cause and retry, up to three attempts. No human needed.
 2. **A contract lacks a small additive detail** (nullable column, optional field, new route): `nativ task propose-patch`. The Contract Governor applies safe additions.
-3. **Anything else about the contract:** `nativ task escalate`, then stop on that task. The project manager runs `nativ triage --all --apply --json`: `AUTO_RESOLVE` items are proven in a sandbox and unblock the task by themselves.
+3. **Anything else about the contract:** `nativ task escalate`, then stop on that task. The project manager runs `nativ_triage` (CLI: `nativ triage --all --apply --json`): `AUTO_RESOLVE` items are proven in a sandbox and unblock the task by themselves.
 4. **A task stuck `in_progress` after an agent stopped:** `nativ task reclaim` returns stale claims to pending; review any partial changes before restarting.
 5. **Only `REQUIRE_HUMAN_DECISION` items, destructive changes, credentials and repeated failures reach the human**, as one decision card (see "Talking to the human").
 6. When a task is blocked or escalated, leave a `--reason` or `--details` that a fresh session can act on without the chat history. The plan, not the conversation, is the memory.

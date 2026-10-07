@@ -22,7 +22,7 @@ When instructed to run autonomously (e.g. "run the queue", "execute milestone", 
 4. When the worker finishes, verify (`nativ_verify`).
 5. Complete the task (`nativ_task_complete`).
 6. **Immediately loop to the next task.** Do NOT pause between tasks or ask the human for permission to proceed.
-7. When a task blocks or escalates, self-heal first: run `nativ triage --all --apply --json` and carry on with whatever it unblocked. Triage may take a minute; its output is compact JSON.
+7. When a task blocks or escalates, self-heal first: call `nativ_triage` (CLI: `nativ triage --all --apply --json`) and carry on with whatever it unblocked. Triage may take a minute; its output is compact JSON.
 8. Stop ONLY when:
    - All tasks in the milestone are completed: call the `verifier` agent for an independent milestone check, then notify the human.
    - Triage returns `REQUIRE_HUMAN_DECISION`, or the circuit breaker tripped: present the four-part card with the options and one direct question.

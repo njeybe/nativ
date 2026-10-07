@@ -90,12 +90,13 @@ const line = (out, rel) => out.split('\n').find((l) => l.includes(rel)) ?? '';
   assert.equal(legacyTemplateHash('a\r\nb  \n'), legacyTemplateHash('a\nb'), 'hashing normalises line endings and trailing space');
   assert.equal(normalizeForHash('﻿x\r\n'), 'x');
 
-  // The pre-marker CLAUDE.md that shipped at HEAD must be recognised (skipped when git history is unavailable)
+  // Since v2.0 every CLAUDE.md nativ writes is stamped, so the copy a project got from HEAD upgrades through its stamp,
+  // not through the legacy table (skipped when git history is unavailable).
   const head = spawnSync('git', ['show', 'HEAD:templates/CLAUDE.md'], { encoding: 'utf8', cwd: path.resolve('.') });
   if (head.status === 0 && head.stdout.trim()) {
-    const headHash = legacyTemplateHash(head.stdout);
-    const currentHash = legacyTemplateHash(template('CLAUDE.md'));
-    if (headHash !== currentHash) assert.ok(isLegacyTemplate('CLAUDE.md', head.stdout), 'the CLAUDE.md shipped at HEAD is a known legacy template');
+    const current = template('CLAUDE.md');
+    const upgraded = planTemplateFile(stampManaged(head.stdout), current, 'CLAUDE.md');
+    assert.equal(upgraded.action, legacyTemplateHash(head.stdout) === legacyTemplateHash(current) ? 'unchanged' : 'updated', 'the CLAUDE.md shipped at HEAD follows the template');
   } else {
     console.log('  (git history not available: HEAD fingerprint check skipped)');
   }
@@ -168,13 +169,14 @@ const line = (out, rel) => out.split('\n').find((l) => l.includes(rel)) ?? '';
     console.log('- Test 5: skipped (HEAD already holds the current template)');
   } else {
     const root = freshProject();
-    write(root, 'CLAUDE.md', head.stdout.replace(/\r?\n/g, '\r\n'));
+    // Since v2.0 nativ stamps what it writes, so a project holds the HEAD directive stamped (CRLF on a Windows checkout).
+    write(root, 'CLAUDE.md', stampManaged(head.stdout).replace(/\r?\n/g, '\r\n'));
     write(root, 'GEMINI.md', headGemini.stdout);
     const run = nativ(root, 'update', root);
     assert.equal(run.status, 0, run.stderr);
     assert.equal(read(root, 'CLAUDE.md'), stampManaged(template('CLAUDE.md')), 'the directive shipped at HEAD is replaced by the current one');
     assert.match(read(root, 'CLAUDE.md'), /@AGENTS\.md/, 'and it now imports the canonical AGENTS.md');
-    assert.match(line(run.stdout, 'CLAUDE.md'), /refreshed from an earlier nativ template/);
+    assert.match(line(run.stdout, 'CLAUDE.md'), /template updated/);
     fs.rmSync(root, { recursive: true, force: true });
     console.log('✔ Test 5: the directive that shipped before this change is refreshed to the new one, CRLF or not');
   }

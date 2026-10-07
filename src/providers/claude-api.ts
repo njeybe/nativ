@@ -77,6 +77,9 @@ export function createClaudeApiProvider(deps: ProviderDeps = {}): Provider {
         if (status === 429 || status === 529) throw new ProviderError('RATE_LIMITED', message.slice(0, 300), retryAfterMs(err));
         if (status === 401 || status === 403) throw new ProviderError('NO_CREDENTIALS', 'The Anthropic API key was rejected.');
         if (/timeout|timed out/i.test(name + message)) throw new ProviderError('TIMEOUT', `Claude did not answer within ${timeout}ms.`);
+        if ((status !== undefined && status >= 500) || /APIConnectionError|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed/i.test(name + message)) {
+          throw new ProviderError('TRANSIENT', message.slice(0, 300));
+        }
         throw new ProviderError('BAD_RESPONSE', message.slice(0, 300));
       }
     },

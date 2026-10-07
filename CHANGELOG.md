@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.6.0
 
 ### Improved: token usage and autonomy
 
@@ -11,12 +11,25 @@
 - **Resumable sessions.** The SessionStart orientation lists blocked tasks and pending escalations.
 - **Budget guard.** `tests/test-token-budget.mjs` fails when an always-loaded file outgrows its token budget.
 
+### Added
+
+- **Self-healing guide.** `docs/self-healing.md` explains the hands-free loop end to end: claims, the escalation ladder, reclaiming stuck tasks and notifications.
+- **`nativ_validate` MCP tool.** A read-only contract check for MCP hosts that returns only the problems and a verdict, not every passing line.
+- **Notifications when nativ needs you.** A `notify` webhook (Slack, Discord, ntfy, any JSON endpoint) or command in `.nativ/config.json` is called when triage returns `REQUIRE_HUMAN_DECISION` or the circuit breaker blocks a task, once per escalation. Webhooks must be https. `nativ notify test` sends a sample. Failures are recorded, never fatal.
+- **`nativ_triage` MCP tool.** Hosts that only speak MCP can now run the self-healing step: it evaluates pending escalations (or one), applies sandbox-proven additive fixes, and returns the decision card for items a person must decide. The directives and session orientation point to it.
+
 ### Fixed
 
 - **Tasks are claimed, not just started.** `task start` refuses a completed or blocked task and one whose dependencies are unfinished, and records `claimedBy` (`--agent` or `NATIV_AGENT_ID`) and `claimedAt`. Another agent cannot start a task with a fresh claim; a claim older than 4 hours can be taken over. Complete and block release the claim. A person can override with `--force`. `nativ_task_start` takes an optional `agent`.
 - **Stuck tasks recover.** `nativ task reclaim` (and `nativ_task_reclaim`) returns `in_progress` tasks with a claim older than 4 hours (`--older-than`) to pending, so a crashed agent no longer leaves a task stuck forever. `--dry-run` reports only. The SessionStart orientation lists stale tasks, and the self-healing ladder covers them.
+- **Provider calls survive network blips.** A network failure or a 5xx answer from Claude API or Gemini is now a `TRANSIENT` error, retried on the same provider twice (about 0.5s and 1s, with jitter) before the chain moves to the next provider. Rejected requests and timeouts are not retried.
+- **Shared JSON files are written safely.** Contract patches, `.nativ/config.json`, task unlocks, provider cooldowns and runner records now go through one atomic writer that retries Windows sharing violations; contract patches no longer fail silently on Windows. Config and unlock changes are read-modify-written under a lock, so parallel writers keep each other's keys, and a config file that does not parse is left untouched instead of being wiped. Studio reports a failed triage-config save instead of claiming success.
+- **Locks wait as long everywhere and leave no empty files.** The plan lock now waits about 5s like the other locks (it gave up after about 0.4s), and locking a file that does not exist no longer creates an empty one that JSON readers cannot parse.
+- **Unknown escalation types are refused.** `nativ task escalate --type` used to turn a typo into `architectural_ambiguity` silently; it now lists the valid types and writes nothing. The CLI and MCP share one list.
 - **`nativ init` writes the architect guide.** It copied a fixed list of eight guides and skipped `architect.md`; it now copies every guide in the templates. `nativ validate` checks the architect guide when present.
 - **Windows paths in `.mcp.json` count as machine-specific on every OS.** A `C:/...` command was treated as portable when setup ran on Linux or macOS.
+- **Continuous integration.** `.github/workflows/ci.yml` builds, checks the plugin sync and runs every suite on Ubuntu (Node 20 and 22) and Windows (Node 22) for pushes to `main` and `dev` and for pull requests. The test runner clears `CI` and the headless overrides for each suite, so tests behave the same on a laptop and in CI.
+- **SQLite on Node 20 explains itself.** SQLite support uses `node:sqlite`, which ships with Node.js 22.5+. On Node 20 the database commands and Studio now say so plainly instead of failing with an unknown-module error. The contract-generator tests no longer depend on `node --test` glob support, which Node 20 lacks.
 - **`npm test` runs every suite.** `tests/run-all.mjs` keeps going after a failure and lists every failed suite at the end.
 
 ## 2.5.1

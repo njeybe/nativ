@@ -57,7 +57,7 @@ function openItems(root: string, tasks: PlanTask[]): string | null {
     const list = stale.slice(0, 5).map((t) => `${t.id} (${Math.floor(claimAgeHours(t) ?? 0)}h)`).join(', ');
     parts.push(`stale in_progress: ${list}: run \`nativ task reclaim\``);
   }
-  if (pending) parts.push(`${pending} escalation(s) pending: run \`nativ triage --all --apply --json\``);
+  if (pending) parts.push(`${pending} escalation(s) pending: run \`nativ_triage\` (or \`nativ triage --all --apply --json\`)`);
   return `Open: ${parts.join('; ')}.`;
 }
 

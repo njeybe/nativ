@@ -10,6 +10,7 @@ import {
   redactMediaUrl,
   sqlitePathFromUrl,
 } from './env-parser.js';
+import { loadSqlite } from './sqlite.js';
 
 /**
  * Multi-engine schema introspector.
@@ -325,7 +326,7 @@ function quoteIdent(name: string): string {
 }
 
 async function createSqliteDriver(url: string): Promise<Driver> {
-  const { DatabaseSync } = await import('node:sqlite');
+  const { DatabaseSync } = await loadSqlite();
   const filePath = sqlitePathFromUrl(url);
   // readOnly: never create a database file or mutate one while introspecting.
   const db = filePath === ':memory:' ? new DatabaseSync(':memory:') : new DatabaseSync(filePath, { readOnly: true });

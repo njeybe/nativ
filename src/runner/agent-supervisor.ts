@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import { loadMasterPlan } from '../core/verifier.js';
+import { writeJsonAtomicSync } from '../core/lock-manager.js';
 import {
   cacheHitRate,
   computeActualCostUsd,
@@ -844,12 +845,7 @@ export class AgentSupervisor extends EventEmitter {
 
   private persist(record: RunnerRecord): void {
     try {
-      fs.mkdirSync(this.runsDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(this.runsDir, `${record.taskId}.json`),
-        `${JSON.stringify(record, null, 2)}\n`,
-        'utf8',
-      );
+      writeJsonAtomicSync(path.join(this.runsDir, `${record.taskId}.json`), record);
     } catch {
       // Local-first persistence is advisory; in-memory state stays authoritative.
     }

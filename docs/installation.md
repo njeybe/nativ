@@ -6,7 +6,7 @@ This guide covers installing `nativ`, connecting it to Claude Code, and checking
 
 | Requirement | Version | Notes |
 | :--- | :--- | :--- |
-| Node.js | 20 or newer (22 recommended) | |
+| Node.js | 20 or newer (22 recommended) | SQLite databases in `nativ db` and Studio need 22.5 or newer |
 | npm | 9 or newer | Ships with Node.js |
 | Git | 2.30 or newer | Needed for `nativ worktree` |
 | Claude Code | current | Optional for the CLI itself, required for the agents, hooks and MCP integration |

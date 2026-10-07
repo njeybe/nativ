@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseJsonLoose, type EnforcementMode } from './enforcement.js';
+import { mutateJsonFileSync } from './lock-manager.js';
 
 export type NativProfile = 'prototype' | 'solo' | 'enterprise';
 
@@ -80,24 +81,12 @@ export function resolveActiveProfileSettings(root: string): ProfileSettings {
 }
 
 export function setProfile(root: string, profile: NativProfile): ProfileSettings {
-  const configPath = path.join(root, CONFIG_FILE);
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  let existing: Record<string, unknown> = {};
-  try {
-    existing = parseJsonLoose<Record<string, unknown>>(fs.readFileSync(configPath, 'utf8')) || {};
-  } catch {
-    existing = {};
-  }
-
   const profileSettings = PROFILE_DEFAULTS[profile];
-  existing.profile = profile;
-  existing.enforcement = profileSettings.enforcement;
-  existing.governorMode = profileSettings.governorMode;
-  existing.testIntegrity = profileSettings.testIntegrity;
-
-  const tmp = `${configPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(existing, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, configPath);
-
+  mutateJsonFileSync(path.join(root, CONFIG_FILE), (config) => {
+    config.profile = profile;
+    config.enforcement = profileSettings.enforcement;
+    config.governorMode = profileSettings.governorMode;
+    config.testIntegrity = profileSettings.testIntegrity;
+  });
   return profileSettings;
 }

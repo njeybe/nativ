@@ -12,6 +12,8 @@ import {
   resolveProviderChain,
   resolveProvider,
   completeWithChain,
+  MAX_TRANSIENT_RETRIES,
+  transientBackoffMs,
   providerCooldownRemaining,
   setProviderCooldown,
   DEFAULT_LIMIT_COOLDOWN_MS,
@@ -159,6 +161,9 @@ const NOW_MS = 1_760_000_000_000;
   await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('nope'), { status: 401 }); }) }).complete({ prompt: 'x' }, root), 'NO_CREDENTIALS');
   await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' }); }) }).complete({ prompt: 'x' }, root), 'TIMEOUT');
   await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => ({ content: [] })) }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
+  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('overloaded'), { status: 500 }); }) }).complete({ prompt: 'x' }, root), 'TRANSIENT');
+  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('Connection error.'), { name: 'APIConnectionError' }); }) }).complete({ prompt: 'x' }, root), 'TRANSIENT');
+  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('bad request'), { status: 400 }); }) }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
 
   // Without an injected client the key comes from .env / env, and its absence is NO_CREDENTIALS
   assert.equal(createClaudeApiProvider({ env: {} }).hasCredentials(root), false);
@@ -192,7 +197,9 @@ const NOW_MS = 1_760_000_000_000;
 
   await assert.rejects(createGeminiProvider({ fetch: fetchWith(() => new Response('{}', { status: 429, headers: { 'retry-after': '12' } })), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), (err) => err.code === 'RATE_LIMITED' && err.retryAfterMs === 12_000);
   await REJECTS(createGeminiProvider({ fetch: fetchWith(() => new Response('{}', { status: 403 })), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), 'NO_CREDENTIALS');
-  await REJECTS(createGeminiProvider({ fetch: fetchWith(() => new Response('{}', { status: 503 })), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
+  await REJECTS(createGeminiProvider({ fetch: fetchWith(() => new Response('{}', { status: 503 })), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), 'TRANSIENT');
+  await REJECTS(createGeminiProvider({ fetch: fetchWith(() => new Response('{}', { status: 400 })), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
+  await REJECTS(createGeminiProvider({ fetch: fetchWith(() => { throw new TypeError('fetch failed'); }), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), 'TRANSIENT');
   await REJECTS(createGeminiProvider({ fetch: fetchWith(() => new Response('{}', { status: 200 })), env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
   await REJECTS(
     createGeminiProvider({ fetch: async () => { throw Object.assign(new Error('aborted'), { name: 'TimeoutError' }); }, env: { GEMINI_API_KEY: KEY } }).complete({ prompt: 'x' }, root),
@@ -298,12 +305,43 @@ const registryDeps = (over = {}) => ({
   assert.ok(seenModels[0].includes('/models/gemini-pinned:'));
 
   // Everything failing surfaces the last typed error; nothing available says NO_CREDENTIALS
-  const failing = registryDeps({ fetch: async () => new Response('{}', { status: 503 }), spawn: async () => ({ code: 1, stdout: cliJson({ is_error: true, result: 'boom' }), stderr: '', timedOut: false }) });
+  const failing = registryDeps({ fetch: async () => new Response('{}', { status: 400 }), spawn: async () => ({ code: 1, stdout: cliJson({ is_error: true, result: 'boom' }), stderr: '', timedOut: false }) });
   await REJECTS(completeWithChain('triage', root, { prompt: 'p' }, { deps: { ...failing, now: () => clock + 10 * 3_600_000 } }), 'BAD_RESPONSE');
   await REJECTS(completeWithChain('triage', tempRoot(), { prompt: 'p' }, { deps: registryDeps({ hasBinary: () => false }) }), 'NO_CREDENTIALS');
 
   fs.rmSync(root, { recursive: true, force: true });
   console.log('✔ Test 9: completeWithChain falls through, remembers limits, honors model config and reports failure');
+}
+
+// Test 10: transient failures are retried on the same provider with backoff, then fall through
+{
+  const root = tempRoot();
+  fs.writeFileSync(path.join(root, '.env'), 'GEMINI_API_KEY="g-key-1234"\n', 'utf8');
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  const ok = () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'fine' }] } }] }), { status: 200 });
+  let calls = 0;
+  const flaky = async () => (++calls < 3 ? new Response('{}', { status: 502 }) : ok());
+  const deps = { ...registryDeps({ hasBinary: () => false, fetch: flaky }), sleep };
+  const recovered = await completeWithChain('triage', root, { prompt: 'p' }, { deps });
+  assert.equal(recovered.text, 'fine', 'two 502s then success: the call recovers');
+  assert.equal(calls, 3);
+  assert.equal(waits.length, 2, 'it waited before each retry');
+  assert.ok(waits[0] >= 500 && waits[0] <= 750 && waits[1] >= 1000 && waits[1] <= 1500, `backoff grows with jitter: ${waits}`);
+
+  calls = 0;
+  const down = { ...registryDeps({ hasBinary: () => false, fetch: async () => { calls++; return new Response('{}', { status: 503 }); } }), sleep };
+  await REJECTS(completeWithChain('triage', root, { prompt: 'p' }, { deps: down }), 'TRANSIENT');
+  assert.equal(calls, 1 + MAX_TRANSIENT_RETRIES, 'retries are bounded');
+
+  calls = 0;
+  const fatal = { ...registryDeps({ hasBinary: () => false, fetch: async () => { calls++; return new Response('{}', { status: 400 }); } }), sleep };
+  await REJECTS(completeWithChain('triage', root, { prompt: 'p' }, { deps: fatal }), 'BAD_RESPONSE');
+  assert.equal(calls, 1, 'a request the provider rejected is not retried');
+  assert.equal(transientBackoffMs(0, () => 0), 500);
+  assert.equal(transientBackoffMs(1, () => 1), 1500);
+  fs.rmSync(root, { recursive: true, force: true });
+  console.log('✔ Test 10: network errors and 5xx are retried twice with jittered backoff; other failures are not');
 }
 
 console.log('\n🎉 ALL PROVIDER ADAPTER TESTS PASSED!');

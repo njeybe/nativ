@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { AuditLogEntry, ContractPatch } from './types.js';
+import { writeJsonAtomicSync } from '../core/lock-manager.js';
 
 export function getContractHash(filePath: string): string | null {
   if (!fs.existsSync(filePath)) return null;
@@ -104,17 +105,12 @@ export function applyApiPatch(contracts: any, patch: ContractPatch): any {
   return contracts;
 }
 
+/** False when the write failed; the shared helper retries Windows sharing violations before giving up. */
 export function atomicWriteJson(filePath: string, data: any): boolean {
-  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, filePath);
+    writeJsonAtomicSync(filePath, data);
     return true;
   } catch {
-    if (fs.existsSync(tmpPath)) {
-      fs.rmSync(tmpPath, { force: true });
-    }
     return false;
   }
 }

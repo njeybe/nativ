@@ -172,4 +172,31 @@ assert.equal(t4.status, 'in_progress', 'task-04 should be in_progress');
 
 console.log('✔ Mixed Parallel Operations: Start, Block, Complete, and Add executed flawlessly.');
 
+// Shared JSON files (.nativ/config.json, unlocks) are read-modify-written under a lock by parallel processes
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-json-lock-'));
+  const file = path.join(dir, '.nativ', 'config.json');
+  const lockModule = path.join(repoRoot, 'dist', 'core', 'lock-manager.js').replace(/\\/g, '/');
+  const writer = (i) =>
+    execFileAsync(process.execPath, ['--input-type=module', '-e',
+      `import { mutateJsonFileSync } from 'file:///${lockModule.replace(/^\//, '')}';
+       for (let n = 0; n < 5; n++) mutateJsonFileSync(${JSON.stringify(file)}, (c) => { c['w${i}_' + n] = true; });`]);
+  await Promise.all(Array.from({ length: 6 }, (_, i) => writer(i)));
+  const merged = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(Object.keys(merged).length, 30, 'six processes x five writes: no key is lost');
+  assert.ok(!fs.existsSync(`${file}.lock`), 'the lock is released');
+
+  const { mutateJsonFileSync, withFileLockSync } = await import(`file:///${lockModule.replace(/^\//, '')}`);
+  const missing = path.join(dir, 'missing', 'escalation.json');
+  withFileLockSync(missing, () => {});
+  assert.ok(!fs.existsSync(missing), 'locking a missing file no longer creates an empty, unparseable one');
+
+  const broken = path.join(dir, 'broken.json');
+  fs.writeFileSync(broken, '{ "keep": true, }');
+  assert.throws(() => mutateJsonFileSync(broken, (c) => { c.x = 1; }), /not valid JSON/);
+  assert.equal(fs.readFileSync(broken, 'utf8'), '{ "keep": true, }', 'an unparseable file is left untouched, not wiped');
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log('✔ Locked JSON writes: parallel writers keep every key; missing files stay missing; broken files are not wiped.');
+}
+
 console.log('\n🎉 ALL MULTI-AGENT CONCURRENCY & LOCK TESTS PASSED!\n');

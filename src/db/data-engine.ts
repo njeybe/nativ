@@ -1,5 +1,6 @@
 import { detectEngine, maskConnectionString, MASK, parseFirestoreUrl, sqlitePathFromUrl } from './env-parser.js';
 import type { DatabaseEngine } from './types.js';
+import { loadSqlite } from './sqlite.js';
 
 /**
  * Multi-Engine Live Data Studio Query and Mutation Engine.
@@ -479,7 +480,7 @@ async function mysqlDelete(url: string, entity: string, primaryKey: string | num
 
 async function sqliteFetch(url: string, entity: string, options: FetchDataOptions): Promise<FetchDataResult> {
   assertValidIdentifier(entity, 'table name');
-  const { DatabaseSync } = await import('node:sqlite');
+  const { DatabaseSync } = await loadSqlite();
   const filePath = sqlitePathFromUrl(url);
   const db = filePath === ':memory:' ? new DatabaseSync(':memory:') : new DatabaseSync(filePath, { readOnly: true });
 
@@ -534,7 +535,7 @@ async function sqliteFetch(url: string, entity: string, options: FetchDataOption
 
 async function sqliteInsert(url: string, entity: string, record: Record<string, unknown>): Promise<InsertRecordResult> {
   assertValidIdentifier(entity, 'table name');
-  const { DatabaseSync } = await import('node:sqlite');
+  const { DatabaseSync } = await loadSqlite();
   const filePath = sqlitePathFromUrl(url);
   const db = filePath === ':memory:' ? new DatabaseSync(':memory:') : new DatabaseSync(filePath);
 
@@ -580,7 +581,7 @@ async function sqliteInsert(url: string, entity: string, record: Record<string, 
 
 async function sqliteUpdate(url: string, entity: string, primaryKey: string | number, updates: Record<string, unknown>): Promise<UpdateRecordResult> {
   assertValidIdentifier(entity, 'table name');
-  const { DatabaseSync } = await import('node:sqlite');
+  const { DatabaseSync } = await loadSqlite();
   const filePath = sqlitePathFromUrl(url);
   const db = filePath === ':memory:' ? new DatabaseSync(':memory:') : new DatabaseSync(filePath);
 
@@ -613,7 +614,7 @@ async function sqliteUpdate(url: string, entity: string, primaryKey: string | nu
 
 async function sqliteDelete(url: string, entity: string, primaryKey: string | number): Promise<DeleteRecordResult> {
   assertValidIdentifier(entity, 'table name');
-  const { DatabaseSync } = await import('node:sqlite');
+  const { DatabaseSync } = await loadSqlite();
   const filePath = sqlitePathFromUrl(url);
   const db = filePath === ':memory:' ? new DatabaseSync(':memory:') : new DatabaseSync(filePath);
 

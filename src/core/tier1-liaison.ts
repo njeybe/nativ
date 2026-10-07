@@ -16,6 +16,8 @@ import path from 'node:path';
 import { MASK } from '../db/env-parser.js';
 import { escalationPath, loadEscalationFile } from '../governor/store.js';
 import { applySelfHealingProposal } from '../governor/index.js';
+import { notifyHuman } from './notify.js';
+import { mutateJsonFileSync } from './lock-manager.js';
 import type { CandidatePatch, SelfHealingEscalationRecord, SelfHealingProposal } from '../governor/circuit-breaker.js';
 import {
   CLAUDE_CLI_DEFAULT_MODEL,
@@ -239,31 +241,15 @@ export function loadTriageConfig(root: string): Partial<TriageConfig> {
   return {};
 }
 
+/** Merges triage settings into `.nativ/config.json` under its lock. Throws when the file cannot be written. */
 export function saveTriageConfig(root: string, update: Partial<TriageConfig>): void {
-  const nativDir = path.join(root, '.nativ');
-  const configFile = path.join(nativDir, 'config.json');
-  try {
-    if (!fs.existsSync(nativDir)) fs.mkdirSync(nativDir, { recursive: true });
-    let existing: Record<string, unknown> = {};
-    if (fs.existsSync(configFile)) {
-      try {
-        existing = JSON.parse(fs.readFileSync(configFile, 'utf8')) as Record<string, unknown>;
-      } catch {
-        existing = {};
-      }
-    }
-    const currentTriage = (existing.triage && typeof existing.triage === 'object') ? (existing.triage as Record<string, unknown>) : {};
-    if (typeof update.autoTriageEnabled === 'boolean') currentTriage.autoTriageEnabled = update.autoTriageEnabled;
-    if (update.riskThreshold) currentTriage.riskThreshold = update.riskThreshold;
-    if (update.model) currentTriage.model = update.model;
-    existing.triage = currentTriage;
-
-    const tmp = `${configFile}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(existing, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmp, configFile);
-  } catch {
-    // Ignore write failures gracefully
-  }
+  mutateJsonFileSync(path.join(root, '.nativ', 'config.json'), (config) => {
+    const triage = config.triage && typeof config.triage === 'object' ? (config.triage as Record<string, unknown>) : {};
+    if (typeof update.autoTriageEnabled === 'boolean') triage.autoTriageEnabled = update.autoTriageEnabled;
+    if (update.riskThreshold) triage.riskThreshold = update.riskThreshold;
+    if (update.model) triage.model = update.model;
+    config.triage = triage;
+  });
 }
 
 /**
@@ -338,7 +324,11 @@ export class Tier1Liaison {
     if (typeof body.model === 'string' && body.model.trim()) {
       this.config.model = body.model.trim();
     }
-    saveTriageConfig(this.root, this.config);
+    try {
+      saveTriageConfig(this.root, this.config);
+    } catch (err) {
+      return { ok: false, error: `Could not save .nativ/config.json: ${err instanceof Error ? err.message : String(err)}` };
+    }
     return { ok: true, config: { ...this.config } };
   }
 
@@ -486,6 +476,16 @@ Respond with strictly valid JSON:
     this.stats.totalEvaluated++;
     if (autoPatchApplied) this.stats.autoResolved++;
     else if (classification === 'REQUIRE_HUMAN_DECISION') this.stats.escalatedToHuman++;
+
+    if (classification === 'REQUIRE_HUMAN_DECISION' && !autoPatchApplied) {
+      await notifyHuman(this.root, {
+        event: 'human_decision',
+        taskId,
+        escalationId,
+        summary: record.summary || 'A decision is needed',
+        ...(humanCard ? { question: humanCard.symptom, options: humanCard.options.map((o) => o.label) } : {}),
+      }).catch(() => {});
+    }
 
     const latencyMs = Date.now() - startTime;
 

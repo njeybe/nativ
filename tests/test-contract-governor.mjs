@@ -395,7 +395,11 @@ try {
   assert.deepEqual(manual.map((e) => e.id), ['esc-01', 'esc-02'], 'manual escalations are numbered esc-01, esc-02, ...');
   const allIds = readJson('escalation.json').escalations.map((e) => e.id);
   assert.equal(new Set(allIds).size, allIds.length, 'manual and circuit-breaker ids never collide');
-  console.log('✔ Manual escalations are numbered sequentially without colliding with breaker ids.');
+  const typo = await cli(['task', 'escalate', 'task-05', dir, '--type', 'schema_flw', '--details', 'typo']);
+  assert.equal(typo.code, 1, 'an unknown --type is refused, not silently re-labelled');
+  assert.match(typo.stderr, /Unknown escalation type "schema_flw"\. Use one of: contract_drift, schema_flaw/);
+  assert.equal(readJson('escalation.json').escalations.length, allIds.length, 'a refused escalation writes nothing');
+  console.log('✔ Manual escalations are numbered sequentially without colliding with breaker ids; unknown types are refused.');
 
   // Test 11: Test-integrity invariant through the real CLI
   console.log('11. Testing the test-integrity guard (delete/weaken existing test suites)...');

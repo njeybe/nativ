@@ -2,6 +2,7 @@ import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { Writable } from 'node:stream';
 import { z } from 'zod';
 import {
   runTaskList,
@@ -14,10 +15,12 @@ import {
   runTaskAdd,
   runTaskProposePatch,
 } from '../commands/task.js';
-import { SUBAGENT_TYPES } from '../scanner/types.js';
+import { SUBAGENT_TYPES, ESCALATION_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
+import { runTriage } from '../commands/triage.js';
 import { runStatus } from '../commands/status.js';
 import { runDoctor } from '../commands/doctor.js';
+import { runValidate } from '../commands/validate.js';
 import {
   runWorktreeCreate,
   runWorktreeList,
@@ -37,13 +40,7 @@ import { registerMcpResources, MCP_RESOURCES } from './resources.js';
 export { captureOutput } from './capture.js';
 export { registerMcpResources, MCP_RESOURCES } from './resources.js';
 
-export const ESCALATION_TYPES = [
-  'contract_drift',
-  'schema_flaw',
-  'missing_credential',
-  'dependency_conflict',
-  'architectural_ambiguity',
-] as const;
+export { ESCALATION_TYPES } from '../scanner/types.js';
 
 /**
  * Native MCP (Model Context Protocol) server for Nativ over stdio.
@@ -184,6 +181,33 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       },
     },
     ({ taskId, reason }) => captureOutput(() => runTaskBlock(taskId, reason, targetDir)),
+  );
+
+  registerNativTool(
+    'triage',
+    {
+      description: 'Self-heal escalations: evaluate pending escalations (or one), apply sandbox-proven additive contract fixes and unblock their tasks. Returns compact JSON; items classified REQUIRE_HUMAN_DECISION carry a humanCard to present to the human.',
+      inputSchema: {
+        escalationId: z.string().optional().describe('Triage only this escalation, e.g. esc-03; default: every pending one'),
+        apply: z.boolean().optional().describe('Write proven safe patches and unblock tasks (default true)'),
+      },
+    },
+    ({ escalationId, apply }) =>
+      captureOutput(() =>
+        runTriage(escalationId, targetDir, {
+          all: !escalationId,
+          apply: apply ?? true,
+          json: true,
+          interactive: false,
+          // stdout carries the MCP protocol, so triage output is routed into the captured tool result.
+          output: new Writable({
+            write(chunk, _encoding, done) {
+              console.log(String(chunk).replace(/\n$/, ''));
+              done();
+            },
+          }),
+        }),
+      ),
   );
 
   registerNativTool(
@@ -331,6 +355,23 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       inputSchema: {},
     },
     () => captureOutput(() => runStatus(targetDir)),
+  );
+
+  registerNativTool(
+    'validate',
+    {
+      description:
+        'Read-only integrity check of the .ai/ contracts, master plan, spec references and role guides. ' +
+        'Returns only problems (✖ errors, ⚠ warnings) and the verdict; an error result means a contract is missing or malformed.',
+      inputSchema: {},
+    },
+    async () => {
+      const result = await captureOutput(() => runValidate(targetDir));
+      const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
+      const problems = text.split('\n').filter((line) => /[✖⚠]/.test(line) && !/validation failed with errors/i.test(line)).map((line) => line.trim());
+      const verdict = result.isError ? 'Validation failed.' : 'All contracts are valid.';
+      return { ...result, content: [{ type: 'text', text: [...problems, verdict].join('\n') }] };
+    },
   );
 
   registerNativTool(

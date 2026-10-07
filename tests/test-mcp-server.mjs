@@ -19,6 +19,8 @@ const EXPECTED_TOOLS = [
   'nativ_task_complete',
   'nativ_task_block',
   'nativ_task_reclaim',
+  'nativ_triage',
+  'nativ_validate',
   'nativ_task_escalate',
   'nativ_learn_propose',
   'nativ_init',
@@ -149,6 +151,9 @@ const env = { ...process.env };
 for (const key of Object.keys(env)) {
   if (/^(PROD_)?DB_|^MYSQL_|^POSTGRES_|^PG(HOST|PORT|USER|PASSWORD|DATABASE)$|DATABASE_URL|MONGO|FIRESTORE/.test(key)) delete env[key];
 }
+// Triage stays offline: no provider keys, and NATIV_PROVIDER_CHILD switches the claude-cli provider off.
+for (const key of ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'ANTHROPIC_API_KEY', 'NATIV_NOTIFY_WEBHOOK', 'NATIV_NOTIFY_COMMAND']) delete env[key];
+env.NATIV_PROVIDER_CHILD = '1';
 env.DEV_DATABASE_URL = `postgres://agent:${SECRET}@127.0.0.1:${await closedPort()}/fixture_dev`;
 
 const server = startServer(projectDir, env);
@@ -267,6 +272,40 @@ try {
   assert.ok(!dbText.includes(SECRET), 'db status output must never contain the raw password');
   assert.ok(!server.stderr().includes(SECRET), 'server stderr must never contain the raw password');
   check('nativ_db_status reports offline databases as JSON with masked credentials');
+
+  // 7b. nativ_triage self-heals over MCP and returns the human card when a person must decide
+  fs.writeFileSync(path.join(projectDir, '.ai', 'escalation.json'), JSON.stringify({ version: '1.0.0', escalations: [
+    { id: 'esc-01', taskId: 'task-2', status: 'pending_review', summary: 'Destructive migration: DROP COLUMN requested', details: 'DROP COLUMN notes deletes user records.' },
+  ] }));
+  const triage = await server.callTool('nativ_triage', {});
+  assert.notEqual(triage.result.isError, true, toolText(triage));
+  const triageJson = JSON.parse(toolText(triage));
+  assert.equal(triageJson.evaluations[0].evaluation.classification, 'REQUIRE_HUMAN_DECISION');
+  assert.ok(triageJson.evaluations[0].evaluation.humanCard.options.length >= 2, 'the decision card reaches the agent');
+  const unknownEsc = await server.callTool('nativ_triage', { escalationId: 'esc-99' });
+  assert.equal(unknownEsc.result.isError, true);
+  check('nativ_triage evaluates escalations over MCP and returns the decision card');
+
+  // 7c. nativ_validate reports only problems and the verdict
+  const incomplete = await server.callTool('nativ_validate', {});
+  assert.equal(incomplete.result.isError, true);
+  assert.match(toolText(incomplete), /✖ Missing: \.ai\/ui_specs\.md/);
+  assert.equal(toolText(incomplete).match(/failed/gi).length, 1, 'the verdict is stated once');
+  fs.writeFileSync(path.join(projectDir, '.ai', 'ui_specs.md'), '# UI\n');
+  fs.mkdirSync(path.join(projectDir, '.ai', 'subagents'), { recursive: true });
+  for (const guide of ['database', 'backend', 'frontend', 'qa-tester']) fs.writeFileSync(path.join(projectDir, '.ai', 'subagents', `${guide}.md`), `# ${guide}\n`);
+  const valid = await server.callTool('nativ_validate', {});
+  assert.notEqual(valid.result.isError, true, toolText(valid));
+  assert.match(toolText(valid), /All contracts are valid\.$/);
+  assert.ok(!/✔/.test(toolText(valid)), 'passing checks are left out to keep the reply short');
+  const apiPath = path.join(projectDir, '.ai', 'api_contracts.json');
+  const apiBefore = fs.readFileSync(apiPath, 'utf8');
+  fs.writeFileSync(apiPath, '{ broken');
+  const invalid = await server.callTool('nativ_validate', {});
+  fs.writeFileSync(apiPath, apiBefore);
+  assert.equal(invalid.result.isError, true);
+  assert.match(toolText(invalid), /✖ Malformed JSON in \.ai\/api_contracts\.json[\s\S]*Validation failed\./);
+  check('nativ_validate returns only problems and a verdict');
 
   // 8. stdout carries JSON-RPC frames only
   for (const line of server.rawStdoutLines) {
