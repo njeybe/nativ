@@ -801,6 +801,7 @@ Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched fi
 | :--- | :--- |
 | `nativ_task_next`, `nativ_task_list`, `nativ_task_add` | Find and add work |
 | `nativ_task_start`, `nativ_task_complete`, `nativ_task_block`, `nativ_task_reclaim` | Move a task through its lifecycle (complete always runs the gatekeeper; reclaim frees stale claims) |
+| `nativ_triage` | Self-heal: evaluate pending escalations, apply sandbox-proven safe fixes, return decision cards for the rest |
 | `nativ_task_escalate`, `nativ_task_propose_patch` | Escalate a gap or propose a governed patch |
 | `nativ_learn_propose` | Propose a lesson; you approve it in a terminal |
 | `nativ_verify`, `nativ_status`, `nativ_bench`, `nativ_test_gen` | Verification, progress, benchmarks, test generation |

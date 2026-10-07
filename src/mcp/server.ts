@@ -2,6 +2,7 @@ import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { Writable } from 'node:stream';
 import { z } from 'zod';
 import {
   runTaskList,
@@ -16,6 +17,7 @@ import {
 } from '../commands/task.js';
 import { SUBAGENT_TYPES } from '../scanner/types.js';
 import { runInit } from '../commands/init.js';
+import { runTriage } from '../commands/triage.js';
 import { runStatus } from '../commands/status.js';
 import { runDoctor } from '../commands/doctor.js';
 import {
@@ -184,6 +186,33 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       },
     },
     ({ taskId, reason }) => captureOutput(() => runTaskBlock(taskId, reason, targetDir)),
+  );
+
+  registerNativTool(
+    'triage',
+    {
+      description: 'Self-heal escalations: evaluate pending escalations (or one), apply sandbox-proven additive contract fixes and unblock their tasks. Returns compact JSON; items classified REQUIRE_HUMAN_DECISION carry a humanCard to present to the human.',
+      inputSchema: {
+        escalationId: z.string().optional().describe('Triage only this escalation, e.g. esc-03; default: every pending one'),
+        apply: z.boolean().optional().describe('Write proven safe patches and unblock tasks (default true)'),
+      },
+    },
+    ({ escalationId, apply }) =>
+      captureOutput(() =>
+        runTriage(escalationId, targetDir, {
+          all: !escalationId,
+          apply: apply ?? true,
+          json: true,
+          interactive: false,
+          // stdout carries the MCP protocol, so triage output is routed into the captured tool result.
+          output: new Writable({
+            write(chunk, _encoding, done) {
+              console.log(String(chunk).replace(/\n$/, ''));
+              done();
+            },
+          }),
+        }),
+      ),
   );
 
   registerNativTool(

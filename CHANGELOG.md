@@ -14,6 +14,7 @@
 ### Added
 
 - **Notifications when nativ needs you.** A `notify` webhook (Slack, Discord, ntfy, any JSON endpoint) or command in `.nativ/config.json` is called when triage returns `REQUIRE_HUMAN_DECISION` or the circuit breaker blocks a task, once per escalation. Webhooks must be https. `nativ notify test` sends a sample. Failures are recorded, never fatal.
+- **`nativ_triage` MCP tool.** Hosts that only speak MCP can now run the self-healing step: it evaluates pending escalations (or one), applies sandbox-proven additive fixes, and returns the decision card for items a person must decide. The directives and session orientation point to it.
 
 ### Fixed
 
