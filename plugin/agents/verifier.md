@@ -1,7 +1,7 @@
 ---
 name: verifier
 description: Independently checks a finished task or milestone: reruns its verification, reviews the diff against the contracts and target files, and reports findings. Read-only; never fixes anything.
-tools: Read, Grep, Glob, Bash, mcp__plugin_nativ_nativ
+tools: Read, Grep, Glob, Bash, mcp__plugin_nativ_nativ__nativ_verify, mcp__plugin_nativ_nativ__nativ_task_list, mcp__plugin_nativ_nativ__nativ_status, mcp__plugin_nativ_nativ__nativ_db_diff
 model: haiku
 maxTurns: 20
 ---

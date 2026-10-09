@@ -459,7 +459,10 @@ const doctorJson = async (root, options = {}) => {
   const out = JSON.parse(printed);
   assert.equal(out.hookSpecificOutput.hookEventName, 'SessionStart', 'documented SessionStart JSON shape');
   assert.match(out.hookSpecificOutput.additionalContext, /nativ project/);
-  assert.ok(out.hookSpecificOutput.additionalContext.length < 900, 'a short orientation, not a dump');
+  const [orientation, playbook] = out.hookSpecificOutput.additionalContext.split('\n\n## Working as Project Manager');
+  assert.ok(orientation.length < 900, 'a short orientation, not a dump');
+  assert.ok(playbook?.includes('Do not run `nativ_verify` or `nativ_task_complete` again'), 'the manager gets its playbook here, not in CLAUDE.md');
+  assert.ok(!buildSessionContext(root, { NATIV_ROLE: 'architect' }).includes('Working as Project Manager'), 'other roles do not');
 
   const bare = tempProject({ ai: false });
   assert.equal(buildSessionContext(bare, {}), null, 'a non-nativ folder gets no context');

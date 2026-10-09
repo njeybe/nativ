@@ -90,11 +90,11 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
     const fm = frontmatter(agent);
     assert.equal(fm.name, file.replace('.md', ''), `${file} name`);
     assert.ok(fm.description.length > 30, `${file} has a description that tells Claude when to delegate`);
-    if (/\bmcp__nativ\b/.test(template)) {
-      assert.match(fm.tools, /mcp__plugin_nativ_nativ\b/, `${file} uses the plugin's MCP tool prefix (mcp__plugin_<plugin>_<server>)`);
+    if (/\bmcp__nativ(?=__|\b)/.test(template)) {
+      assert.match(fm.tools, /mcp__plugin_nativ_nativ(?=__|\b)/, `${file} uses the plugin's MCP tool prefix (mcp__plugin_<plugin>_<server>)`);
     }
-    assert.ok(!/\bmcp__nativ\b/.test(fm.tools), `${file} must not use the project-scope prefix, which matches nothing inside a plugin`);
-    assert.equal(agent, template.replace(/\bmcp__nativ\b/g, 'mcp__plugin_nativ_nativ'), `${file} differs from its template only by the tool prefix`);
+    assert.ok(!/\bmcp__nativ(?=__|\b)/.test(fm.tools), `${file} must not use the project-scope prefix, which matches nothing inside a plugin`);
+    assert.equal(agent, template.replace(/\bmcp__nativ(?=__|\b)/g, 'mcp__plugin_nativ_nativ'), `${file} differs from its template only by the tool prefix`);
   }
   for (const agent of ['verifier', 'explorer']) {
     const tools = frontmatter(read(`${PLUGIN_DIR}/agents/${agent}.md`)).tools;

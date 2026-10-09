@@ -1,6 +1,7 @@
 import pc from 'picocolors';
 import { MasterPlanTask } from '../../scanner/types.js';
 import { runTaskVerification, VerificationResult } from '../../core/verifier.js';
+import { digestFailure } from '../../core/verifier/output-digest.js';
 import {
   CircuitBreaker,
   TestIntegrityGuard,
@@ -187,17 +188,19 @@ export async function runTaskComplete(
       if (failedPhase) console.error(pc.yellow(`  Phase:   ${failedPhase.name}`));
       console.error(pc.yellow(`  Command: \`${vResult.command}\``));
 
-      if (vResult.stderr && vResult.stderr.trim()) {
+      const digest = digestFailure(targetDir, taskId, vResult);
+      if (digest.stderr) {
         console.error(pc.red('\n--- stderr ---'));
-        console.error(pc.red(vResult.stderr.trim()));
+        console.error(pc.red(digest.stderr));
       }
-      if (vResult.stdout && vResult.stdout.trim() && !vResult.stderr?.trim()) {
+      if (digest.stdout) {
         console.error(pc.dim('\n--- stdout ---'));
-        console.error(pc.dim(vResult.stdout.trim()));
+        console.error(pc.dim(digest.stdout));
       }
       if (vResult.error && !vResult.stderr?.includes(vResult.error)) {
         console.error(pc.red(`\nError: ${vResult.error}`));
       }
+      if (digest.logFile) console.error(pc.dim(`\n  Full output: ${digest.logFile}`));
 
       console.error(pc.yellow(`\n⚠ Task remains '${foundTask.status}'. Fix the issue and retry:`));
       console.error(pc.white(`  nativ task complete ${taskId}`));

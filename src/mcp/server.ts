@@ -76,7 +76,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
   registerNativTool(
     'task_list',
     {
-      description: 'List project tasks from .ai/master_plan.json with optional filters (JSON).',
+      description: 'List project tasks from .ai/master_plan.json with optional filters (JSON summary; full for every field).',
       inputSchema: {
         available: z.boolean().optional().describe('Only tasks that are unblocked and ready for execution'),
         status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional().describe('Filter by task status'),
