@@ -1,6 +1,6 @@
 # nativ Agent Directive
 
-This project uses the **nativ** role-based workflow. Every agent, whatever tool or model it runs on, follows this file. The state lives in `.ai/`; the `nativ` CLI and its MCP tools are the only supported way to change it.
+This project uses the **nativ** role-based workflow. Every agent follows this file. The state lives in `.ai/`; the `nativ` CLI and MCP tools are the only supported way to change it.
 
 ## Roles
 
@@ -28,9 +28,9 @@ The vendor behind a role does not matter; the boundary does. `nativ hook check` 
 
 1. `nativ task start <taskId>`. Never edit `.ai/master_plan.json` by hand.
 2. Change only the task's `targetFiles`. Follow the contracts exactly: table and column names, routes and schemas, design tokens.
-3. Run the task's `verificationCommand` (or `nativ verify <taskId>`). You have **three** fix attempts.
+3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so there is no need to run the check yourself first. Do not use `--no-verify`. You have **three** fix attempts.
 4. After the third failure: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and tell the human.
-5. When verification passes: `nativ task complete <taskId>`. The gatekeeper re-runs the check. Do not use `--no-verify`.
+5. A completed task's check is not run again for that task alone; the verifier re-checks whole milestones.
 6. `nativ task next` for the following task.
 
 The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot start subagents, so the project manager also runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.

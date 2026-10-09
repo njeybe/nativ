@@ -81,7 +81,7 @@ export async function renderPlugin(root = repoRoot) {
   // (verified against Claude Code 2.1.284), so the agents' tool lists must use the plugin form.
   for (const file of AGENT_FILES) {
     const template = readLf(path.join(root, 'templates', 'claude-agents', file));
-    files.set(`${PLUGIN_DIR}/agents/${file}`, template.replace(/\bmcp__nativ\b/g, `mcp__plugin_${PLUGIN_NAME}_${PLUGIN_NAME}`));
+    files.set(`${PLUGIN_DIR}/agents/${file}`, template.replace(/\bmcp__nativ(?=__|\b)/g, `mcp__plugin_${PLUGIN_NAME}_${PLUGIN_NAME}`));
   }
 
   // The skill is the canonical directive, so an installed plugin and `nativ setup` teach the same rules.

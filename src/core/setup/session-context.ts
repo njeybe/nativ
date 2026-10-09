@@ -4,6 +4,7 @@ import { ROLE_ENV, loadEnforcementMode, parseJsonLoose } from '../enforcement.js
 import { resolveProjectRoot } from '../root-resolver.js';
 import { loadEscalationFile } from '../../governor/store.js';
 import { DEFAULT_STALE_HOURS, claimAgeHours, isStaleClaim } from '../task-claims.js';
+import { PM_PLAYBOOK } from './pm-playbook.js';
 
 interface PlanTask {
   id: string;
@@ -86,6 +87,7 @@ export function buildSessionContext(cwd: string, env: NodeJS.ProcessEnv = proces
   const open = openItems(root, tasks);
   if (open) lines.push(open);
   lines.push('Prefer the nativ_* MCP tools (or the `nativ` CLI). Do not edit .ai/ directly: escalate contract gaps with `nativ task escalate`.');
+  if (role === 'project manager') lines.push('', PM_PLAYBOOK);
   return lines.join('\n');
 }
 

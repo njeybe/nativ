@@ -1,6 +1,19 @@
 import path from 'node:path';
 import pc from 'picocolors';
 import { verifyBatch, BatchVerificationResult } from '../core/verifier.js';
+import { digestFailure } from '../core/verifier/output-digest.js';
+
+/** Passing runs need no output; failing ones get a digest and the path to the full log. */
+function compactBatch(batch: BatchVerificationResult, root: string) {
+  return {
+    ...batch,
+    tasks: batch.tasks.map((t) => {
+      if (t.result.success) return { ...t, result: { ...t.result, stdout: '', stderr: '' } };
+      const { stdout, stderr, logFile } = digestFailure(root, t.taskId, t.result);
+      return { ...t, result: { ...t.result, stdout, stderr, logFile } };
+    }),
+  };
+}
 
 export interface VerifyOptions {
   all?: boolean;
@@ -23,7 +36,7 @@ export async function runVerify(
   });
 
   if (options.json) {
-    console.log(JSON.stringify(batch, null, 2));
+    console.log(JSON.stringify(compactBatch(batch, targetDir)));
     if (batch.failed > 0) {
       process.exitCode = 1;
     }
@@ -64,17 +77,19 @@ export async function runVerify(
       const failedPhase = t.result.phases?.find((p) => !p.success);
       if (failedPhase) console.log(pc.red(`    Failed in phase "${failedPhase.name}"`));
 
-      if (t.result.stderr && t.result.stderr.trim()) {
+      const digest = digestFailure(targetDir, t.taskId, t.result);
+      if (digest.stderr) {
         console.log(pc.red(`\n--- [${t.taskId}] stderr ---`));
-        console.log(pc.red(t.result.stderr.trim()));
+        console.log(pc.red(digest.stderr));
       }
-      if (t.result.stdout && t.result.stdout.trim() && !t.result.stderr?.trim()) {
+      if (digest.stdout) {
         console.log(pc.dim(`\n--- [${t.taskId}] stdout ---`));
-        console.log(pc.dim(t.result.stdout.trim()));
+        console.log(pc.dim(digest.stdout));
       }
       if (t.result.error && !t.result.stderr?.includes(t.result.error)) {
         console.log(pc.red(`\nError: ${t.result.error}`));
       }
+      if (digest.logFile) console.log(pc.dim(`  Full output: ${digest.logFile}`));
       console.log('');
     }
   }

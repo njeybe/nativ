@@ -106,7 +106,8 @@ export function createProgram(): Command {
     .option('-s, --status <status>', 'Filter tasks by status (pending, in_progress, completed, blocked)')
     .option('-m, --milestone <id>', 'Filter tasks by milestone ID or name')
     .option('--fast-path', 'Show only fast-path tasks')
-    .option('--json', 'Output filtered tasks as JSON')
+    .option('--json', 'Output filtered tasks as JSON (a summary per task)')
+    .option('--full', 'With --json, include every task field')
     .action(async (targetDir, options) => {
       await runTaskList(targetDir, options);
     });
@@ -152,7 +153,8 @@ export function createProgram(): Command {
     .option('-s, --status <status>', 'Filter tasks by status (pending, in_progress, completed, blocked)')
     .option('-m, --milestone <id>', 'Filter tasks by milestone ID or name')
     .option('--fast-path', 'Show only fast-path tasks')
-    .option('--json', 'Output filtered tasks as JSON')
+    .option('--json', 'Output filtered tasks as JSON (a summary per task)')
+    .option('--full', 'With --json, include every task field')
     .action(async (targetDir, options) => {
       await runTaskList(targetDir, options);
     });

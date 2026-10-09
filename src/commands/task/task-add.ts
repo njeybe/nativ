@@ -171,7 +171,7 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
     const result: TaskAddResult = { task, milestoneId: milestone.id, milestoneName: milestone.name, createdMilestone, reopenedMilestone };
 
     if (options.json) {
-      console.log(JSON.stringify(result, null, 2));
+      console.log(JSON.stringify(result));
       return result;
     }
 
