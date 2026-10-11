@@ -1,4 +1,11 @@
-// Console drawer, dialogs and other shell overlays.
+// Inspector pane, dialogs and other shell overlays.
+import { ICON_PATHS } from './icons.js';
+
+// Phosphor icon in the shared 256-unit format.
+const icon = (name: string): string =>
+  '<svg class="icon" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"'
+  + ' aria-hidden="true">' + ICON_PATHS[name] + '</svg>';
+
 export const markupTools = String.raw`</main>
 </div>
 </div>
@@ -8,21 +15,26 @@ export const markupTools = String.raw`</main>
 
 <section id="runner-console-drawer" aria-labelledby="rc-task" hidden>
   <header class="rc-head">
-    <code class="rc-task" id="rc-task">&#8211;</code>
+    <div class="rc-id-row">
+      <code class="rc-task" id="rc-task"></code>
+      <span class="rc-status" id="rc-status"><span class="rc-dot" aria-hidden="true"></span><span id="rc-status-text">Idle</span></span>
+      <code class="rc-clock" id="rc-clock">00:00</code>
+    </div>
     <span class="rc-title" id="rc-title"></span>
     <ol class="rc-steps" id="rc-steps" aria-label="Runner lifecycle"></ol>
     <div class="rc-controls">
+      <button class="rc-btn danger" type="button" id="rc-abort" aria-label="Abort the running agent">Abort</button>
+      <button class="rc-btn" type="button" id="rc-open-diff" aria-label="Open the worktree diff">Open diff</button>
       <button class="rc-btn" type="button" id="rc-autoscroll" aria-pressed="true" aria-label="Toggle console auto-scroll">Auto-scroll</button>
       <button class="rc-btn" type="button" id="rc-clear" aria-label="Clear the console buffer">Clear</button>
-      <button class="rc-btn danger" type="button" id="rc-abort" aria-label="Abort the running agent">Abort</button>
-      <button class="rc-btn" type="button" id="rc-minimize" aria-expanded="true" aria-controls="rc-body">Minimize</button>
+      <button class="rc-btn" type="button" id="rc-minimize" aria-expanded="true" aria-controls="rc-body" aria-label="Collapse the inspector">Collapse</button>
       <button class="rc-btn" type="button" id="rc-close" aria-label="Close the runner console">Close</button>
     </div>
   </header>
   <div class="rc-tabs" role="tablist" aria-label="Console views">
-    <button class="rc-tab" type="button" role="tab" id="rc-tab-logs" data-rc-tab="logs" aria-controls="rc-body" aria-selected="true"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3.5 3.5L3 11.5M8.5 12h4.5"/></svg>Live Logs</button>
-    <button class="rc-tab" type="button" role="tab" id="rc-tab-diff" data-rc-tab="diff" aria-controls="rc-diff" aria-selected="false" tabindex="-1"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 2.5v6M2 5.5h6M8.5 12.5h5.5"/></svg>Worktree Changes <span class="rc-count" id="rc-diff-count">&#8211;</span></button>
-    <button class="rc-tab" type="button" role="tab" id="rc-tab-heal" data-rc-tab="heal" aria-controls="rc-heal" aria-selected="false" tabindex="-1" hidden><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v3.7c0 3.1-2.2 5.6-5.2 6.6-3-1-5.2-3.5-5.2-6.6V3.9z"/><path d="M5.6 8.1l1.7 1.7 3.2-3.3"/></svg>Self-Healing Proposal <span class="rc-count is-proposal" id="rc-heal-count">1</span></button>
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-logs" data-rc-tab="logs" aria-controls="rc-body" aria-selected="true">${icon('terminal')}Live Logs</button>
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-diff" data-rc-tab="diff" aria-controls="rc-diff" aria-selected="false" tabindex="-1">${icon('worktrees')}Worktree Changes <span class="rc-count" id="rc-diff-count">-</span></button>
+    <button class="rc-tab" type="button" role="tab" id="rc-tab-heal" data-rc-tab="heal" aria-controls="rc-heal" aria-selected="false" tabindex="-1" hidden>${icon('check')}Self-Healing Proposal <span class="rc-count is-proposal" id="rc-heal-count">1</span></button>
   </div>
   <pre class="rc-body" id="rc-body" role="log" aria-live="polite" aria-label="Runner output" tabindex="0"></pre>
   <div class="rc-diff" id="rc-diff" role="tabpanel" aria-labelledby="rc-tab-diff" hidden>
@@ -57,8 +69,8 @@ export const markupTools = String.raw`</main>
     <fieldset class="choice-group">
       <legend>Engine</legend>
       <div class="engine-options">
-        <label class="engine-option"><input type="radio" name="dispatch-engine" id="dispatch-engine-native" value="native" checked><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z"/></svg><span><b>Native Engine</b><span>Direct API, Prompt Caching &amp; Fast Streaming. Token spend is reported live.</span></span></label>
-        <label class="engine-option"><input type="radio" name="dispatch-engine" id="dispatch-engine-cli" value="cli"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5L6.5 8l-2 1.5M8.5 10h3"/></svg><span><b>CLI Terminal Pairing</b><span>Interactive Claude Code in a terminal shell, driven by the command below.</span></span></label>
+        <label class="engine-option"><input type="radio" name="dispatch-engine" id="dispatch-engine-native" value="native" checked>${icon('play')}<span><b>Native Engine</b><span>Direct API, Prompt Caching &amp; Fast Streaming. Token spend is reported live.</span></span></label>
+        <label class="engine-option"><input type="radio" name="dispatch-engine" id="dispatch-engine-cli" value="cli">${icon('terminal')}<span><b>CLI Terminal Pairing</b><span>Interactive Claude Code in a terminal shell, driven by the command below.</span></span></label>
       </div>
     </fieldset>
     <fieldset class="choice-group">
@@ -83,7 +95,7 @@ export const markupTools = String.raw`</main>
     <p class="field-error" id="dispatch-error" aria-live="polite"></p>
     <div class="modal-foot">
       <button class="btn" value="cancel" type="submit">Cancel</button>
-      <button class="btn primary" type="button" id="btn-launch-agent" aria-keyshortcuts="Control+Enter"><svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z"/></svg>Launch Autonomous Runner <kbd>Ctrl+Enter</kbd></button>
+      <button class="btn primary" type="button" id="btn-launch-agent" aria-keyshortcuts="Control+Enter">${icon('play')}Launch Autonomous Runner <kbd>Ctrl+Enter</kbd></button>
     </div>
   </form>
 </dialog>

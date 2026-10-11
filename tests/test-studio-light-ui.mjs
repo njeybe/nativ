@@ -380,6 +380,13 @@ try {
     console.log('✔ Page is self-contained (CSP-safe) and emoji-free');
   }
 
+  // 6b. Auto-navigation to the active milestone is wired
+  {
+    const served = renderStudioHtml({ version: VERSION });
+    assert.ok(served.includes('Studio.autoNav') && served.includes('Studio.activeMilestone'), 'auto-nav must be present');
+    console.log('✔ Auto-navigation to the active milestone is wired');
+  }
+
   // 7. Served end-to-end by the studio server under its CSP
   {
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-studio-ui-')));

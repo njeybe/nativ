@@ -26,6 +26,7 @@ import { consoleScript } from './studio-ui/shell/console.js';
 import { triageScript } from './studio-ui/shell/triage.js';
 import { proposalsScript } from './studio-ui/shell/proposals.js';
 import { syncScript } from './studio-ui/shell/sync.js';
+import { pulseScript } from './studio-ui/shell/pulse.js';
 import { routerScript } from './studio-ui/shell/router.js';
 import { detailScript } from './studio-ui/shell/detail.js';
 import { paletteScript } from './studio-ui/shell/palette.js';
@@ -63,6 +64,7 @@ const BODY = [
   proposalsScript,
   ...pages.map((p) => wrapPage(p.script)),
   syncScript,
+  pulseScript,
   routerScript,
   detailScript,
   paletteScript,

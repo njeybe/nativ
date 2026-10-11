@@ -1,5 +1,13 @@
 // Responsive rules for the kept pages and dialogs.
 export const responsiveCss = String.raw`/* Responsive */
+@media (max-width: 1023px) and (min-width: 761px) {
+  :root { --sidebar-w: 56px; }
+  .side { padding: 16px 8px; align-items: center; }
+  .brand { padding: 0; justify-content: center; }
+  .brand .wordmark { height: 16px; width: 16px; overflow: hidden; }
+  .brand b, .brand .ver, .nav-glabel, .nav-text, .nav-badge, .side-foot { display: none; }
+  .nav-item { justify-content: center; padding: 6px; width: 40px; }
+}
 @media (max-width: 900px) {
   #runner-console-drawer { inset: auto 0 0 0; }
   .panes { grid-template-columns: 1fr; }

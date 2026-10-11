@@ -1,19 +1,22 @@
-// Home page client script: one pure render from the shared model.
+// Home page client script: one pure render from the shared model, sections stacked top to bottom.
 export const homeScript = String.raw`  var esc = Studio.ui.esc;
-  var RECENT_CAP = 6;
+  var UP_NEXT_CAP = 6;
+  var ACTIVITY_CAP = 8;
 
   function head() {
-    return '<div class="page-head"><div><h1>Home</h1><p>What needs you, what is running, and what just finished.</p></div></div>';
+    return '<div class="page-head"><h1>Home</h1></div>';
   }
 
-  function panel(title, right, body) {
-    return '<section class="panel"><div class="panel-head"><h2>' + esc(title) + '</h2>' + right + '</div>' + body + '</section>';
+  function section(key, title, right, body) {
+    return '<section class="home-sec" data-sec="' + key + '"><div class="sec-head"><h2>' + esc(title) +
+      '</h2>' + (right || '') + '</div>' + body + '</section>';
   }
   function rightText(text) { return '<span class="right">' + esc(text) + '</span>'; }
 
-  function actBtn(act, id, label, busy) {
+  function actBtn(act, id, label, busy, cls) {
     var on = busy === act.slice(5);
-    return '<button type="button" class="btn" data-act="' + act + '" data-id="' + esc(id) + '"' + (busy ? ' disabled' : '') + '>' +
+    return '<button type="button" class="btn' + (cls ? ' ' + cls : '') + '" data-act="' + act +
+      '" data-id="' + esc(id) + '"' + (busy ? ' disabled' : '') + '>' +
       (on ? '<span class="spinner" aria-hidden="true"></span>' : '') + esc(label) + '</button>';
   }
 
@@ -24,127 +27,140 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     return e.reason || e.summary || e.details || 'Waiting for your decision.';
   }
 
-  function needItem(item) {
+  function needActions(item) {
     var t = item.task;
     var busy = Studio.busyAction ? Studio.busyAction(t.id) : null;
     var stuck = t.status === 'blocked';
-    var out = '<button type="button" class="btn primary" data-task="' + esc(t.id) + '">' + (stuck ? 'See what failed' : 'Open task') + '</button>';
+    var out = '<button type="button" class="btn" data-task="' + esc(t.id) + '">' +
+      (stuck ? 'See what failed' : 'Open task') + '</button>';
     if (stuck) out += actBtn('home-start', t.id, 'Try again', busy);
-    if (item.hasProposal) out += actBtn('home-proposal', t.id, 'Review proposal', busy);
-    else if (item.escalation) out += actBtn('home-ask', t.id, 'Ask the architect', busy);
-    return '<div class="need" data-need="' + esc(t.id) + '">' + Studio.ui.statusIcon('blocked') + '<div class="body">' +
-      '<div><span class="mono faint">' + esc(t.id) + '</span> · ' + Studio.ui.agentChip(t.agent) + '</div>' +
-      '<b style="font-weight:500">' + esc(t.title) + '</b><span class="why">' + esc(needReason(item)) + '</span>' +
-      '<div class="row">' + out + '</div></div></div>';
+    if (item.hasProposal) out += actBtn('home-proposal', t.id, 'Review proposal', busy, 'primary');
+    else if (item.escalation) out += actBtn('home-ask', t.id, 'Ask the architect', busy, 'primary');
+    return out;
   }
 
-  function needsPanel(model) {
+  function needItem(item) {
+    var t = item.task;
+    return '<div class="need" data-need="' + esc(t.id) + '"><div class="body">' +
+      '<div class="l1"><b>Human Decision Required</b><span class="mono">' + esc(t.id) + '</span></div>' +
+      '<span class="why">' + esc(needReason(item)) + '</span></div>' +
+      '<div class="acts">' + needActions(item) + '</div></div>';
+  }
+
+  function decisionQueue(model) {
     var n = model.needsYou;
-    var body = n.length ? n.map(needItem).join('') :
-      '<div class="calm">' + Studio.ui.statusIcon('completed') + 'Nothing needs you. No stuck tasks, questions or proposals.</div>';
-    var right = n.length ? n.length + (n.length === 1 ? ' item' : ' items') : 'All clear';
-    return panel('Needs you', rightText(right), '<div class="panel-body">' + body + '</div>');
+    if (!n.length) return '';
+    var count = n.length + (n.length === 1 ? ' item' : ' items');
+    return '<section class="home-sec decisions" data-sec="decisions"><div class="sec-head"><h2>Decisions</h2>' +
+      rightText(count) + '</div>' + n.map(needItem).join('') + '</section>';
   }
 
-  function lastFinished(model) {
-    var done = model.tasks.filter(function (t) { return t.status === 'completed'; });
-    var timed = done.filter(function (t) { return t.endT; }).sort(function (a, b) { return b.endT - a.endT; });
-    return timed[0] || done[done.length - 1] || null;
+  function isReady(model, t) {
+    if (t.status !== 'pending') return false;
+    return t.isAvailable || t.deps.every(function (d) {
+      var dep = model.byId[d];
+      return !dep || dep.status === 'completed';
+    });
   }
 
-  function idleText(model) {
-    var last = lastFinished(model);
-    if (!last) return 'No agent is working. Last finished nothing yet.';
-    var when = last.endT ? ' ' + esc(Studio.fmt.ago(last.endT)) : '';
-    return 'No agent is working. Last finished <span class="mono">' + esc(last.id) + '</span>' + when + '.';
+  function readyTasks(model) {
+    return model.tasks.filter(function (t) { return isReady(model, t); });
   }
 
-  function nowItem(t) {
-    var timer = t.startT ? '<span class="timer" data-since="' + t.startT + '">' + Studio.fmt.dur(Studio.now() - t.startT) + '</span>' : '';
-    return '<button type="button" class="now" data-task="' + esc(t.id) + '"><div class="l1">' + Studio.ui.statusIcon('in_progress') +
-      Studio.ui.agentChip(t.agent) + timer + '</div><div class="title">' + esc(t.title) + '</div>' +
-      (t.latestLog ? '<div class="log">' + esc(t.latestLog) + '</div>' : '') + '</button>';
+  function dispatchBtn(id, label, cls) {
+    return '<button type="button" class="btn' + (cls ? ' ' + cls : '') + '" data-act="home-dispatch" data-id="' +
+      esc(id) + '">' + esc(label) + '</button>';
   }
 
-  function nowPanel(model) {
+  function taskCells(t) {
+    return '<span class="mono id">' + esc(t.id) + '</span>' +
+      '<button type="button" class="t link" data-task="' + esc(t.id) + '">' + esc(t.title) + '</button>' +
+      '<span class="agent">' + esc(t.agent || '') + '</span>';
+  }
+
+  function runRow(t) {
+    var since = t.startT ? ' data-since="' + t.startT + '">' + Studio.fmt.dur(Studio.now() - t.startT) : '>';
+    var row = '<div class="row run-row">' + taskCells(t) +
+      '<span class="state"><i class="dot run"></i>Running</span>' +
+      '<span class="mono num timer"' + since + '</span></div>';
+    var log = '<span class="mono log">' + esc(t.latestLog || '') + '</span>';
+    return row + '<div class="row sub-row">' + log + '<button type="button" class="btn" data-act="home-console"' +
+      ' data-id="' + esc(t.id) + '">Open console</button></div>';
+  }
+
+  function nowRunning(model) {
     var r = model.running;
-    var body = r.length ? r.map(nowItem).join('') : '<div class="calm">' + idleText(model) + '</div>';
-    return panel('Right now', rightText(r.length ? r.length + ' working' : 'Idle'), '<div class="panel-body">' + body + '</div>');
+    if (r.length) return section('running', 'Now running', rightText(r.length + ' running'), r.map(runRow).join(''));
+    var next = readyTasks(model)[0];
+    var btn = next ? dispatchBtn(next.id, 'Dispatch ' + next.id, 'primary') : '';
+    return section('running', 'Now running', '', '<div class="row calm"><span>No agent is running.</span>' + btn + '</div>');
   }
 
-  function figure(k, value, total, sub) {
-    return '<div><span class="k">' + esc(k) + '</span><span class="v">' + esc(value) +
-      (total == null ? '' : '<small> / ' + esc(total) + '</small>') + '</span><span class="s">' + esc(sub) + '</span></div>';
+  function waitOn(model, t) {
+    var open = t.deps.filter(function (d) { var x = model.byId[d]; return x && x.status !== 'completed'; });
+    return open[0] || '';
   }
 
-  function spendNote(s) {
-    var parts = [];
-    if (s.cacheHitRate != null) parts.push((s.cacheHitRate * 100).toFixed(1) + '% cached');
-    if (s.cacheSavingsUsd != null) parts.push('saved about ' + Studio.fmt.money(s.cacheSavingsUsd));
-    return parts.length ? parts.join(', ') : 'no spend recorded';
+  function nextRow(model, t) {
+    var end = isReady(model, t) ? dispatchBtn(t.id, 'Dispatch') :
+      '<span class="wait">waits <span class="mono">' + esc(waitOn(model, t)) + '</span></span>';
+    return '<div class="row next-row">' + taskCells(t) + end + '</div>';
   }
 
-  function stripPanel(model) {
-    var s = model.summary;
-    var left = s.tasksLeft ? s.tasksLeft + ' left' : 'all done';
-    var have = s.contractsPresent;
-    var plan = have == null ? 'not checked' : (have >= s.contractsTotal ? 'all present and intact' : (s.contractsTotal - have) + ' missing');
-    return '<section class="panel strip">' +
-      figure('Milestones', s.milestonesDone, s.milestonesTotal, 'finished') +
-      figure('Tasks', s.tasksDone, s.tasksTotal, left) +
-      figure('Spend', Studio.fmt.money(s.spendUsd), null, spendNote(s)) +
-      figure('Plan files', have == null ? '–' : have, s.contractsTotal, plan) + '</section>';
+  function upNext(model) {
+    var list = model.tasks.filter(function (t) { return t.status === 'pending'; });
+    var ready = list.filter(function (t) { return isReady(model, t); });
+    var waiting = list.filter(function (t) { return !isReady(model, t); });
+    var rows = ready.concat(waiting).slice(0, UP_NEXT_CAP);
+    var body = rows.length ? rows.map(function (t) { return nextRow(model, t); }).join('') :
+      '<div class="row calm">Nothing is waiting.</div>';
+    return section('next', 'Up next', '', body);
   }
 
-  function recentTasks(model) {
-    return model.tasks.filter(function (t) { return t.status === 'completed' && t.endT; })
-      .sort(function (a, b) { return b.endT - a.endT; }).slice(0, RECENT_CAP);
-  }
-
-  function finishedRow(t) {
-    return '<button type="button" class="row-btn" data-task="' + esc(t.id) + '">' + Studio.ui.statusIcon(t.status) +
-      '<span class="mono faint hide-sm">' + esc(t.id) + '</span><span class="t">' + esc(t.title) + '</span>' +
-      '<span class="hide-sm">' + Studio.ui.agentChip(t.agent) + '</span>' +
-      '<span class="faint num row-right">' + Studio.ui.when(t.endT) + '</span></button>';
-  }
-
-  function finishedPanel(model) {
-    var list = recentTasks(model);
-    var body = list.length ? '<div class="list">' + list.map(finishedRow).join('') + '</div>' :
-      Studio.ui.empty('Nothing has finished yet.', '');
-    var btn = '<button type="button" class="btn ghost right" data-go="tasks">Open Tasks</button>';
-    return panel('Just finished', btn, body);
-  }
-
-  function msRow(m) {
+  function milestoneProgress(model) {
+    var m = model.milestones.filter(function (x) { return x.id === model.activeMilestoneId; })[0];
+    if (!m) return '';
     var pct = m.total ? Math.round((m.done / m.total) * 100) : 0;
-    return '<button type="button" class="ms-row" data-ms="' + esc(m.id) + '"><span class="mono faint">' + esc(m.id) + '</span>' +
-      '<span class="t" title="' + esc(m.name) + '">' + esc(m.short) + '</span>' +
-      '<span class="bar"><i style="width:' + pct + '%"></i></span>' +
-      '<span class="num faint" style="font-size:12px;text-align:right">' + m.done + '/' + m.total + '</span></button>';
+    var body = '<div class="row ms-row" data-ms="' + esc(m.id) + '"><span class="mono id">' + esc(m.id) + '</span>' +
+      '<span class="t">' + esc(m.name) + '</span><span class="mono num">' + m.done + ' of ' + m.total + '</span></div>' +
+      '<div class="progress"><i style="width:' + pct + '%"></i></div>';
+    return section('milestone', 'Milestone', '', body);
   }
 
-  function milestonesPanel(model) {
-    var list = model.milestones.slice().reverse();
-    var body = list.length ? '<div class="list">' + list.map(msRow).join('') + '</div>' :
-      Studio.ui.empty('No milestones yet.', 'The plan has no milestones.');
-    return panel('Milestones', rightText('newest first'), body);
+  function activityEvents(model) {
+    var out = [];
+    model.tasks.forEach(function (t) {
+      if (t.endT) out.push({ at: t.endT, id: t.id, what: 'completed' });
+      if (t.startT) out.push({ at: t.startT, id: t.id, what: 'started' });
+    });
+    return out.sort(function (a, b) { return b.at - a.at; }).slice(0, ACTIVITY_CAP);
+  }
+
+  function activityRow(e) {
+    return '<div class="row act-row" data-event="' + esc(e.id) + '"><span class="mono num when">' +
+      Studio.ui.when(e.at) + '</span><span class="mono id">' + esc(e.id) + '</span><span>' + e.what + '</span></div>';
+  }
+
+  function recentActivity(model) {
+    var list = activityEvents(model);
+    var body = list.length ? list.map(activityRow).join('') : '<div class="row calm">Nothing has happened yet.</div>';
+    return section('activity', 'Recent activity', '', body);
   }
 
   function skeleton() {
-    var bar = function (w) { return '<div class="skel" style="width:' + w + '"></div>'; };
-    var block = '<div class="skel-block">' + bar('40%') + bar('100%') + bar('80%') + '</div>';
-    return head() + '<div class="home-top">' + block + block + '</div>' +
-      '<div class="skel-strip">' + block + block + block + block + '</div>' +
-      '<div class="home-top">' + block + block + '</div>';
+    var row = '<div class="row skel-row"><div class="skel"></div></div>';
+    return '<div class="home">' + head() + '<section class="home-sec" aria-busy="true">' +
+      row + row + row + row + '</section></div>';
   }
 
   function render(ctx) {
     var model = ctx.model;
-    return head() +
-      '<div class="home-top">' + needsPanel(model) + nowPanel(model) + '</div>' +
-      stripPanel(model) +
-      '<div class="home-top">' + finishedPanel(model) + milestonesPanel(model) + '</div>';
+    if (!model.milestones.length) {
+      return '<div class="home">' + head() +
+        '<div class="row calm">No plan yet. Ask the architect to design one.</div></div>';
+    }
+    return '<div class="home">' + head() + decisionQueue(model) + nowRunning(model) + upNext(model) +
+      milestoneProgress(model) + recentActivity(model) + '</div>';
   }
 
   function forward(name) {
@@ -155,6 +171,9 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     deps: ['status', 'tasks', 'telemetry', 'runs', 'escalations'],
     render: render,
     skeleton: skeleton,
-    actions: { 'home-start': forward('start'), 'home-proposal': forward('proposal'), 'home-ask': forward('ask') }
+    actions: {
+      'home-start': forward('start'), 'home-proposal': forward('proposal'), 'home-ask': forward('ask'),
+      'home-console': forward('logs'), 'home-dispatch': forward('dispatch')
+    }
   });
 `;

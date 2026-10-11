@@ -1,9 +1,9 @@
 // Flow page styles, all scoped under #panel-flow.
-export const flowCss = String.raw`#panel-flow .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+export const flowCss = String.raw`#panel-flow .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-control); overflow: hidden; background: var(--surface); }
 #panel-flow .seg button { border: 0; background: none; padding: 0 12px; height: 30px; font-size: 13px; color: var(--fg-2); cursor: pointer; }
 #panel-flow .seg button + button { border-left: 1px solid var(--line); }
 #panel-flow .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
-#panel-flow .fl-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; overflow: hidden; }
+#panel-flow .fl-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); min-width: 0; overflow: hidden; }
 #panel-flow .fl-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 12px 16px; }
 #panel-flow .fl-bar .right { margin-left: auto; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--fg-3); }
 #panel-flow .flow-wrap { overflow: auto; max-height: 72vh; position: relative; border-top: 1px solid var(--line); }
@@ -18,7 +18,7 @@ export const flowCss = String.raw`#panel-flow .seg { display: inline-flex; borde
 #panel-flow .lane-label { position: sticky; left: 0; width: 128px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--surface); border-right: 1px solid var(--line); height: 100%; z-index: 2; }
 #panel-flow .lane-label .faint { font-size: 11.5px; }
 #panel-flow .round-head { position: absolute; top: 0; height: 30px; display: flex; align-items: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
-#panel-flow .node { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; text-align: left; cursor: pointer; transition: opacity .15s, border-color .15s, box-shadow .15s; z-index: 1; }
+#panel-flow .node { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-control); text-align: left; cursor: pointer; transition: opacity .15s, border-color .15s, box-shadow .15s; z-index: 1; }
 #panel-flow .node:hover { border-color: var(--line-2); box-shadow: var(--shadow); }
 #panel-flow .node.in_progress { border-color: color-mix(in srgb, var(--run) 50%, var(--line)); background: color-mix(in srgb, var(--run-soft) 55%, var(--surface)); }
 #panel-flow .node.blocked { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); background: color-mix(in srgb, var(--bad-soft) 55%, var(--surface)); }

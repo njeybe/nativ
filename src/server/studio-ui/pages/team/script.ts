@@ -1,31 +1,25 @@
-// Team page client script: one pure render, one table row per agent.
+// Team page client script: one pure render, one roster row per agent.
 export const teamScript = String.raw`  var esc = Studio.ui.esc;
-  var DASH = '–';
+  var DASH = '-';
 
   function head() {
-    return '<div class="page-head"><div><h1>Team</h1><p>Each agent in plain terms: what it did, how long it took, what it cost.</p></div></div>';
-  }
-
-  function sum(list) {
-    return list.reduce(function (total, n) { return total + n; }, 0);
+    return '<div class="page-head"><div><h1>Team</h1><p>Who is working on what, and how much each agent has finished.</p></div></div>';
   }
 
   function statsFor(key, tasks) {
     var done = tasks.filter(function (t) { return t.status === 'completed'; });
     var timed = done.filter(function (t) { return t.durationMs; });
-    var work = sum(timed.map(function (t) { return t.durationMs; }));
     var costs = tasks.filter(function (t) { return t.costUsd != null; });
     var stamps = tasks.map(function (t) { return t.status === 'in_progress' ? (t.startT || 0) : (t.endT || 0); });
     return {
       agent: key || null,
       total: tasks.length,
       done: done.length,
-      work: timed.length ? work : null,
-      avg: timed.length ? work / timed.length : null,
-      cost: costs.length ? sum(costs.map(function (t) { return t.costUsd; })) : null,
+      work: timed.length ? timed.reduce(function (n, t) { return n + t.durationMs; }, 0) : null,
+      cost: costs.length ? costs.reduce(function (n, t) { return n + t.costUsd; }, 0) : null,
+      blocked: tasks.filter(function (t) { return t.status === 'blocked'; }).length,
       last: Math.max.apply(null, [0].concat(stamps)) || null,
-      running: tasks.filter(function (t) { return t.status === 'in_progress'; })[0] || null,
-      stuck: tasks.filter(function (t) { return t.status === 'blocked'; })[0] || null
+      running: tasks.filter(function (t) { return t.status === 'in_progress'; })[0] || null
     };
   }
 
@@ -41,71 +35,74 @@ export const teamScript = String.raw`  var esc = Studio.ui.esc;
       .sort(function (a, b) { return b.total - a.total; });
   }
 
-  function chip(task, label) {
-    return '<button type="button" class="chip" data-task="' + esc(task.id) + '">' +
-      Studio.ui.statusIcon(task.status) + esc(label) + '</button>';
+  function currentTask(r) {
+    var t = r.running;
+    if (!t) return '<span class="idle">Idle</span>';
+    return '<button type="button" class="cur" data-act="team-open" data-tid="' + esc(t.id) +
+      '" title="' + esc(t.title || t.id) + '"><span class="mono">' + esc(t.id) + '</span>' +
+      '<span class="ttl">' + esc(t.title || '') + '</span></button>';
   }
 
-  function rightNow(r) {
-    if (r.running) return chip(r.running, r.running.id);
-    if (r.stuck) return chip(r.stuck, 'Stuck on ' + r.stuck.id);
-    return '<span class="faint">Idle</span>';
-  }
-
-  function shareBar(r, max) {
-    var info = Studio.agentInfo(r.agent);
-    var pct = max ? Math.round((r.total / max) * 100) : 0;
-    return '<div class="bar"><i style="width:' + pct + '%;background:var(' + info.token + ')"></i></div>';
+  function rate(r) {
+    var fin = r.done + r.blocked;
+    return fin ? Math.round((r.done / fin) * 100) + '%' : DASH;
   }
 
   function lastActive(r) {
     return r.last ? Studio.ui.when(r.last) : DASH;
   }
 
-  function row(r, max) {
-    return '<tr data-agent="' + esc(r.agent || 'unassigned') + '"><td>' + Studio.ui.agentChip(r.agent) + '</td>' +
-      '<td>' + rightNow(r) + '</td>' +
-      '<td class="r">' + r.done + '<span class="faint"> / ' + r.total + '</span></td>' +
-      '<td class="share">' + shareBar(r, max) + '</td>' +
-      '<td class="r">' + (r.avg == null ? DASH : esc(Studio.fmt.dur(r.avg))) + '</td>' +
-      '<td class="r">' + (r.work == null ? DASH : esc(Studio.fmt.dur(r.work))) + '</td>' +
-      '<td class="r">' + (r.cost == null ? DASH : esc(Studio.fmt.money(r.cost))) + '</td>' +
-      '<td class="r faint">' + lastActive(r) + '</td></tr>';
+  function row(r) {
+    var dot = r.running ? '<i class="run-dot"></i>' : '';
+    return '<tr data-agent="' + esc(r.agent || 'unassigned') + '"><td class="who">' + dot +
+      esc(r.agent || 'unassigned') + '</td>' +
+      '<td>' + currentTask(r) + '</td>' +
+      '<td class="mono r">' + r.done + '</td>' +
+      '<td class="mono r hide-sm">' + (r.work == null ? DASH : esc(Studio.fmt.dur(r.work))) + '</td>' +
+      '<td class="mono r hide-sm">' + (r.cost == null ? DASH : esc(Studio.fmt.money(r.cost))) + '</td>' +
+      '<td class="mono r hide-sm">' + rate(r) + '</td>' +
+      '<td class="mono r hide-sm">' + lastActive(r) + '</td></tr>';
   }
 
   function table(rows) {
-    var max = Math.max.apply(null, rows.map(function (r) { return r.total; }));
-    var cols = ['Agent', 'Right now', 'Tasks done', 'Share of work', 'Avg. time', 'Total time', 'Est. cost', 'Last active'];
-    var th = cols.map(function (c, i) {
-      var cls = i === 3 ? ' class="share"' : (i > 1 ? ' class="r"' : '');
-      return '<th' + cls + '>' + c + '</th>';
+    var cols = [['Agent', ''], ['Current task', ''], ['Tasks done', 'r'],
+      ['Time', 'r hide-sm'], ['Cost', 'r hide-sm'], ['Success rate', 'r hide-sm'], ['Last active', 'r hide-sm']];
+    var th = cols.map(function (c) {
+      var tip = c[0] === 'Success rate' ? ' title="Completed / (completed + blocked)"' : '';
+      return '<th' + tip + (c[1] ? ' class="' + c[1] + '"' : '') + '>' + c[0] + '</th>';
     }).join('');
-    return '<section class="panel table-wrap"><table><thead><tr>' + th + '</tr></thead><tbody>' +
-      rows.map(function (r) { return row(r, max); }).join('') + '</tbody></table></section>';
+    return '<div class="roster"><table><thead><tr>' + th + '</tr></thead><tbody>' +
+      rows.map(row).join('') + '</tbody></table></div>' + defs();
   }
 
   function defs() {
-    return '<section class="panel"><div class="panel-head"><h2>What these columns mean</h2></div><div class="panel-body defs">' +
-      '<div><b>Tasks done</b>: finished and checked, out of all tasks given to this agent.</div>' +
-      '<div><b>Avg. time</b>: from start to a passing check, for tasks that recorded timing.</div>' +
-      '<div><b>Est. cost</b>: estimated from token counts. The real bill is on Home under Spend.</div>' +
-      '<div><b>Right now</b>: the task this agent is working on, or the one it is stuck on.</div></div></section>';
+    var items = [['Tasks done', 'finished and checked by the gatekeeper.'],
+      ['Time', 'total time on completed tasks that recorded timing.'],
+      ['Cost', 'estimated from token counts; the real bill is on Home.'],
+      ['Current task', 'the task this agent is working on right now.']];
+    return '<details class="defs"><summary>What these columns mean</summary>' + items.map(function (i) {
+      return '<div><b>' + i[0] + '</b><span>' + i[1] + '</span></div>';
+    }).join('') + '</details>';
   }
 
   function skeleton() {
-    var bar = function (w) { return '<div class="skel" style="width:' + w + '"></div>'; };
-    var block = '<div class="skel-block">' + bar('100%') + bar('92%') + bar('74%') + '</div>';
-    return head() + block + block;
+    var line = function (w) {
+      return '<tr><td colspan="6"><div class="skel" style="width:' + w + '"></div></td></tr>';
+    };
+    var rows = ['92%', '78%', '86%', '70%'].map(line).join('');
+    return head() + '<div class="roster"><table><thead>' + line('100%') + '</thead><tbody>' +
+      rows + '</tbody></table></div>';
   }
 
   function render(ctx) {
     var rows = buildRows(ctx.model);
-    if (!rows.length) return head() + '<section class="panel">' + ctx.ui.empty('No tasks yet', 'Agents show up here once the plan has tasks.') + '</section>';
-    return head() + table(rows) + defs();
+    if (!rows.length) return head() + '<p class="empty">No agents have worked on this project yet.</p>';
+    return head() + table(rows);
   }
 
   Studio.registerPage('team', {
     deps: ['tasks', 'telemetry', 'runs'],
+    actions: { 'team-open': function (el) { Studio.taskAction('logs', el.getAttribute('data-tid')); } },
     render: render,
     skeleton: skeleton
   });

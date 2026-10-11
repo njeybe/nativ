@@ -129,7 +129,12 @@ const api = {
   assert.deepEqual(items, ['home', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database']);
   assert.match(html, /data-go="tasks" aria-current="page"/);
   assert.match(html, /nav-badge warn">1</, 'needs-you badge on Home');
-  assert.match(html, /nav-badge run">1</, 'running badge on Tasks');
+  assert.match(html, /data-go="tasks"[^>]*>.*?nav-badge run">\d+</, 'tasks count badge');
+  const navItems = html.match(/<button[^>]*class="nav-item"[^>]*>/g);
+  assert.equal(navItems.length, 7);
+  for (const b of navItems) assert.match(b, /aria-label="[^"]+"/, 'nav item aria-label');
+  assert.match(renderStudioHtml({ version: '1.2.3' }),
+    /@media \(max-width: 1023px\)[^{]*\{\s*:root \{ --sidebar-w: 56px/);
   assert.doesNotMatch(html, /Cockpit|Canvas/);
   console.log('✔ Sidebar groups Now, Project, System in order, with badges and no removed entries');
 }
@@ -213,31 +218,31 @@ const api = {
   const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
   const light = /:root\s*\{([^}]*)\}/.exec(css)[1];
   const lightTokens = {
-    '--bg': '#f6f6f9',
-    '--surface': '#ffffff',
-    '--surface-2': '#f0f0f5',
-    '--line': '#e3e3ea',
-    '--line-2': '#d2d2dc',
-    '--fg': '#16161f',
-    '--fg-2': '#54546a',
-    '--fg-3': '#8b8b9e',
-    '--accent': '#4f46e5',
-    '--accent-soft': '#eeeefe',
+    '--bg': '#f5f5f5',
+    '--surface': '#fafafa',
+    '--surface-2': '#efefef',
+    '--line': '#e4e4e7',
+    '--line-2': '#d4d4d8',
+    '--fg': '#18181b',
+    '--fg-2': '#52525b',
+    '--fg-3': '#6b6b74',
+    '--accent': '#18181b',
+    '--accent-soft': '#ededf0',
     '--ok': '#15803d',
-    '--run': '#2563eb',
-    '--bad': '#dc2626',
-    '--warn': '#b45309',
-    '--ag-frontend': '#7c3aed',
+    '--run': '#1d4ed8',
+    '--bad': '#b91c1c',
+    '--warn': '#a1500a',
+    '--ag-frontend': 'var\\(--fg-3\\)',
   };
   for (const [k, v] of Object.entries(lightTokens)) assert.match(light, new RegExp(`${k}:\\s*${v}`), `light ${k}`);
   const darkBlock = /:root\[data-theme="dark"\]\s*\{([^}]*)\}/.exec(css)[1];
   const darkTokens = {
-    '--bg': '#0e0e13',
-    '--surface': '#16161d',
-    '--line': '#2a2a36',
-    '--fg': '#ececf2',
-    '--accent': '#8e8aff',
-    '--accent-fg': '#0e0e13',
+    '--bg': '#0f0f0f',
+    '--surface': '#1a1a1a',
+    '--line': '#303030',
+    '--fg': '#ececee',
+    '--accent': '#ececee',
+    '--accent-fg': '#0f0f0f',
     '--ok': '#4ade80',
     '--run': '#60a5fa',
     '--bad': '#f87171',
@@ -304,14 +309,14 @@ const api = {
   assert.equal(f('Studio.fmt.dur(45000)'), '45s');
   assert.equal(f('Studio.fmt.dur(252000)'), '4m 12s');
   assert.equal(f('Studio.fmt.dur(3900000)'), '1h 05m');
-  assert.equal(f('Studio.fmt.dur(null)'), '–');
+  assert.equal(f('Studio.fmt.dur(null)'), '-');
   assert.equal(f(`Studio.fmt.ago(${NOW - 10_000})`), 'just now');
   assert.equal(f(`Studio.fmt.ago(${NOW - 12 * 60_000})`), '12m ago');
   assert.equal(f(`Studio.fmt.ago(${NOW - 3 * 3_600_000})`), '3h ago');
   assert.equal(f(`Studio.fmt.ago(${NOW - 2 * 86_400_000})`), '2d ago');
   assert.equal(f('Studio.fmt.ago(null)'), 'time not recorded');
   assert.equal(f('Studio.fmt.money(0.42)'), '$0.42');
-  assert.equal(f('Studio.fmt.money(null)'), '–');
+  assert.equal(f('Studio.fmt.money(null)'), '-');
   assert.match(f('Studio.ui.agentChip("mystery-agent")'), /mystery-agent/);
   assert.match(f('Studio.ui.agentChip("db-migration")'), /--ag-database/);
   console.log('✔ fmt and ui helpers');

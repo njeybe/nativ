@@ -55,55 +55,71 @@ const text = (s) => s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 const order = [...html.matchAll(/<tr data-agent="([^"]+)"/g)].map((m) => m[1]);
 assert.deepEqual(order, ['backend', 'frontend', 'qa-tester', 'database']);
 
-// Done / total
-assert.equal(text(cells('backend')[2]), '3 / 4');
-assert.equal(text(cells('frontend')[2]), '1 / 3');
-assert.equal(text(cells('database')[2]), '0 / 1');
+// Table structure and columns
+const heads = [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+assert.deepEqual(heads, ['Agent', 'Current task', 'Tasks done', 'Time', 'Cost', 'Success rate', 'Last active']);
+assert.ok(html.includes('<table') && !html.includes('class="panel"'), 'table, no cards');
+assert.equal(cells('backend').length, 7);
 
-// Averages and totals use only completed tasks that have timing
-const b = cells('backend').map(text);
-assert.equal(b[4], '2m 00s', 'avg over the two timed tasks, not three');
-assert.equal(b[5], '4m 00s', 'total time');
-assert.equal(b[6], '$0.75', 'cost sum');
-assert.ok(cells('backend')[7].includes('title="'), 'exact time on hover');
-assert.equal(b[7], '30m ago');
+// Agent name as text, tasks done as a plain number
+assert.equal(text(cells('backend')[0]), 'backend');
+assert.equal(text(cells('backend')[2]), '3');
+assert.equal(text(cells('frontend')[2]), '1');
+assert.equal(text(cells('database')[2]), '0');
 
-// Right now: running chip, stuck chip, idle
+// Success rate: completed over finished (completed + blocked), hyphen without data
+assert.equal(text(cells('backend')[5]), '100%');
+assert.equal(text(cells('qa-tester')[5]), '0%');
+assert.equal(text(cells('database')[5]), '-');
+assert.ok(rowOf('backend').includes('class="mono r hide-sm"'), 'mono rate');
+
+// Last active
+assert.ok(cells('backend')[6].includes('title="'), 'exact time on hover');
+assert.equal(text(cells('backend')[6]), '30m ago');
+assert.equal(text(cells('database')[6]), '-');
+
+// Current task: running agent shows id and title, others are Idle
 const f = cells('frontend');
-assert.ok(f[1].includes('data-task="f-2"') && text(f[1]) === 'f-2', 'running chip');
-const q = cells('qa-tester');
-assert.ok(q[1].includes('data-task="q-1"') && text(q[1]) === 'Stuck on q-1', 'stuck chip');
+assert.ok(f[1].includes('data-tid="f-2"') && text(f[1]) === 'f-2Title of f-2', 'running task');
+assert.ok(f[1].includes('title="Title of f-2"'), 'truncated title has hover text');
 assert.equal(text(cells('backend')[1]), 'Idle');
+assert.equal(text(cells('qa-tester')[1]), 'Idle');
+assert.ok(cells('backend')[1].includes('class="idle"'), 'idle is muted');
 
-// Running wins over stuck when an agent has both
-const both = renderPage('team', api([
-  task('x-1', 'backend', 'blocked'), task('x-2', 'backend', 'in_progress'),
-]));
-assert.ok(both.includes('data-task="x-2"') && !both.includes('Stuck on'), 'running before stuck');
+// Inspector link
+assert.ok(f[1].includes('data-act="team-open"'), 'opens the inspector');
+import { teamScript } from '../src/server/studio-ui/pages/team/script.ts';
+assert.ok(teamScript.includes("Studio.taskAction('logs'"), 'uses taskAction logs');
 
-// Dashes for missing values, dash count on an agent with no timing
-const d = cells('database').map(text);
-assert.deepEqual([d[4], d[5], d[6], d[7]], ['–', '–', '–', '–']);
-assert.equal(text(cells('qa-tester')[4]), '–');
+// Running dot only on running agents, colours come from tokens
+assert.ok(cells('frontend')[0].includes('class="run-dot"'));
+assert.ok(!cells('backend')[0].includes('run-dot'));
+import { teamCss } from '../src/server/studio-ui/pages/team/styles.ts';
+assert.ok(teamCss.includes('background: var(--run)'), 'run dot token');
+assert.ok(!/background:\s*#|style="[^"]*background/.test(rowOf('frontend')), 'no inline colours');
+assert.ok(!html.includes('--ag-') && !html.includes('agent-chip'), 'no per-agent colours');
 
-// Share bar relative to the busiest agent, in the agent colour
-assert.ok(rowOf('backend').includes('width:100%'));
-assert.ok(rowOf('frontend').includes('width:75%'));
-assert.ok(rowOf('database').includes('width:25%'));
-assert.ok(rowOf('backend').includes('background:var(--'), 'agent colour');
+// Time and cost
+assert.equal(text(cells('backend')[3]), '4m 00s');
+assert.equal(text(cells('backend')[4]), '$0.75');
+assert.equal(text(cells('database')[3]) + text(cells('database')[4]), '--');
+assert.ok(html.includes('title="Completed / (completed + blocked)"'), 'rate header tip');
+assert.ok(html.includes('<details') && html.includes('What these columns mean'), 'definitions');
+for (const k of ['Tasks done', 'Time', 'Cost', 'Current task']) assert.ok(html.includes('<b>' + k + '</b>'));
 
-// Definitions panel, plain words only
-assert.ok(html.includes('What these columns mean'));
-for (const k of ['Tasks done', 'Avg. time', 'Est. cost', 'Right now']) {
-  assert.ok(html.includes('<b>' + k + '</b>'), 'definition for ' + k);
-}
+// Narrow screens hide the last two columns
+assert.ok(teamCss.includes('max-width: 1023px') && html.includes('hide-sm'));
+
+// Old card/definition content is gone; plain words only
+assert.ok(!html.includes('Share of work'));
 for (const bad of ['thinking budget', 'token burn', 'phase', 'cockpit', 'teleprompter', 'pod']) {
   assert.ok(!html.toLowerCase().includes(bad), 'no old word: ' + bad);
 }
 assert.ok(!/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(html), 'no emojis');
+assert.ok(!/[\u2013\u2014]/.test(html), 'no en or em dashes');
 
 // Empty state
 const empty = renderPage('team', { milestones: [], status: {}, telemetry: {}, runs: [], escalations: [], logTail: {} });
-assert.ok(empty.includes('No tasks yet') && !empty.includes('<table'));
+assert.ok(empty.includes('No agents have worked on this project yet.') && !empty.includes('<table'));
 
 console.log('✔ Team page render checks passed');

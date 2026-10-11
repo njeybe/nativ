@@ -5,7 +5,9 @@ export const sidebarViewScript = String.raw`  // ─── Sidebar markup (pure)
   function navBadges(env) {
     var badges = {}, model = env.model;
     if (model && model.needsYou.length) badges.home = ['warn', model.needsYou.length];
-    if (model && model.running.length) badges.tasks = ['run', model.running.length];
+    var ready = model ? model.tasks.filter(function (t) { return t.status === 'pending' && t.isAvailable; }).length : 0;
+    var active = model ? model.running.length + ready : 0;
+    if (active) badges.tasks = [model.running.length ? 'run' : '', active];
     if (env.worktreeCount != null) badges.worktrees = ['', env.worktreeCount];
     if (env.benchmarkText) badges.benchmarks = ['', env.benchmarkText];
     return badges;
@@ -17,7 +19,8 @@ export const sidebarViewScript = String.raw`  // ─── Sidebar markup (pure)
     var item = function (p) {
       var b = badges[p.id];
       return '<button type="button" class="nav-item" data-go="' + esc(p.id) + '"' +
-        (env.view === p.id ? ' aria-current="page"' : '') + '>' + ui.svg(p.icon) +
+        (env.view === p.id ? ' aria-current="page"' : '') +
+        ' aria-label="' + esc(p.label) + '" title="' + esc(p.label) + '"' + '>' + ui.svg(p.icon) +
         '<span class="nav-text">' + esc(p.label) + '</span>' +
         (b ? '<span class="nav-badge' + (b[0] ? ' ' + b[0] : '') + '">' + esc(b[1]) + '</span>' : '') + '</button>';
     };
@@ -32,7 +35,7 @@ export const sidebarViewScript = String.raw`  // ─── Sidebar markup (pure)
   /** env = { root, branch }. */
   Studio.sideFootHtml = function (env) {
     return '<span>Workspace</span><span class="mono" id="sb-root" title="' + esc(env.root || '') + '">' +
-      esc(env.root || '–') + '</span><span>branch <span class="mono" id="sb-branch-name">' + esc(env.branch || '–') + '</span></span>';
+      esc(env.root || '-') + '</span><span>branch <span class="mono" id="sb-branch-name">' + esc(env.branch || '-') + '</span></span>';
   };
 
 `;

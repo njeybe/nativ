@@ -48,16 +48,16 @@ export const toastsFormatScript = String.raw`  // ─── Toasts ────�
 
   // ─── Formatting ────────────────────────────────────────────────────────────
   function num(n) {
-    if (n == null || n === '' || isNaN(n)) return '–';
+    if (n == null || n === '' || isNaN(n)) return '-';
     return Number(n).toLocaleString('en-US', { maximumFractionDigits: 3 });
   }
   function usd(n) {
-    if (n == null || isNaN(n)) return '–';
+    if (n == null || isNaN(n)) return '-';
     n = Number(n);
     return '$' + (n >= 100 ? n.toFixed(0) : n >= 1 ? n.toFixed(2) : n.toFixed(3));
   }
   function fmtMs(ms) {
-    if (ms == null || isNaN(ms)) return '–';
+    if (ms == null || isNaN(ms)) return '-';
     if (ms < 1000) return Math.round(ms) + ' ms';
     if (ms < 60000) return (ms / 1000).toFixed(2) + ' s';
     return Math.floor(ms / 60000) + 'm ' + Math.round((ms % 60000) / 1000) + 's';
@@ -83,7 +83,7 @@ export const toastsFormatScript = String.raw`  // ─── Toasts ────�
     if (typeof v === 'number') return num(v);
     if (Array.isArray(v)) return v.map(String).join(', ');
     if (v && typeof v === 'object') return JSON.stringify(v);
-    return String(v == null ? '–' : v);
+    return String(v == null ? '-' : v);
   }
 
 `;

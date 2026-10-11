@@ -15,7 +15,7 @@ export const databaseDriftScript = String.raw`  // ─── Database Studio: dr
   }
 
   function colCell(c) {
-    if (!c) return '<span class="muted">—</span>';
+    if (!c) return '<span class="muted">-</span>';
     return esc(c.type) + (c.nullable ? '' : ' NOT NULL') + (c.default != null ? ' <span class="muted">DEFAULT</span> ' + esc(c.default) : '') +
       (c.primaryKey ? ' <span class="badge badge-pk">PK</span>' : '') + (c.isMedia ? ' <span class="badge badge-media">IMAGE</span>' : '') +
       (c.isSubcollection ? ' <span class="badge badge-subcol">SUBCOLLECTION</span>' : '');

@@ -88,6 +88,31 @@ export const routerScript = String.raw`  // ─── Router and shell-wide even
     });
   }, 1000);
 
+  // Active milestone: the one with running tasks, else the highest-index one.
+  Studio.activeMilestone = function (model) {
+    var list = (model && model.milestones) || [];
+    var run = list.filter(function (m) {
+      return m.tasks.some(function (t) { return t.status === 'in_progress'; });
+    });
+    var pool = run.length ? run : list;
+    return pool.length ? pool[pool.length - 1] : null;
+  };
+
+  var autoNavDone = false;
+  Studio.autoNav = function () {
+    if (autoNavDone || !pipe.loaded.tasks || !Studio.model) return;
+    var ms = Studio.activeMilestone(Studio.model);
+    if (!ms) return;
+    autoNavDone = true;
+    var S = Studio.state;
+    var opts = { milestoneId: ms.id, keepDetail: true, scroll: false };
+    if (!S.view) Studio.go('tasks', opts);
+    else { S.milestoneId = ms.id; paintPage(S.view); }
+    var el = document.querySelector('[data-milestone="' + cssEsc(ms.id) + '"], [data-ms-group="' + cssEsc(ms.id) + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' });
+  };
+  if (typeof Studio.onPaint === 'function') { Studio.onPaint(function () { Studio.autoNav(); }); }
+
   Studio.api = api;
   Studio.postJson = postJson;
   Studio.toast = function (message, kind) { toast(message, kind); };

@@ -11,6 +11,20 @@
 - **Frontend pre-flight.** The frontend guide runs `nativ design check` on the task's UI files before a worker finishes.
 - **Doctor findings.** `nativ doctor` reports the design profile (`specs:design-profile`) and the bundle (`design:taste-bundle`).
 
+### Changed
+
+- **Studio redesign.** Studio follows the taste-v1 design profile in a monochrome "Ink" direction. It has light and dark themes, and color is used only for status.
+- **New wordmark.** The nativ wordmark replaces the old letter logo and follows the theme.
+- **Phosphor icons.** Studio icons are now Phosphor (MIT). See Third-party notices in the README.
+- **Pulse strip.** A strip under the top bar shows milestone progress and running, blocked and decision counts on every page.
+- **Dispatch button.** The top bar has a "Dispatch `<next task>`" button.
+- **Inspector.** The console drawer is now a right-side inspector. On narrow screens it is a sheet.
+- **Home is a "now" page.** It shows decisions, running tasks, up next, milestone progress and recent activity.
+- **Tasks list.** Tasks defaults to a list grouped by milestone, with filters and a Board toggle.
+- **Team roster.** Team is a roster table.
+- **Worktrees.** Worktree changes open in the inspector.
+- **Restyled pages.** Flow, Benchmarks, Database and dialogs are restyled.
+
 ### Removed
 
 - The `nativ` design profile and every nativ-authored design rule. `nativ init --design` and `--profile` accept only `taste-v1` or `taste-v2`; `nativ design check` exits 1 until a profile is set or passed.

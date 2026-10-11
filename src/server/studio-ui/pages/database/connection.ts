@@ -148,7 +148,7 @@ export const databaseConnectionScript = String.raw`  // ─── Database Studi
       out.className = 'result err';
       out.textContent = 'Error: ' + (r.error || 'Connection failed');
       var hint = hintFor(r.error);
-      if (hint) out.textContent += ' — ' + hint;
+      if (hint) out.textContent += ': ' + hint;
       return false;
     }, function (e) {
       out.className = 'result err'; out.textContent = 'Error: ' + e.message; return false;

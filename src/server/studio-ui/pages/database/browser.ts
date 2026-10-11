@@ -116,7 +116,7 @@ export const databaseBrowserScript = String.raw`  // ─── Database Studio: 
     var start = res.totalCount === 0 ? 0 : (res.page - 1) * res.limit + 1;
     var end = Math.min(res.page * res.limit, res.totalCount);
     var pagination = '<div class="pagination-bar">' +
-      '<div>Showing ' + start + '–' + end + ' of ' + res.totalCount + ' ' + (isColl ? 'documents' : 'records') + '</div>' +
+      '<div>Showing ' + start + '-' + end + ' of ' + res.totalCount + ' ' + (isColl ? 'documents' : 'records') + '</div>' +
       '<div class="pagination-ctrls">' +
         '<button class="btn small" type="button" id="btn-page-prev"' + (res.page <= 1 ? ' disabled' : '') + '>Previous</button>' +
         '<span>Page ' + res.page + ' of ' + Math.max(1, res.totalPages) + '</span>' +

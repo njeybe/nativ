@@ -51,7 +51,7 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
 
   var fmt = {
     dur: function (ms) {
-      if (ms == null || isNaN(ms)) return '–';
+      if (ms == null || isNaN(ms)) return '-';
       var s = Math.round(ms / 1000);
       if (s < 60) return s + 's';
       if (s < 3600) return Math.floor(s / 60) + 'm ' + pad2(s % 60) + 's';
@@ -71,20 +71,19 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
       if (!t) return 'not recorded';
       return new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     },
-    money: function (v) { return v == null || isNaN(v) ? '–' : '$' + Number(v).toFixed(2); }
+    money: function (v) { return v == null || isNaN(v) ? '-' : '$' + Number(v).toFixed(2); }
   };
 
   /** Grounded spend is small per task: four decimals below a dollar. */
   function usdSpend(n) {
-    if (n == null || isNaN(n)) return '–';
+    if (n == null || isNaN(n)) return '-';
     n = Number(n);
     return '$' + (n >= 1 ? n.toFixed(2) : n.toFixed(4));
   }
 
-  /** Wraps inner SVG paths (24-unit box, stroke icon) in an svg element. */
+  /** Wraps inner SVG paths (256-unit box, fill icon) in an svg element. */
   function svgWrap(inner, width) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (width || 1.8) +
-      '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (inner || '') + '</svg>';
+    return '<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">' + (inner || '') + '</svg>';
   }
   function svgIcon(name, width) { return svgWrap(Studio.icons[name], width); }
 

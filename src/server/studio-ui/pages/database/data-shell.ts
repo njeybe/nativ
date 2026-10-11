@@ -1,5 +1,5 @@
 // Database Studio data loading and shell.
-export const databaseDataScript = String.raw`  // ─── View 5: Database Studio — data loading ────────────────────────────────
+export const databaseDataScript = String.raw`  // ─── View 5: Database Studio - data loading ────────────────────────────────
   function load(fresh) {
     state.loading = true;
     renderDb();
@@ -63,7 +63,7 @@ export const databaseDataScript = String.raw`  // ─── View 5: Database Stu
         ? ' <span class="badge badge-source" title="Detected in ' + esc(s.exampleFile || '.env.example') + '">via ' + esc(s.sourceKey) + '</span>'
         : (s.sourceKey ? ' <span class="badge badge-source">via ' + esc(s.sourceKey) + '</span>' : '');
     return '<span class="pill" title="' + esc(s.maskedUrl) + '"><span class="dot on"></span><b>' + label + ':</b> ' +
-      esc(ENGINE_LABEL[s.engine] || s.engine) + (s.database ? ' · ' + esc(s.database) : '') + ' (' + Math.round(s.pingMs) + 'ms) – ' +
+      esc(ENGINE_LABEL[s.engine] || s.engine) + (s.database ? ' · ' + esc(s.database) : '') + ' (' + Math.round(s.pingMs) + 'ms): ' +
       entityCount(s) + ' ' + entityNoun(s, true) + sourceBadge + ' <span class="badge badge-online">ONLINE</span></span>';
   }
 
@@ -119,7 +119,7 @@ export const databaseDataScript = String.raw`  // ─── View 5: Database Stu
       : ((state.schema[activeEnv + 'Tables'] || []).length);
     $('count-data').textContent = String(dataCount);
     var d = state.diff && state.diff.summary;
-    $('count-drift').textContent = d ? String(d.addedTablesCount + d.alteredTablesCount + d.droppedTablesCount) : '–';
+    $('count-drift').textContent = d ? String(d.addedTablesCount + d.alteredTablesCount + d.droppedTablesCount) : '-';
     var script = state.diff ? generateScript(state.diff) : { text: '', lang: 'sql', count: 0 };
     state.sql = script.text;
     state.scriptLang = script.lang;
@@ -154,8 +154,8 @@ export const databaseDataScript = String.raw`  // ─── View 5: Database Stu
     return '<div class="sr-only">Loading database schema…</div><div class="panes" aria-busy="true">' + col + col + '</div>';
   }
 
-  var DB_ICON = '<svg class="icon empty-icon" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">' +
-    '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>';
+  var DB_ICON = '<svg class="icon empty-icon" width="56" height="56" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">' +
+    '<path d="M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z"/></svg>';
 
   function emptyState(title, text) {
     return '<div class="empty card">' + DB_ICON + '<h3>' + esc(title) + '</h3><p>' + esc(text) + '</p>' +

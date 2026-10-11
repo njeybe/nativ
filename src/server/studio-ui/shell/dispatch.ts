@@ -147,4 +147,22 @@ export const dispatchScript = String.raw`  // ─── Autonomous dispatch: POS
     runDispatch(id, opts);
   }
 
+  // ─── Top bar: Dispatch next ────────────────────────────────────────────────
+  var nextBtn = $('btn-dispatch-next'), nextId = null, nextSeen = null;
+  function syncDispatchNext() {
+    var m = Studio.model;
+    if (!m) return;
+    var t = m.tasks.filter(function (x) { return x.status === 'pending' && x.isAvailable; })[0];
+    var key = t ? t.id : '';
+    if (key === nextSeen) return;
+    nextSeen = key;
+    nextId = t ? t.id : null;
+    nextBtn.disabled = !t;
+    $('dispatch-next-label').textContent = t ? 'Dispatch ' + t.id : 'Nothing ready';
+    nextBtn.title = t ? 'Open the dispatch dialog for ' + t.id : 'No pending task has its dependencies met';
+  }
+  nextBtn.addEventListener('click', function () { if (nextId) openDispatchDialog(nextId); });
+  Studio.onPaint(syncDispatchNext);
+  syncDispatchNext();
+
 `;

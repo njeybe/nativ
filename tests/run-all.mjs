@@ -16,6 +16,7 @@ const NODE_SUITES = [
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',
   'studio-team', 'studio-redesign-e2e',
+  'studio-brand', 'studio-topbar', 'studio-pulse', 'studio-inspector', 'studio-worktrees',
 ];
 
 const filter = process.argv[2];

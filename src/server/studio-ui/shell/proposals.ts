@@ -111,6 +111,7 @@ export const proposalsScript = String.raw`  // ─── Console tab 3: self-hea
 
   function openConsole(taskId, quiet, tab) {
     var drawer = $('runner-console-drawer');
+    rememberInspectorOpener();
     if (rc.taskId !== taskId) {
       rc.taskId = taskId;
       rc.backfilled = false;
@@ -130,10 +131,11 @@ export const proposalsScript = String.raw`  // ─── Console tab 3: self-hea
     rc.minimized = false;
     drawer.hidden = false;
     drawer.classList.remove('is-min');
-    $('rc-minimize').textContent = 'Minimize';
+    $('rc-minimize').textContent = 'Collapse';
     $('rc-minimize').setAttribute('aria-expanded', 'true');
     document.body.classList.add('has-console');
     document.body.classList.remove('has-console-min');
+    applyInspectorMode();
     syncConsole();
     syncHealTab();
     rcTick();
@@ -149,6 +151,8 @@ export const proposalsScript = String.raw`  // ─── Console tab 3: self-hea
     rc.diffTimer = null;
     $('runner-console-drawer').hidden = true;
     document.body.classList.remove('has-console', 'has-console-min');
+    applyInspectorMode();
+    restoreInspectorFocus();
   }
 
   function toggleConsoleMinimized() {
@@ -158,7 +162,7 @@ export const proposalsScript = String.raw`  // ─── Console tab 3: self-hea
     document.body.classList.toggle('has-console', !rc.minimized);
     document.body.classList.toggle('has-console-min', rc.minimized);
     var btn = $('rc-minimize');
-    btn.textContent = rc.minimized ? 'Expand' : 'Minimize';
+    btn.textContent = rc.minimized ? 'Expand' : 'Collapse';
     btn.setAttribute('aria-expanded', String(!rc.minimized));
     if (!rc.minimized && rc.tab === 'diff' && rc.taskId) loadConsoleDiff(rc.taskId);
   }
