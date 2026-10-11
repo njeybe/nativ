@@ -185,16 +185,37 @@ function checkLearnings(root: string): IntegrityFinding[] {
   return findings;
 }
 
-function checkUiSpecs(root: string): IntegrityFinding[] {
-  const specs = readText(path.join(root, '.ai', 'ui_specs.md'));
-  if (specs === null || /Marketing pages/i.test(specs)) return [];
+function checkDesignProfile(specs: string | null): IntegrityFinding[] {
+  if (specs === null || /^##\s+Design Profile\b/m.test(specs)) return [];
   return [{
-    id: 'specs:marketing',
+    id: 'specs:design-profile',
     status: 'info',
     category: 'specs',
-    message: '.ai/ui_specs.md predates the Marketing pages checks. Ask the architect to add that part '
-      + 'of the Anti-Generic Checklist from the current nativ template.',
+    message: '.ai/ui_specs.md has no Design Profile section. Ask the architect to add it from the '
+      + 'current nativ template (templates/dot-ai/ui_specs.md).',
   }];
+}
+
+function checkTasteBundle(root: string, templatesDir: string): IntegrityFinding[] {
+  const mk = (message: string): IntegrityFinding[] =>
+    [{ id: 'design:taste-bundle', status: 'info', category: 'specs', message }];
+  const dir = path.join(root, '.ai', 'design', 'taste');
+  if (!fs.existsSync(dir)) {
+    return mk('The design bundle .ai/design/taste/ is missing. Run `nativ update` to install it.');
+  }
+  const differs = ['LICENSE', 'v1/SKILL.md', 'v2/SKILL.md'].filter((rel) => {
+    const want = readText(path.join(templatesDir, 'design', 'taste', rel));
+    const have = readText(path.join(dir, rel));
+    return want !== null && (have === null || have.replace(/\r/g, '') !== want.replace(/\r/g, ''));
+  });
+  if (!differs.length) return [];
+  return mk(`Design bundle files differ from the nativ package: ${differs.join(', ')}. `
+    + 'Run `nativ update` (or `nativ update --force` to replace edited ones).');
+}
+
+function checkUiSpecs(root: string, templatesDir: string): IntegrityFinding[] {
+  const specs = readText(path.join(root, '.ai', 'ui_specs.md'));
+  return [...checkDesignProfile(specs), ...checkTasteBundle(root, templatesDir)];
 }
 
 export function checkHarnessIntegrity(root: string, options: { templatesDir?: string } = {}): IntegrityFinding[] {
@@ -204,7 +225,7 @@ export function checkHarnessIntegrity(root: string, options: { templatesDir?: st
     ...checkMissingRoleGuides(root),
     ...checkEditedRoleGuides(root, options.templatesDir ?? getTemplatesDir()),
     ...checkLearnings(root),
-    ...checkUiSpecs(root),
+    ...checkUiSpecs(root, options.templatesDir ?? getTemplatesDir()),
   ];
   if (!findings.some((f) => f.category === 'guardrail' || f.category === 'secret')) {
     const message = 'No guardrail overrides and no secrets in files agents read';

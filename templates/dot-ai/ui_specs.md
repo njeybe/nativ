@@ -18,6 +18,21 @@ Pick one level and design track and write them here:
 
 ---
 
+## Design Profile
+The Architect picks one profile per project. Workers read the digest named here.
+Native mobile and terminal UI projects leave the placeholder.
+- **Profile:** taste-v1 | taste-v2
+- **Digest:** .ai/design/taste/<v1|v2>/DIGEST.md
+- **Design read:** Reading this as: <page kind> for <audience>, with a <vibe> language,
+  leaning toward <design system or aesthetic>.
+- **Dials:** DESIGN_VARIANCE <1-10> / MOTION_INTENSITY <1-10> / VISUAL_DENSITY <1-10>, and why
+- **Design system:** <official package from taste-v2 section 2.A, or "none: Tailwind and tokens">
+- **Stack notes:** React <major>, Next.js App Router yes/no, Tailwind <major>,
+  motion package <motion | framer-motion | none>, icon library <name>
+- **Redesign mode (taste-v2):** Greenfield | Preserve | Overhaul
+
+---
+
 ## Design Brief
 - **Who uses it:**
 - **The job they are doing:**
@@ -174,40 +189,6 @@ One or two. Everything else stays restrained.
 
 ---
 
-## Anti-Generic Checklist
-**Web**
-- [ ] No unconsidered font defaults. Consumer/brand: distinct curated typeface (e.g. Outfit, Plus Jakarta Sans, DM Sans). Data-dense B2B SaaS/utility: Inter, Roboto, or native system type permitted for density and zero-FOIT. No unstyled browser defaults without a reason.
-- [ ] No default indigo/purple accent.
-- [ ] No rows of identical cards with pastel icon boxes.
-- [ ] No gradient-text hero.
-- [ ] No decorative blobs.
-- [ ] No greeting banners.
-- [ ] No emojis. Icons are vector SVG.
-- [ ] No serif by default. A serif needs a stated reason (editorial, heritage) in the brief.
-- [ ] One font family, unless the tokens define a heading and body pairing.
-- [ ] No purple or blue glow gradients and no neon mesh backgrounds unless the brief asks.
-- [ ] No warm beige with brass accents as the automatic "premium" look. Pick it only on purpose.
-- [ ] One accent color and one palette temperature (warm or cool grays, not both).
-- [ ] One corner-radius scale for every surface.
-
-**Marketing pages** (landing, product and pricing pages)
-- [ ] The hero fits the first screen: headline of at most 2 lines, subtext of about 20 words, the main button visible without scrolling.
-- [ ] The hero holds at most 4 things: an optional small label, headline, subtext, buttons (one primary, at most one secondary). Logo walls go in their own section below.
-- [ ] No more than 2 image-and-text split sections in a row.
-- [ ] Small uppercase labels above headings: at most one for every 3 sections.
-- [ ] Each section layout (3-column cards, split, bento) appears once per page.
-- [ ] Real images and real vector logos. No mock screenshots built from boxes, no text-only page.
-- [ ] Sections stay short: a headline of about 8 words, about 25 words of text, one visual or one button. More than 5 items need a grid, tabs or a carousel.
-- [ ] Every figure comes from real data or is marked as a sample.
-- [ ] One label per action across the page ("Contact us" everywhere, not three variants).
-
-**Mobile**
-- [ ] No default Material seed blue.
-- [ ] No unthemed default widgets without a reason.
-- [ ] No emojis.
-
----
-
 ## States
 Every component and view covers these.
 
@@ -224,8 +205,6 @@ Every component and view covers these.
 ---
 
 ## Accessibility
-- **Transitions:** `transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);`
-- **Active state:** `transform: scale(0.98)`.
 - **Focus rings:** `:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }`
 - **Dialogs and drawers:** close with `Escape` and backdrop click; lock background scroll.
 - **Labels:** `aria-label` on every icon-only button.

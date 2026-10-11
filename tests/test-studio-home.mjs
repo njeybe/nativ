@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { renderPage, NOW } from './helpers/studio-harness.mjs';
+import vm from 'node:vm';
+import { renderPage, createStudio, loadModel, NOW } from './helpers/studio-harness.mjs';
+import { wrapPage } from '../src/server/studio-ui/shell/pure.ts';
+import { homePage } from '../src/server/studio-ui/pages/home/index.ts';
 
 // Run with `npx tsx tests/test-studio-home.mjs`: renders the Home page from fixture data, no DOM.
 console.log('--- Starting Studio Home page verification ---');
@@ -11,46 +14,33 @@ const task = (id, status, extra = {}) => ({
 const timing = (id, endMinsAgo) => ({
   taskId: id, startedAt: iso(endMinsAgo + 4), completedAt: iso(endMinsAgo), durationMs: 240_000,
 });
-const contracts = (n) => {
-  const names = ['a', 'b', 'c', 'd', 'e'];
-  return Object.fromEntries(names.map((k, i) => [k, i < n]));
-};
 
-function calmApi(extra = {}) {
+function calmApi() {
   const done = [];
   for (let i = 1; i <= 8; i++) done.push(task('task-' + i, 'completed'));
   return {
     milestones: [
-      { id: 'm1', name: 'Initial Setup & Contract Verification', tasks: [done[0]] },
-      { id: 'm2', name: 'Second: details after colon', tasks: done.slice(1, 8) },
+      { id: 'm1', name: 'Initial Setup', tasks: done.slice(0, 4) },
+      { id: 'm2', name: 'Second milestone', tasks: [...done.slice(4), task('task-9', 'pending')] },
     ],
-    status: { contracts: contracts(5) },
-    telemetry: {
-      summary: { actual: { spendUsd: 6.18, cacheHitRate: 0.976, cacheSavingsUsd: 39.73 } },
-      // task-1 has no timing at all; the rest finished at staggered times
-      taskBreakdowns: done.slice(1).map((t, i) => timing(t.id, 10 + i * 30)),
-    },
+    telemetry: { taskBreakdowns: done.slice(1).map((t, i) => timing(t.id, 10 + i * 30)) },
     runs: [], escalations: [], logTail: {},
-    ...extra,
   };
 }
 
 function busyApi() {
   return {
     milestones: [{
-      id: 'm3', name: 'Busy milestone: things',
+      id: 'm3', name: 'Busy milestone',
       tasks: [
-        task('task-a', 'blocked', {
-          notes: 'Verification failed after 3 attempts: heading missing.',
-          circuitBreaker: { consecutiveFailures: 3 },
-        }),
+        task('task-a', 'blocked', { notes: 'Verification failed after 3 attempts: heading missing.' }),
         task('task-b', 'blocked'),
         task('task-c', 'in_progress', { assignedSubagent: 'frontend' }),
         task('task-d', 'pending', { dependencies: ['task-c'] }),
         task('task-e', 'completed'),
+        task('task-f', 'pending'),
       ],
     }],
-    status: { contracts: contracts(3) },
     telemetry: { taskBreakdowns: [timing('task-e', 5), { taskId: 'task-c', startedAt: iso(2) }] },
     runs: [],
     escalations: [
@@ -62,133 +52,164 @@ function busyApi() {
   };
 }
 
-const idOrder = (html, ids) => ids.map((id) => html.indexOf('data-task="' + id + '"'));
-const ascending = (list) => list.every((n, i) => n >= 0 && (i === 0 || n > list[i - 1]));
-const section = (html, title) => {
-  const start = html.indexOf('<h2>' + title + '</h2>');
-  assert.ok(start >= 0, 'section ' + title);
+const sec = (html, key) => {
+  const start = html.indexOf('data-sec="' + key + '"');
+  assert.ok(start >= 0, 'section ' + key);
   const next = html.indexOf('<section', start);
   return html.slice(start, next < 0 ? undefined : next);
 };
 
+// Registers Home with a recording taskAction and returns a trigger for its data-act handlers.
+function withActions(api) {
+  const ctx = createStudio();
+  loadModel(ctx, api);
+  vm.runInContext(wrapPage(homePage.script), ctx);
+  const calls = [];
+  ctx.Studio.taskAction = (name, id) => calls.push([name, id]);
+  const act = (name, id) => ctx.Studio.pages.home.actions[name]({ getAttribute: () => id });
+  return { calls, act };
+}
+
 let passed = 0;
 const test = (name, fn) => { fn(); passed++; console.log('  ok - ' + name); };
 
-test('calm state and idle state with last finished task', () => {
-  const html = renderPage('home', calmApi());
-  assert.match(html, /Nothing needs you\. No stuck tasks, questions or proposals\./);
-  assert.match(html, /All clear/);
-  assert.match(html, /Idle/);
-  assert.match(html, /No agent is working\. Last finished <span class="mono">task-2<\/span> 10m ago\./);
-  assert.doesNotMatch(html, /See what failed/);
+test('sections render in order', () => {
+  const html = renderPage('home', busyApi());
+  const order = ['decisions', 'running', 'next', 'milestone', 'activity']
+    .map((k) => html.indexOf('data-sec="' + k + '"'));
+  assert.ok(order.every((n, i) => n >= 0 && (i === 0 || n > order[i - 1])), String(order));
 });
 
-test('idle with nothing finished yet', () => {
-  const api = { milestones: [{ id: 'm1', name: 'A', tasks: [task('task-1', 'pending')] }], runs: [], escalations: [] };
-  const html = renderPage('home', api);
-  assert.match(html, /Last finished nothing yet\./);
-  assert.match(html, /Nothing has finished yet\./);
+test('decision queue shows only when decisions exist', () => {
+  assert.doesNotMatch(renderPage('home', calmApi()), /data-sec="decisions"|Human Decision Required/);
+  const q = sec(renderPage('home', busyApi()), 'decisions');
+  assert.equal((q.match(/class="need"/g) || []).length, 3);
+  assert.equal((q.match(/Human Decision Required/g) || []).length, 3);
+  assert.match(q, /Verification failed after 3 attempts: heading missing\./);
+  assert.match(q, /Which table should this use\?/);
+  assert.match(q, /data-act="home-proposal" data-id="task-a"/);
+  assert.match(q, /data-act="home-ask" data-id="task-b"/);
+  assert.equal((q.match(/data-act="home-start"/g) || []).length, 2);
 });
 
-test('a completed task leaves Needs you even if its escalation was never closed', () => {
+test('now running row with timer, log and Open console', () => {
+  const r = sec(renderPage('home', busyApi()), 'running');
+  assert.match(r, /<span class="mono id">task-c<\/span>/);
+  assert.match(r, /Running/);
+  assert.match(r, new RegExp('data-since="' + (NOW - 2 * 60_000) + '">2m 00s<'));
+  assert.match(r, /Writing the home page/);
+  assert.match(r, /data-act="home-console" data-id="task-c">Open console/);
+});
+
+test('Open console and Dispatch call the shell task actions', () => {
+  const page = withActions(busyApi());
+  page.act('home-console', 'task-c');
+  page.act('home-dispatch', 'task-f');
+  page.act('home-proposal', 'task-a');
+  assert.deepEqual(page.calls, [['logs', 'task-c'], ['dispatch', 'task-f'], ['proposal', 'task-a']]);
+});
+
+test('idle state offers Dispatch for the next ready task', () => {
+  const r = sec(renderPage('home', calmApi()), 'running');
+  assert.match(r, /No agent is running\./);
+  assert.match(r, /data-act="home-dispatch" data-id="task-9"/);
+});
+
+test('up next: ready tasks dispatch, waiting tasks name what they wait on', () => {
+  const u = sec(renderPage('home', busyApi()), 'next');
+  assert.match(u, /data-act="home-dispatch" data-id="task-f">Dispatch</);
+  assert.match(u, /waits <span class="mono">task-c<\/span>/);
+  assert.doesNotMatch(u, /data-act="home-dispatch" data-id="task-d"/);
+});
+
+test('milestone progress shows done of total with no filled track', () => {
+  const m = sec(renderPage('home', calmApi()), 'milestone');
+  assert.match(m, /Second milestone/);
+  assert.match(m, /4 of 5/);
+  assert.match(m, /style="width:80%"/);
+  const rule = homePage.css.split('\n').find((l) => l.includes('.progress {'));
+  assert.doesNotMatch(rule, /background/);
+});
+
+test('recent activity lists at most 8 events newest first', () => {
+  const a = sec(renderPage('home', calmApi()), 'activity');
+  const rows = [...a.matchAll(/data-event="([^"]+)"/g)].map((x) => x[1]);
+  assert.equal(rows.length, 8);
+  assert.equal(rows[0], 'task-2');
+  assert.match(a, /class="mono num when"/);
+});
+
+test('empty plan and loading copy', () => {
+  const html = renderPage('home', { milestones: [], runs: [], escalations: [] });
+  assert.match(html, /No plan yet\. Ask the architect to design one\./);
+  const ctx = createStudio();
+  vm.runInContext(wrapPage(homePage.script), ctx);
+  const skel = ctx.Studio.pages.home.skeleton();
+  assert.equal((skel.match(/skel-row/g) || []).length, 4);
+});
+
+test('no emojis or long dashes in the page', () => {
+  const html = renderPage('home', busyApi()) + homePage.script;
+  assert.doesNotMatch(html, /[–—]|\p{Extended_Pictographic}/u);
+});
+
+test('a completed task leaves the queue even if its escalation stays open', () => {
   const api = busyApi();
   api.escalations.push({ id: 'esc-4', taskId: 'task-e', status: 'pending_review', reason: 'Old question' });
-  const sec = section(renderPage('home', api), 'Needs you');
-  assert.match(sec, /3 items/);
-  assert.doesNotMatch(sec, /task-e|Old question/);
+  const q = sec(renderPage('home', api), 'decisions');
+  assert.match(q, /3 items/);
+  assert.doesNotMatch(q, /task-e/);
+  assert.doesNotMatch(q, /Old question/);
 });
 
-test('Needs you lists one item per task with the right actions', () => {
-  const html = renderPage('home', busyApi());
-  const sec = section(html, 'Needs you');
-  assert.match(sec, /3 items/);
-  assert.equal((sec.match(/class="need"/g) || []).length, 3);
-  assert.match(sec, /Verification failed after 3 attempts: heading missing\./);
-  assert.match(sec, /Paused after 3 attempts\./);
-  assert.match(sec, /Which table should this use\?/);
-  assert.equal((sec.match(/See what failed/g) || []).length, 2);
-  assert.match(sec, /data-act="home-proposal" data-id="task-a"/);
-  assert.match(sec, /data-act="home-ask" data-id="task-b"/);
-  assert.doesNotMatch(sec, /data-act="home-ask" data-id="task-a"/);
-  assert.equal((sec.match(/data-act="home-start"/g) || []).length, 2);
-  assert.match(sec, /Open task/);
+test('decision items keep their task and reason hooks', () => {
+  const q = sec(renderPage('home', busyApi()), 'decisions');
+  assert.match(q, /data-need="task-a"/);
+  assert.match(q, /data-need="task-b"/);
+  assert.match(q, /data-need="task-d"/);
+  assert.match(q, /Paused after 3 attempts\./);
+  assert.equal((q.match(/See what failed/g) || []).length, 2);
+  assert.match(q, /Open task/);
+  assert.doesNotMatch(q, /data-act="home-ask" data-id="task-a"/);
+  assert.match(q, /<span class="mono">task-a<\/span>/);
 });
 
-test('Right now shows only running tasks with timer and latest log', () => {
-  const html = renderPage('home', busyApi());
-  const sec = section(html, 'Right now');
-  assert.match(sec, /1 working/);
-  assert.match(sec, /data-task="task-c"/);
-  assert.equal((sec.match(/data-task=/g) || []).length, 1);
-  assert.match(sec, new RegExp('data-since="' + (NOW - 2 * 60_000) + '">2m 00s<'));
-  assert.match(sec, /<div class="log">Writing the home page<\/div>/);
-  assert.doesNotMatch(sec, /No agent is working/);
+test('now running lists only running tasks', () => {
+  const r = sec(renderPage('home', busyApi()), 'running');
+  assert.match(r, /1 running/);
+  assert.doesNotMatch(r, /No agent is running/);
+  assert.doesNotMatch(r, /task-a|task-e/);
+  assert.match(r, /frontend/);
+  assert.match(r, /class="dot run"/);
 });
 
-test('figure strip shows milestones, tasks, spend and plan files', () => {
-  const html = renderPage('home', calmApi());
-  const strip = html.slice(html.indexOf('class="panel strip"'), html.indexOf('<h2>Just finished'));
-  assert.match(strip, /Milestones<\/span><span class="v">2<small> \/ 2<\/small>/);
-  assert.match(strip, /Tasks<\/span><span class="v">8<small> \/ 8<\/small><\/span><span class="s">all done/);
-  assert.match(strip, /\$6\.18/);
-  assert.match(
-    strip,
-    /97\.6% cached, saved about \$39\.73/,
-  );
-  assert.match(
-    strip,
-    /Plan files<\/span><span class="v">5<small> \/ 5<\/small><\/span><span class="s">all present and intact/,
-  );
-  const busy = renderPage('home', busyApi());
-  assert.match(busy, /4 left/);
-  assert.match(busy, /3<small> \/ 5<\/small><\/span><span class="s">2 missing/);
+test('up next caps rows and puts ready tasks first', () => {
+  const u = sec(renderPage('home', busyApi()), 'next');
+  assert.ok(u.indexOf('task-f') < u.indexOf('task-d'));
+  assert.doesNotMatch(u, /data-task="task-c"|task-e/);
+  const none = sec(renderPage('home', { milestones: [{ id: 'm', name: 'M', tasks: [task('x', 'completed')] }] }), 'next');
+  assert.match(none, /Nothing is waiting\./);
 });
 
-test('missing cost and plan data show a dash', () => {
-  const api = calmApi({ status: {}, telemetry: { taskBreakdowns: [] } });
-  const html = renderPage('home', api);
-  assert.match(html, /Spend<\/span><span class="v">–<\/span><span class="s">no spend recorded/);
-  assert.match(html, /Plan files<\/span><span class="v">–<small> \/ 5<\/small><\/span><span class="s">not checked/);
+test('styles follow the Ink rules', () => {
+  const css = homePage.css;
+  assert.match(css, /\.decisions \{[^}]*border-left: 3px solid var\(--warn\)/);
+  assert.match(css, /\.decisions \{[^}]*box-shadow: var\(--shadow\)/);
+  assert.match(css, /\.decisions \{[^}]*border-radius: 6px/);
+  assert.match(css, /\.row \{[^}]*min-height: 36px/);
+  assert.match(css, /max-width: 960px/);
+  assert.match(css, /@media \(max-width: 1024px\)/);
+  assert.match(css, /\.progress i \{[^}]*height: 4px/);
+  assert.doesNotMatch(css, /border-radius: 12px/);
 });
 
-test('Just finished is newest first, capped at 6, with exact time on hover', () => {
-  const html = renderPage('home', calmApi());
-  const sec = section(html, 'Just finished');
-  const rows = sec.match(/class="row-btn"/g) || [];
-  assert.equal(rows.length, 6);
-  // task-2 finished 10m ago, task-3 40m ago, and so on; task-1 has no time and is left out
-  assert.ok(ascending(idOrder(sec, ['task-2', 'task-3', 'task-4', 'task-5', 'task-6', 'task-7'])));
-  assert.doesNotMatch(sec, /data-task="task-8"/);
-  assert.doesNotMatch(sec, /data-task="task-1"/);
-  assert.match(sec, /<time datetime="[^"]+" title="[^"]+">10m ago<\/time>/);
-  assert.match(sec, /data-go="tasks">Open Tasks/);
-});
-
-test('milestones list is newest first and opens Tasks on click', () => {
-  const html = renderPage('home', calmApi());
-  const sec = section(html, 'Milestones');
-  const order = ['m2', 'm1'].map((id) => sec.indexOf('data-ms="' + id + '"'));
-  assert.ok(ascending(order));
-  assert.match(sec, /<span class="t" title="Second: details after colon">Second<\/span>/);
-  assert.match(sec, /style="width:100%"/);
-  assert.match(sec, /7\/7/);
-  assert.match(sec, /newest first/);
-});
-
-test('empty plan renders without failing', () => {
-  const html = renderPage('home', { milestones: [], runs: [], escalations: [] });
-  assert.match(html, /Nothing needs you/);
-  assert.match(html, /No milestones yet\./);
-  assert.match(html, /0<small> \/ 0<\/small>/);
-});
-
-test('page source has no backticks or template placeholders', async () => {
-  const { homePage } = await import('../src/server/studio-ui/pages/home/index.ts');
+test('page source parses and has no backticks or template placeholders', () => {
   assert.ok(!homePage.script.includes('`'));
   assert.ok(!homePage.script.includes('${'));
   assert.ok(!homePage.css.includes('`'));
+  new vm.Script(wrapPage(homePage.script));
   const loose = homePage.css.split('\n').filter((l) => /^[#.a-z]/i.test(l) && !l.startsWith('#panel-home'));
   assert.deepEqual(loose, []);
 });
 
-console.log('\n✔ ' + passed + ' Studio Home checks passed');
+console.log('\n' + passed + ' Studio Home checks passed');

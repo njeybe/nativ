@@ -47,7 +47,7 @@ export const detailViewScript = String.raw`  // ─── Task detail panel (pur
 
   function detailFacts(t, model) {
     var m = model.milestones.filter(function (x) { return x.id === t.milestoneId; })[0];
-    var ms = m ? '<button type="button" class="chip" data-ms="' + esc(m.id) + '"><span class="mono">' + esc(m.id) + '</span>' + esc(m.short) + '</button>' : '–';
+    var ms = m ? '<button type="button" class="chip" data-ms="' + esc(m.id) + '"><span class="mono">' + esc(m.id) + '</span>' + esc(m.short) + '</button>' : '-';
     return '<dl class="kv"><dt>Milestone</dt><dd>' + ms + '</dd><dt>Agent</dt><dd>' + ui.agentChip(t.agent) + '</dd>' +
       '<dt>Started</dt><dd class="num">' + esc(fmt.full(t.startT)) + '</dd><dt>Took</dt><dd class="num">' + detailTook(t) + '</dd>' +
       '<dt>Est. cost</dt><dd class="num">' + esc(fmt.money(t.costUsd)) + '</dd></dl>';

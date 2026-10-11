@@ -2,7 +2,7 @@
 export const dialogsCss = String.raw`/* Toasts */
 /* Bottom-right so notifications never cover the sticky header and navigation. */
 .toast-host { position: fixed; right: 16px; bottom: 16px; z-index: 100; display: flex; flex-direction: column; gap: 8px; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
-.toast { pointer-events: auto; display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; font-size: 13.5px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--danger); border-radius: var(--r-card); box-shadow: var(--shadow-float); animation: toast-in .18s ease-out; }
+.toast { pointer-events: auto; display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; font-size: 13.5px; background: var(--surface); border: 1px solid var(--line-2); border-left: 3px solid var(--danger); border-radius: var(--r-card); box-shadow: var(--shadow); animation: toast-in .18s ease-out; }
 .toast.ok { border-left-color: var(--success); }
 .toast .t-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .toast .t-hint { color: var(--muted); font-size: 12.5px; }
@@ -12,8 +12,8 @@ export const dialogsCss = String.raw`/* Toasts */
 /* Dialogs */
 dialog { border: none; padding: 0; background: transparent; color: var(--text); width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
 dialog.narrow { width: min(460px, calc(100vw - 32px)); }
-dialog::backdrop { background: rgb(10 10 20 / 0.4); backdrop-filter: blur(2px); }
-.modal { padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-float); }
+dialog::backdrop { background: color-mix(in srgb, var(--text) 40%, transparent); backdrop-filter: blur(2px); }
+.modal { padding: 22px; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-card); box-shadow: var(--shadow); }
 .modal h2 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
 .modal .lead { color: var(--muted); margin: 0 0 16px; font-size: 14px; line-height: 1.55; }
 .field { margin-bottom: 16px; }
@@ -112,7 +112,7 @@ textarea.cmd-preview { min-height: 92px; font-family: var(--mono); font-size: 12
 .switch-text { display: flex; flex-direction: column; font-size: 13.5px; }
 .switch-text b { font-weight: 600; }
 .switch-text span { font-size: 12.5px; color: var(--muted); }
-kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--chip-border); border-radius: 4px; }
+kbd { padding: 0 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--chip); border: 1px solid var(--chip-border); border-radius: var(--r-control); }
 .btn.primary kbd { color: var(--accent-fg); background: transparent; border-color: color-mix(in srgb, var(--accent-fg) 45%, transparent); }
 
 `;

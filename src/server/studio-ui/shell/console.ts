@@ -57,11 +57,13 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
   function syncConsole() {
     var run = rc.taskId ? runFor(rc.taskId) : null;
     var task = rc.taskId ? taskById(rc.taskId) : null;
-    $('rc-task').textContent = rc.taskId || '–';
+    $('rc-task').textContent = rc.taskId || '';
     $('rc-title').textContent = task ? task.title : '';
     $('rc-steps').innerHTML = rcStepper(run);
     $('rc-abort').disabled = !isRunActive(run);
     $('rc-elapsed').textContent = mmss(elapsedOf(run) || 0);
+    $('rc-clock').textContent = $('rc-elapsed').textContent;
+    syncInspectorStatus(run);
     $('rc-bytes').textContent = formatBytes((run && run.logBytes) || 0);
     var gate = 'Idle';
     if (run && run.verification) gate = run.verification.success ? 'Passed' : 'Failed';
@@ -90,6 +92,7 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
       var run = rc.taskId ? runFor(rc.taskId) : null;
       if (!rc.taskId || !isRunActive(run)) { clearInterval(rc.ticker); rc.ticker = null; return; }
       $('rc-elapsed').textContent = mmss(elapsedOf(run) || 0);
+      $('rc-clock').textContent = $('rc-elapsed').textContent;
     }, 1000);
   }
 
@@ -135,7 +138,7 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
     $('rc-diff-files').innerHTML = (files || []).map(function (f) { return '<li title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('');
     $('rc-diff-files').hidden = !(files && files.length);
     $('rc-diff-body').innerHTML = bodyHtml;
-    $('rc-diff-count').textContent = count == null ? '–' : String(count);
+    $('rc-diff-count').textContent = count == null ? '-' : String(count);
   }
 
   function loadConsoleDiff(taskId) {
@@ -190,5 +193,61 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
   function visibleConsoleTabs() {
     return ['logs', 'diff', 'heal'].filter(function (name) { return !$('rc-tab-' + name).hidden; });
   }
+
+  // Inspector header status: dot color follows the run state only.
+  function syncInspectorStatus(run) {
+    var st = run ? run.status : '';
+    var tone = !st ? 'idle' : st === 'completed' ? 'ok' : (st === 'failed' || st === 'aborted') ? 'err' : 'run';
+    $('rc-status').setAttribute('data-tone', tone);
+    $('rc-status-text').textContent = st ? (RUN_LABEL[st] || st) : 'Idle';
+  }
+
+  // Below 1024px the inspector is a modal sheet over the content.
+  function inspectorIsSheet() {
+    return window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
+  }
+
+  // Remembers the opener so closing hands focus back to it.
+  function rememberInspectorOpener() {
+    var drawer = $('runner-console-drawer');
+    var active = document.activeElement;
+    if (drawer.hidden && active && !drawer.contains(active)) rc.opener = active;
+  }
+
+  function applyInspectorMode() {
+    var drawer = $('runner-console-drawer');
+    var sheet = inspectorIsSheet() && !drawer.hidden;
+    if (sheet) drawer.setAttribute('aria-modal', 'true');
+    else drawer.removeAttribute('aria-modal');
+    drawer.setAttribute('role', sheet ? 'dialog' : 'region');
+    if ($('task-drawer').hidden) $('scrim').hidden = !sheet;
+  }
+
+  function restoreInspectorFocus() {
+    if ($('task-drawer').hidden) $('scrim').hidden = true;
+    var opener = rc.opener;
+    rc.opener = null;
+    if (opener && document.contains(opener) && opener.focus) opener.focus();
+  }
+
+  // Keeps Tab inside the sheet while it is modal.
+  function trapInspectorFocus(e) {
+    var drawer = $('runner-console-drawer');
+    if (e.key !== 'Tab' || drawer.hidden || !inspectorIsSheet()) return;
+    var items = Array.prototype.filter.call(
+      drawer.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"]), textarea, input'),
+      function (el) { return !el.disabled && el.offsetParent !== null; });
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  document.addEventListener('keydown', trapInspectorFocus);
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#rc-open-diff') : null;
+    if (t) setConsoleTab('diff', true);
+  });
+  window.addEventListener('resize', applyInspectorMode);
 
 `;

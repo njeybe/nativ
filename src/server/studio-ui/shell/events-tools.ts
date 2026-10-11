@@ -81,7 +81,11 @@ export const eventsToolsScript = String.raw`  // ─── Events: live runner c
   $('rc-minimize').addEventListener('click', toggleConsoleMinimized);
   $('rc-close').addEventListener('click', closeConsole);
   $('runner-console-drawer').addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { e.stopPropagation(); closeConsole(); $('main').focus(); }
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    var opener = rc.opener;
+    closeConsole();
+    if (!(opener && document.contains(opener))) $('main').focus();
   });
 
   $('btn-confirm-ok').addEventListener('click', function () {

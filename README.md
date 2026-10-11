@@ -26,6 +26,7 @@ cd your-project && nativ init    # scaffold .ai/ and the Claude Code configurati
 | | [Database](#database) | [Troubleshooting](#troubleshooting) |
 | | [Worktrees](#worktrees) | [For maintainers](#for-maintainers) |
 | | [Studio, tests and benchmarks](#studio-tests-and-benchmarks) | |
+| | | [Design profiles](#design-profiles) |
 
 ---
 
@@ -140,7 +141,8 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 
 | Command | What it does | Who |
 | :--- | :--- | :--- |
-| [`init`](#nativ-init) | Scaffold `.ai/` and the Claude Code configuration | You |
+| [`init`](#nativ-init) | Scaffold `.ai/` and the Claude Code configuration; `--design` picks a design profile | You |
+| [`design check`](#nativ-design-check) | Scan UI files for design-rule violations | You, Agent |
 | [`setup`](#nativ-setup) | Write or merge the Claude Code configuration | You |
 | [`profile`](#nativ-profile) | Inspect or switch ceremony profile (`prototype`, `solo`, `enterprise`) | You, Agent |
 | [`doctor`](#nativ-doctor) | Check the integration and the harness; `--fix` repairs | You, Agent (read-only) |
@@ -190,6 +192,20 @@ nativ init [targetDir] [-f, --force]
 | Option | Description |
 | :--- | :--- |
 | `-f, --force` | Overwrite existing specification and directive files |
+| `--design <taste-v1|taste-v2>` | Set the design profile in `.ai/ui_specs.md` and install the taste-skill bundle |
+
+#### `nativ design check`
+
+Scan UI source files for design-rule violations. Exits 1 on any error.
+
+```bash
+nativ design check [paths...] [--profile <id>] [--json]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--profile <id>` | `taste-v1` or `taste-v2`; default is the profile in `.ai/ui_specs.md`. With neither, the command exits 1 |
+| `--json` | Print findings as JSON |
 
 #### `nativ setup`
 
@@ -656,6 +672,29 @@ Run the MCP server over stdio. `setup` registers it; see [MCP server](#mcp-serve
 
 ---
 
+## Design profiles
+
+nativ can hold web UI work to a design profile. Pick one per web project; it is recorded in the
+Design Profile section of `.ai/ui_specs.md`.
+
+| Profile | Use for |
+| :--- | :--- |
+| `taste-v2` | Landing sites, portfolios, editorial pages and web redesigns |
+| `taste-v1` | Web apps, SaaS screens and dashboards |
+
+Native mobile (Flutter) and terminal UI get no profile. They follow only their own spec.
+
+Set it with `nativ init --design taste-v2` (or `taste-v1`), or let the architect pick one during
+planning. An unset profile is a spec gap: frontend workers escalate, and `nativ design check`
+exits 1 until a profile is set or passed with `--profile`. An architect must pick one. Init and update install the bundle in `.ai/design/taste/`: the
+LICENSE, SOURCE.md, and `v1/` and `v2/` folders, each with `SKILL.md` and a short `DIGEST.md`
+that workers read first. Run `nativ design check` to scan UI files for rule violations.
+
+Credit: the taste-skill prompts are by Leonxlnx, [github.com/Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill),
+MIT License, pinned at commit `717446e`.
+
+---
+
 ## Configuration
 
 ### `.nativ/config.json`
@@ -907,3 +946,34 @@ npm run sync-plugin      # after changing a template or the setup generator; a t
 ## License
 
 MIT (c) JB Natividad. See [LICENSE](LICENSE).
+
+## Third-party notices
+
+- **Phosphor Icons** (`@phosphor-icons/core` 2.1.1) is vendored into Studio under the MIT license:
+
+  ```
+  MIT License
+
+  Copyright (c) 2023 Phosphor Icons
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+  ```
+
+- **taste-skill** by Leonxlnx (MIT). The bundled copy keeps its own LICENSE under
+  `templates/design/taste/`.

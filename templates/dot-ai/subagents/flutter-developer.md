@@ -54,16 +54,7 @@ Do not invent the layout.
 - Respect safe areas (notch, home bar) and the keyboard. A focused field stays visible.
 - Check small phones, large phones and tablets, in both orientations where the spec allows.
 
-## 7. Anti-generic rules
-These match the Anti-Generic Checklist in `.ai/ui_specs.md`:
-- No default Material seed blue, and no unthemed default widgets, without a reason.
-- No default type without a reason. Use the fonts in the style tile.
-- No rows of identical cards with pastel icon boxes.
-- No gradient-text hero and no decorative blobs.
-- No greeting banners ("Welcome back!"). Let the content speak.
-- No emojis anywhere in code or UI. Use icons from the icon set the spec names.
-
-## 8. States and access
+## 7. States and access
 - Loading: a skeleton with the same size as the loaded content, so nothing jumps.
 - Empty: a short explanation and a primary action.
 - Error: a plain-language cause and a Retry button, never a raw error dump.
@@ -77,7 +68,7 @@ These match the Anti-Generic Checklist in `.ai/ui_specs.md`:
 - Mutations: disable the submit while it runs and show progress next to it.
   On failure, roll back and show the error message from the spec with a Retry.
 
-## 9. Before you finish
+## 8. Before you finish
 1. Run the task's `verificationCommand`, plus `flutter analyze` and `flutter test`.
 2. Check the source for emojis. There must be none.
 3. Check the UI has no overflow stripes on small and large screens.

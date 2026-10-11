@@ -1,27 +1,27 @@
 // Design tokens (light, dark, old-name aliases), base rules and shared legacy components.
-const DARK = `--bg: #0e0e13; --surface: #16161d; --surface-2: #1d1d26; --line: #2a2a36; --line-2: #383847;
-  --fg: #ececf2; --fg-2: #a4a4b7; --fg-3: #6e6e82;
-  --accent: #8e8aff; --accent-soft: #23224a; --accent-fg: #0e0e13;
-  --ok: #4ade80; --ok-soft: #13281b; --run: #60a5fa; --run-soft: #142238;
-  --bad: #f87171; --bad-soft: #341617; --warn: #fbbf24; --warn-soft: #2f2410;
-  --ag-backend: #38bdf8; --ag-frontend: #a78bfa; --ag-qa: #fbbf24; --ag-flutter: #2dd4bf;
-  --ag-architect: #8e8aff; --ag-devops: #94a3b8; --ag-database: #34d399; --ag-security: #f87171;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35); color-scheme: dark;`;
+const DARK = `--bg: #0f0f0f; --surface: #1a1a1a; --surface-2: #242424; --line: #303030; --line-2: #3d3d3d;
+  --fg: #ececee; --fg-2: #a1a1aa; --fg-3: #8b8b94;
+  --accent: #ececee; --accent-soft: #1d1d21; --accent-fg: #0f0f0f;
+  --ok: #4ade80; --ok-soft: #12261a; --run: #60a5fa; --run-soft: #121d33;
+  --bad: #f87171; --bad-soft: #2c1414; --warn: #fbbf24; --warn-soft: #2a210b;
+  --ag-backend: var(--fg-3); --ag-frontend: var(--fg-3); --ag-qa: var(--fg-3); --ag-flutter: var(--fg-3);
+  --ag-architect: var(--fg-3); --ag-devops: var(--fg-3); --ag-database: var(--fg-3); --ag-security: var(--fg-3);
+  --shadow: 0 8px 24px color-mix(in srgb, var(--fg) 12%, transparent); color-scheme: dark;`;
 
 export const tokensBaseCss = String.raw`:root {
-  --bg: #f6f6f9;
-  --surface: #ffffff;
-  --surface-2: #f0f0f5;
-  --line: #e3e3ea; --line-2: #d2d2dc;
-  --fg: #16161f; --fg-2: #54546a; --fg-3: #8b8b9e;
-  --accent: #4f46e5; --accent-soft: #eeeefe; --accent-fg: #ffffff;
-  --ok: #15803d; --ok-soft: #e7f5ec;
-  --run: #2563eb; --run-soft: #e7eefd;
-  --bad: #dc2626; --bad-soft: #fdecec;
-  --warn: #b45309; --warn-soft: #fcf2e1;
-  --ag-backend: #0284c7; --ag-frontend: #7c3aed; --ag-qa: #d97706; --ag-flutter: #0d9488;
-  --ag-architect: #4f46e5; --ag-devops: #64748b; --ag-database: #059669; --ag-security: #dc2626;
-  --shadow: 0 1px 2px rgba(22,22,40,.05), 0 4px 16px rgba(22,22,40,.06);
+  --bg: #f5f5f5;
+  --surface: #fafafa;
+  --surface-2: #efefef;
+  --line: #e4e4e7; --line-2: #d4d4d8;
+  --fg: #18181b; --fg-2: #52525b; --fg-3: #6b6b74;
+  --accent: #18181b; --accent-soft: #ededf0; --accent-fg: #fafafa;
+  --ok: #15803d; --ok-soft: #e7f4ec;
+  --run: #1d4ed8; --run-soft: #e8eefc;
+  --bad: #b91c1c; --bad-soft: #fbeaea;
+  --warn: #a1500a; --warn-soft: #fbf0e4;
+  --ag-backend: var(--fg-3); --ag-frontend: var(--fg-3); --ag-qa: var(--fg-3); --ag-flutter: var(--fg-3);
+  --ag-architect: var(--fg-3); --ag-devops: var(--fg-3); --ag-database: var(--fg-3); --ag-security: var(--fg-3);
+  --shadow: 0 8px 24px color-mix(in srgb, var(--fg) 12%, transparent);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, Menlo, monospace;
   color-scheme: light;
@@ -36,8 +36,8 @@ export const tokensBaseCss = String.raw`:root {
   --warn-bg: var(--warn-soft);
   --proposal: var(--warn); --proposal-bg: var(--warn-soft); --proposal-line: color-mix(in srgb, var(--warn) 40%, var(--surface));
   --chip: var(--surface-2); --chip-border: var(--line-2);
-  --term-bg: #0f172a; --term-text: #f8fafc; --term-muted: #94a3b8; --term-line: rgb(148 163 184 / 0.28);
-  --r-control: 7px; --r-card: 12px;
+  --term-bg: var(--surface); --term-text: var(--fg); --term-muted: var(--fg-3); --term-line: rgb(148 163 184 / 0.28);
+  --r-control: 6px; --r-card: 6px;
   --shadow-float: 0 12px 32px -8px rgb(15 23 42 / 0.25), 0 2px 6px -2px rgb(15 23 42 / 0.1);
   --sidebar-w: 224px;
 }

@@ -32,9 +32,9 @@ export const databaseExplorerScript = String.raw`  // ─── Database Studio:
         mediaBadge(t, c);
       var typeCell = esc(c.type) + (c.observedTypes ? ' <span class="muted">(' + esc(c.observedTypes.join(' | ')) + ')</span>' : '');
       var lastCell = coll
-        ? (c.presence != null ? Math.round(c.presence * 100) + '%' : '<span class="muted">–</span>')
+        ? (c.presence != null ? Math.round(c.presence * 100) + '%' : '<span class="muted">-</span>')
         : (c.default == null ? '<span class="muted">NULL</span>' : esc(c.default));
-      return '<tr><td>' + (tags || '<span class="muted">–</span>') + '</td><td class="mono">' + esc(c.name) +
+      return '<tr><td>' + (tags || '<span class="muted">-</span>') + '</td><td class="mono">' + esc(c.name) +
         (fk ? ' <span class="muted">→ ' + esc(fk.referencedTable + '.' + fk.referencedColumn) + '</span>' : '') + '</td><td class="mono">' + typeCell +
         '</td><td>' + (c.nullable ? 'YES' : '<b>NO</b>') + '</td><td class="mono">' + lastCell + '</td></tr>';
     }).join('');

@@ -1,10 +1,53 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import pc from 'picocolors';
 import { detectProject } from '../scanner/detector.js';
 import { applySetup, getTemplatesDir, planTemplateFile, type AssetChange } from '../core/setup-assets.js';
 import { printSetupResult } from './setup.js';
 import { runValidate } from './validate.js';
+
+const noCr = (text: string) => text.replace(/\r/g, '');
+
+function walkFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walkFiles(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+}
+
+// Plain copies (no stamp) so doctor can compare them; edited files are kept unless forced.
+function syncTasteBundle(templatesDir: string, aiDir: string, force?: boolean): number {
+  const src = path.join(templatesDir, 'design', 'taste');
+  let kept = 0;
+  const manifestPath = path.join(aiDir, 'design', 'taste', '.manifest.json');
+  let manifest: Record<string, string> = {};
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch { /* installed before manifests */ }
+  const hash = (t: string) => createHash('sha256').update(noCr(t)).digest('hex');
+  for (const file of walkFiles(src)) {
+    const rel = path.relative(src, file).split(path.sep).join('/');
+    const dest = path.join(aiDir, 'design', 'taste', ...rel.split('/'));
+    const text = fs.readFileSync(file, 'utf8');
+    const existing = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : null;
+    const shown = `.ai/design/taste/${rel}`;
+    if (existing !== null && noCr(existing) === noCr(text)) {
+      printChange({ path: shown, action: 'unchanged' });
+      manifest[rel] ??= hash(text);
+    } else if (existing !== null && !force && manifest[rel] !== hash(existing)) {
+      kept++;
+      printChange({ path: shown, action: 'skipped', detail: 'differs from the template' });
+    } else {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, text, 'utf8');
+      manifest[rel] = hash(text);
+      printChange({ path: shown, action: existing === null ? 'created' : 'updated' });
+    }
+  }
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  return kept;
+}
 
 export interface UpdateOptions {
   /** Also replace directive and role-guide files that were edited by hand. */
@@ -73,6 +116,9 @@ export async function runUpdate(targetDirArg?: string, options: UpdateOptions = 
     if (plan.action === 'skipped') kept++;
     printChange({ path: item.rel, action: plan.action, detail: plan.detail });
   }
+
+  console.log(pc.bold('\nDesign bundle'));
+  kept += syncTasteBundle(templatesDir, aiDir, options.force);
 
   // 2. Everything `nativ setup` manages: AGENTS.md, .claude/agents/, settings, MCP server
   console.log(pc.bold('\nClaude Code configuration'));

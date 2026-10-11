@@ -34,6 +34,7 @@ import { runTriage } from './commands/triage.js';
 import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
 import { runProfileCommand } from './commands/profile.js';
+import { runDesignCheck } from './commands/design-check.js';
 import { packageVersion } from './core/version.js';
 
 export function createProgram(): Command {
@@ -48,6 +49,7 @@ export function createProgram(): Command {
     .command('init [targetDir]')
     .description('Scaffold the workflow (.ai/, AGENTS.md, directives) and the Claude Code configuration in the target directory')
     .option('-f, --force', 'Overwrite existing specification and directive files')
+    .option('--design <profile>', 'Design profile: nativ, taste-v1 or taste-v2')
     .action(async (targetDir, options) => {
       await runInit(targetDir, options);
     });
@@ -282,6 +284,17 @@ export function createProgram(): Command {
     .option('--revoke', 'Re-lock the task to its target files')
     .action(async (taskId, targetDir, options) => {
       await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
+    });
+
+  const design = program.command('design').description('Design profile tools');
+
+  design
+    .command('check [paths...]')
+    .description('Scan source files for design-rule violations (default path: src)')
+    .option('--profile <id>', 'Design profile: nativ, taste-v1 or taste-v2')
+    .option('--json', 'Output findings as JSON')
+    .action((paths, options) => {
+      runDesignCheck(paths, options);
     });
 
   const learn = program

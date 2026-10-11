@@ -79,7 +79,10 @@ export const paintScript = String.raw`  // ─── Painting ──────
     if (foot.__html !== footHtml) { foot.innerHTML = footHtml; foot.__html = footHtml; }
     var lost = !!(pipe.errors.tasks || pipe.errors.status) || live.mode === 'offline';
     $('banner').hidden = !lost;
+    Studio.afterPaint.forEach(function (fn) { try { fn(); } catch (e) { /* one hook must not break painting */ } });
   }
+  Studio.afterPaint = Studio.afterPaint || [];
+  Studio.onPaint = function (fn) { Studio.afterPaint.push(fn); };
 
   /** One entry point after data or state changes: model, sidebar, current page, panel, palette. */
   function refreshUi(parts) {

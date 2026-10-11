@@ -185,7 +185,7 @@ try {
 
   // 2. Tasks: active milestone, 5-card cap on Just finished, column contents.
   {
-    const html = renderPage('tasks', api);
+    const html = renderPage('tasks', api, { state: { tasksView: 'board' } });
     match(html, /<option value="m2" selected>/, 'defaults to the active milestone');
     const board = html.slice(html.indexOf('class="board"'), html.indexOf('Other milestones'));
     ok(!/data-task="(f-\d|l-1)"/.test(board), 'board shows only the selected milestone');
@@ -201,7 +201,7 @@ try {
     no(html, /Waiting on [^<]*f-1/, 'finished cross-milestone dependency is not waited on');
     match(html, /Running <span data-since="\d+">/, 'running timer');
     match(html, /Paused after/, 'stuck card');
-    const page = withActions('tasks', api);
+    const page = withActions('tasks', api, { tasksView: 'board' });
     match(page.render(), /Show all 7/);
     page.act('tasks-more');
     const expanded = page.render();
@@ -239,31 +239,31 @@ try {
     console.log('✔ Flow: selected milestone only, implied links hidden, gap squeezed, untimed listed');
   }
 
-  // 4. Home: stuck task and proposal in Needs you, calm state without them.
+  // 4. Home: stuck task and proposal in the decision queue, calm state without them.
   {
     const html = renderPage('home', api);
-    const sec = between(html, '<h2>Needs you</h2>', '<section');
+    const sec = between(html, 'data-sec="decisions"', '<section');
     match(sec, /class="need"/);
-    match(sec, /data-task="e-3"/, 'stuck task is listed');
-    match(sec, /Verification failed after 3 attempts: heading not found\./, 'reason from notes');
+    match(sec, /data-task="e-3"|data-need="e-3"/, 'stuck task is listed');
+    match(sec, /Verification failed after 3 attempts: heading not found./, 'reason from notes');
     match(sec, /data-act="home-proposal" data-id="e-3"/, 'proposal action');
     eq((sec.match(/class="need"/g) || []).length, 1, 'one item for the task and its proposal');
-    const now = between(html, '<h2>Right now</h2>', '<section');
-    match(now, /data-task="e-2"/, 'running task shown');
-    match(now, /1 working/);
+    const now = between(html, 'data-sec="running"', '<section');
+    match(now, /e-2/, 'running task shown');
+    match(now, /1 running/);
     const calm = JSON.parse(JSON.stringify(api));
     calm.milestones[1].tasks.find((t) => t.id === 'e-3').status = 'completed';
     calm.milestones[1].tasks.find((t) => t.id === 'e-2').status = 'completed';
     calm.escalations = [];
     const calmHtml = renderPage('home', calm);
-    match(calmHtml, /Nothing needs you\. No stuck tasks, questions or proposals\./, 'calm state');
-    match(calmHtml, /All clear/);
-    match(calmHtml, /No agent is working/);
-    match(html, /Plan files/);
-    console.log('✔ Home: stuck task and proposal in Needs you, calm state when none');
+    no(calmHtml, /data-sec="decisions"/, 'calm state has no decision queue');
+    match(calmHtml, /No agent is running./);
+    match(html, /data-sec="milestone"/, 'milestone progress section');
+    match(html, /data-sec="activity"/, 'recent activity section');
+    console.log('✔ Home: stuck task and proposal in the decision queue, calm state when none');
   }
 
-  // 5. Team: rows per agent, dashes where nothing was recorded.
+  // 5. Team: roster rows per agent, hyphens where nothing was recorded.
   {
     const html = renderPage('team', api);
     const order = [...html.matchAll(/<tr data-agent="([^"]+)"/g)].map((m) => m[1]);
@@ -275,12 +275,12 @@ try {
         .map((m) => m[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
     };
     const db = cells('database');
-    same([db[4], db[5], db[6]], ['–', '–', '–'], 'database has no timing or cost: dashes');
-    ok(cells('backend')[6].startsWith('$'), 'backend shows its recorded cost');
-    ok(cells('frontend')[6].startsWith('$'), 'frontend shows its recorded cost');
-    ok(html.includes('Stuck on') && html.includes('data-task="e-3"'), 'stuck agent chip');
-    ok(html.includes('data-task="e-2"'), 'running agent chip');
-    console.log('✔ Team: rows per agent, dashes for missing values');
+    same([db[3], db[4], db[6]], ['-', '-', '-'], 'database has no timing, cost or activity: hyphens');
+    ok(cells('backend')[4].startsWith('$'), 'backend shows its recorded cost');
+    ok(cells('frontend')[4].startsWith('$'), 'frontend shows its recorded cost');
+    ok(html.includes('data-tid="e-2"'), 'running agent shows its current task');
+    ok(html.includes('data-act="team-open"'), 'current task opens the inspector');
+    console.log('✔ Team: rows per agent, hyphens for missing values');
   }
 
   // 6. All new pages render without emojis or old wording.
