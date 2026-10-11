@@ -18,6 +18,48 @@ settle it, escalate with `architectural_ambiguity`. Do not guess a direction.
 For Quick work, work with no screen, or a project with no design brief, match the existing
 components and `.ai/codebase_map.md` instead.
 
+## 2.6 Design profiles
+Read `## Design Profile` in `.ai/ui_specs.md` first.
+If the Profile is missing or still the placeholder, stop and escalate with
+`architectural_ambiguity` before writing UI code.
+
+Profiles are `taste-v1` or `taste-v2`. Read the digest at
+`.ai/design/taste/<v1|v2>/DIGEST.md`. Open `SKILL.md` beside it only for a
+section the digest points to.
+
+Order of authority, highest first:
+1. The task's `acceptanceCriteria`.
+2. `.ai/ui_specs.md` (tokens, wireframes, copy).
+3. The digest.
+4. `SKILL.md`.
+
+The settled conflicts below override the digest and `SKILL.md`. The digest is a faithful copy
+of upstream, so it may say things nativ overrides, such as "generate images first".
+1. Questions: never ask the user. Escalate with `architectural_ambiguity`.
+2. The design read and dials are set in the Design Profile. Do not change them. If values
+   are missing, that is a spec gap: escalate.
+3. Dependencies: a library the profile needs that is not in `package.json` is installed only
+   when `package.json` is in your targetFiles. Otherwise escalate with `dependency_conflict`.
+   Never import a package that is not installed.
+4. Icons: use the icon library named in Stack notes. Do not hand-draw SVG icons.
+5. Images: the spec decides imagery. Never call image generation yourself. Leave a labeled
+   placeholder and list the missing images in your report.
+6. Colors and fonts come from the Design Tokens. A token that breaks a profile rule is a
+   spec gap: escalate, do not fix it in code.
+7. Emojis are banned under every profile. Only the spec can allow them.
+8. Under `taste-v2`, no em dash or en dash as a separator in any text users see. Use a
+   hyphen or rewrite the sentence.
+9. Run Lighthouse and Core Web Vitals only when the task's `verificationCommand` does.
+
+Stack notes:
+- React 18: `motion` (from `motion/react`) and `framer-motion` share one API and work on
+  React 18 and 19. Keep the one installed. Do not migrate packages in a feature task.
+- Server Component rules apply only when Stack notes say Next.js App Router. In a
+  client-only React app skip them, but keep motion in small memoized leaf components.
+- Tailwind: follow the installed major version. Never mix v3 and v4 syntax.
+- `next/font` is for Next.js only. Elsewhere self-host fonts with `@font-face` and
+  `font-display: swap`.
+
 ## 3. Build from the design
 `.ai/ui_specs.md` is the source of truth. Use these parts of it:
 - **Design brief and chosen direction:** who uses it, the tone, what to avoid.
@@ -51,46 +93,7 @@ Do not invent the layout.
 - Check wide screens: do not stretch text or forms edge to edge.
 - Dialogs and drawers close with `Escape` and a backdrop click, and keep focus inside.
 
-## 6. Visual style (compressed)
-Follow the style the spec chose. If it names a known style, use these anchors:
-- **Minimalist:** hairline borders, very soft shadows, tight 4px/8px spacing, tabular numbers.
-- **Neo-brutalist:** thick solid borders, hard offset shadows with no blur, uppercase labels.
-- **Glass:** translucent surfaces with backdrop blur, thin light border, soft deep shadow.
-- **Bento:** grid of cards with uneven spans, one corner radius everywhere.
-- **Soft UI / clay:** surface matches the background, paired light and dark shadows,
-  puffy radii.
-- **Skeuomorphic / spatial / maximalist:** physical cues, layered depth, or bold color layers,
-  always through the tokens.
-
-Values come from the tokens and the style tile, never from this list.
-
-## 7. Anti-generic rules
-These match the Anti-Generic Checklist in `.ai/ui_specs.md`:
-- No default Inter or system-only type without a reason.
-- No default indigo or purple accent.
-- No rows of identical cards with pastel icon boxes.
-- No gradient-text hero and no decorative blobs.
-- No greeting banners ("Welcome back!"). Let the content speak.
-- No emojis anywhere in code or UI. Icons are inline vector SVG.
-
-### 7.1 Build-time details
-The font, color and layout choices are made at design time (the Anti-Generic Checklist in
-`.ai/ui_specs.md`). These are the details that go wrong while building:
-- One accent color and one corner-radius scale, from the tokens, on every component.
-  A button or link that needs a different color is a spec gap: escalate it.
-- Large display type with tight line height clips the tails of y, g, j, p and q, worst in
-  italics. Keep display line height at 1.1 or more.
-- Images come from the spec. If one is missing, leave a clearly labeled placeholder and
-  list the images still needed in your report. Never fake a product screenshot out of
-  boxes, and never fill space with hand-drawn illustrations.
-- Logos are real vector files, never a company name typed out as text.
-- Numbers shown in the UI come from the spec's content samples or real data. Do not
-  invent precise-looking figures such as "92%" or "4.1x".
-- One label per action: if the spec says "Contact us", do not add "Get in touch" elsewhere.
-- Marketing or landing page: also follow the Marketing pages part of the checklist, when
-  `.ai/ui_specs.md` has one.
-
-## 8. States and access
+## 6. States and access
 - Loading: a skeleton with the same size as the loaded content, so nothing jumps.
 - Empty: a short explanation and a primary action.
 - Error: a plain-language cause and a Retry button, never a raw error dump.
@@ -101,7 +104,7 @@ The font, color and layout choices are made at design time (the Anti-Generic Che
 - Mutations: disable the submit while it runs and show progress next to it.
   On failure, roll back and show the error message from the spec with a Retry.
 
-## 9. Before you finish
+## 7. Before you finish
 1. Run the task's `verificationCommand` (or `nativ verify <taskId>`).
 2. Check the source for emojis. There must be none.
 3. Check the UI has no sideways scrolling or clipping on phone, tablet and desktop widths.
@@ -109,8 +112,8 @@ The font, color and layout choices are made at design time (the Anti-Generic Che
 5. Pre-flight, all must pass:
    - Button labels, inputs, placeholders and form labels meet contrast: 4.5:1 for body
      text, 3:1 for large text.
-   - Button labels fit on one line at desktop width.
-   - The accent color and corner radius are the same everywhere.
    - Re-read every string you wrote that the spec did not give. Rewrite anything vague,
      broken or invented.
-   - Marketing or landing page: run the Marketing pages checks, when the checklist has them.
+6. Run the Pre-flight in the profile's DIGEST.md.
+7. Run `nativ design check <your UI files or folders>`. Fix every error. Fix each warning, or
+   explain it in your report. It reads the Design Profile in `.ai/ui_specs.md`.

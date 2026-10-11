@@ -26,6 +26,7 @@ cd your-project && nativ init    # scaffold .ai/ and the Claude Code configurati
 | | [Database](#database) | [Troubleshooting](#troubleshooting) |
 | | [Worktrees](#worktrees) | [For maintainers](#for-maintainers) |
 | | [Studio, tests and benchmarks](#studio-tests-and-benchmarks) | |
+| | | [Design profiles](#design-profiles) |
 
 ---
 
@@ -140,7 +141,8 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 
 | Command | What it does | Who |
 | :--- | :--- | :--- |
-| [`init`](#nativ-init) | Scaffold `.ai/` and the Claude Code configuration | You |
+| [`init`](#nativ-init) | Scaffold `.ai/` and the Claude Code configuration; `--design` picks a design profile | You |
+| [`design check`](#nativ-design-check) | Scan UI files for design-rule violations | You, Agent |
 | [`setup`](#nativ-setup) | Write or merge the Claude Code configuration | You |
 | [`profile`](#nativ-profile) | Inspect or switch ceremony profile (`prototype`, `solo`, `enterprise`) | You, Agent |
 | [`doctor`](#nativ-doctor) | Check the integration and the harness; `--fix` repairs | You, Agent (read-only) |
@@ -190,6 +192,20 @@ nativ init [targetDir] [-f, --force]
 | Option | Description |
 | :--- | :--- |
 | `-f, --force` | Overwrite existing specification and directive files |
+| `--design <taste-v1|taste-v2>` | Set the design profile in `.ai/ui_specs.md` and install the taste-skill bundle |
+
+#### `nativ design check`
+
+Scan UI source files for design-rule violations. Exits 1 on any error.
+
+```bash
+nativ design check [paths...] [--profile <id>] [--json]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--profile <id>` | `taste-v1` or `taste-v2`; default is the profile in `.ai/ui_specs.md`. With neither, the command exits 1 |
+| `--json` | Print findings as JSON |
 
 #### `nativ setup`
 
@@ -653,6 +669,29 @@ nativ bench [-s concurrency|governor|verification|telemetry|e2e|all] [-c <worker
 Run the MCP server over stdio. `setup` registers it; see [MCP server](#mcp-server).
 
 [Back to contents](#contents)
+
+---
+
+## Design profiles
+
+nativ can hold web UI work to a design profile. Pick one per web project; it is recorded in the
+Design Profile section of `.ai/ui_specs.md`.
+
+| Profile | Use for |
+| :--- | :--- |
+| `taste-v2` | Landing sites, portfolios, editorial pages and web redesigns |
+| `taste-v1` | Web apps, SaaS screens and dashboards |
+
+Native mobile (Flutter) and terminal UI get no profile. They follow only their own spec.
+
+Set it with `nativ init --design taste-v2` (or `taste-v1`), or let the architect pick one during
+planning. An unset profile is a spec gap: frontend workers escalate, and `nativ design check`
+exits 1 until a profile is set or passed with `--profile`. An architect must pick one. Init and update install the bundle in `.ai/design/taste/`: the
+LICENSE, SOURCE.md, and `v1/` and `v2/` folders, each with `SKILL.md` and a short `DIGEST.md`
+that workers read first. Run `nativ design check` to scan UI files for rule violations.
+
+Credit: the taste-skill prompts are by Leonxlnx, [github.com/Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill),
+MIT License, pinned at commit `717446e`.
 
 ---
 

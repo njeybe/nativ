@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Design profiles.** The Design Profile in `.ai/ui_specs.md` picks `taste-v1` or `taste-v2`. Workers follow the chosen profile's rules before they build UI. Native mobile and terminal UI get no profile and follow only their own spec; an unset profile makes frontend workers escalate.
+- **Bundled taste-skill v1 and v2.** init and update install `.ai/design/taste/` with each version's `SKILL.md` and a short `DIGEST.md` that workers read first. Untouched copies refresh on update. Credit: Leonxlnx, MIT License, pinned at commit `717446e`.
+- **`nativ init --design`.** Choose the design profile when scaffolding a project.
+- **`nativ design check`.** Scans UI files with eight rules for emoji, em and en dashes, `h-screen`, scroll listeners, pure black, Google Fonts links, hand-rolled icons and custom cursors. Exits 1 on errors; warnings never fail. Supports `--profile` and `--json`.
+- **Frontend pre-flight.** The frontend guide runs `nativ design check` on the task's UI files before a worker finishes.
+- **Doctor findings.** `nativ doctor` reports the design profile (`specs:design-profile`) and the bundle (`design:taste-bundle`).
+
+### Removed
+
+- The `nativ` design profile and every nativ-authored design rule. `nativ init --design` and `--profile` accept only `taste-v1` or `taste-v2`; `nativ design check` exits 1 until a profile is set or passed.
+- The Anti-Generic Checklist (Web, Marketing pages, Mobile) from `ui_specs.md`, and the Transitions and Active state lines of its Accessibility section.
+- Frontend guide: Visual style, Anti-generic rules and Build-time details, plus the `nativ` fallback and the style and Marketing pages checks in Before you finish.
+- Flutter guide: Anti-generic rules.
+- Architect guides: the `nativ` profile choice, the Inter typeface rule and the Anti-Generic and Marketing pages checks.
+- Doctor finding `specs:marketing`.
+- `nativ update` does not change an existing project's `.ai/ui_specs.md`, so projects keep their own text. Their frontend workers escalate UI tasks until the architect fills the Design Profile.
+
 ## 2.6.0
 
 ### Improved: token usage and autonomy

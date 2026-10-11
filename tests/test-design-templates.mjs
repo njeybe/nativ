@@ -10,11 +10,22 @@ const ui = fs.readFileSync(path.join(root, 'templates', 'dot-ai', 'ui_specs.md')
 const headings = [
   'Planning Level', 'Design Brief', 'Users & Top Tasks', 'Real Content Samples',
   'User Flows', 'Design Directions', 'Design Tokens', 'Platform Rules', 'Wireframes',
-  'Component Map', 'Copy & Wording', 'Signature Moments', 'Anti-Generic Checklist',
-  'States', 'Accessibility',
+  'Component Map', 'Copy & Wording', 'Signature Moments',
+  'States', 'Accessibility', 'Design Profile',
 ];
 for (const h of headings) {
   assert.ok(new RegExp(`^##\\s+${h.replace(/[&]/g, '\\$&')}\\s*$`, 'm').test(ui), `ui_specs.md is missing heading "${h}"`);
+}
+
+const h2 = ui.match(/^## .+$/gm);
+assert.equal(h2[h2.indexOf('## Planning Level') + 1], '## Design Profile', 'Design Profile follows Planning Level');
+const profileRe = /^- \*\*Profile:\*\*\s*(taste-v1|taste-v2)\s*$/m;
+assert.ok(!profileRe.test(ui), 'template placeholder is not a machine-read profile');
+assert.ok(profileRe.test('- **Profile:** taste-v2'), 'a filled profile line is machine-read');
+assert.ok(!profileRe.test('- **Profile:** nativ'), 'the nativ profile no longer exists');
+assert.ok(!ui.includes('Anti-Generic Checklist'), 'ui_specs.md has no Anti-Generic Checklist');
+for (const t of ['Marketing pages', 'Transitions:', 'Active state']) {
+  assert.ok(!ui.includes(t), `ui_specs.md still has "${t}"`);
 }
 
 assert.ok(/^###\s+appointment-list\s*$/m.test(ui), 'ui_specs.md has a stable component anchor example');
@@ -44,9 +55,17 @@ const frontend = fs.readFileSync(frontendPath, 'utf8');
 for (const term of ['wireframes', 'component map', 'style-tile.html', 'specSlices', 'acceptanceCriteria', 'Code style']) {
   assert.ok(frontend.toLowerCase().includes(term.toLowerCase()), `frontend.md does not mention "${term}"`);
 }
+for (const term of ['Design Profile', 'DIGEST.md', 'taste-v1', 'taste-v2', 'dependency_conflict', 'architectural_ambiguity', 'React 18']) {
+  assert.ok(frontend.includes(term), `frontend.md does not mention "${term}"`);
+}
 assert.ok(!/[^\x00-\x7f]/.test(frontend.replace(/[–—]/g, '')), 'frontend.md has no emoji or mojibake');
 assert.ok(frontend.split('\n').every((l) => l.length <= 100), 'frontend.md lines are 100 chars or fewer');
 assert.ok(!/CSS mathematics|#[0-9a-f]{6}\b/i.test(frontend), 'frontend.md has no jargon or hard-coded hex');
+
+for (const t of ['Visual style', 'Anti-generic rules', 'Build-time details', 'Anti-Generic Checklist', '`nativ`']) {
+  assert.ok(!frontend.includes(t), `frontend.md still has "${t}"`);
+}
+assert.ok(frontend.includes('architectural_ambiguity') && frontend.includes('DIGEST.md'), 'frontend.md escalates and names the digest');
 
 const flutter = fs.readFileSync(path.join(root, 'templates', 'dot-ai', 'subagents', 'flutter-developer.md'), 'utf8');
 for (const term of ['ThemeData', 'ThemeExtension', '48dp', 'offline', 'permission denied', 'specSlices', 'acceptanceCriteria', 'wireframes', 'style-tile.html', 'Code style', 'one widget per file']) {
@@ -84,4 +103,29 @@ for (const [name, text, terms] of enhanced) {
   }
 }
 
+const dotArchitect = fs.readFileSync(path.join(root, 'templates', 'dot-ai', 'subagents', 'architect.md'), 'utf8');
+const profileTerms = ['Design Profile', 'taste-v1', 'taste-v2', '.ai/design/taste/', 'DIGEST.md'];
+for (const [name, text] of [['architect.md', architect], ['plugin architect.md', pluginArchitect],
+  ['GEMINI.md', gemini], ['dot-ai architect.md', dotArchitect]]) {
+  for (const term of profileTerms) {
+    assert.ok(text.includes(term), `${name} does not mention "${term}"`);
+  }
+}
+for (const [name, text, level, wire] of [
+  ['architect.md', architect, /\*\*Planning level\.\*\*/, /\*\*Wireframes\.\*\*/],
+  ['GEMINI.md', gemini, /Pick the planning level/, /Wireframes, as ASCII/],
+]) {
+  const at = text.indexOf('Design Profile');
+  assert.ok(text.search(level) < at, `${name} places Design Profile after the planning level`);
+  assert.ok(at < text.search(wire), `${name} places Design Profile before the wireframes`);
+}
+
 console.log('test-design-templates: ok');
+
+// nativ design rules are gone from every architect guide
+for (const [name, text] of [['architect.md', architect], ['plugin architect.md', pluginArchitect],
+  ['GEMINI.md', gemini], ['dot-ai architect.md', dotArchitect]]) {
+  for (const bad of ['Anti-Generic', 'Marketing pages', 'Inter,', '`nativ` (', '`nativ` for']) {
+    assert.ok(!text.includes(bad), `${name} still mentions "${bad}"`);
+  }
+}

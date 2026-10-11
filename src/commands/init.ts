@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import pc from 'picocolors';
 import { detectProject } from '../scanner/detector.js';
 import { buildContextContent } from '../scanner/context-builder.js';
 import { runSetup, printSetupResult } from './setup.js';
 import { stampManaged } from '../core/setup-assets.js';
+import { DESIGN_PROFILES } from '../core/design-rules.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,7 +20,56 @@ function getTemplatesDir(): string {
   return path.resolve(__dirname, '../templates');
 }
 
-export async function runInit(targetDirArg?: string, options: { force?: boolean } = {}) {
+// Sets the Profile line, and the Digest line for taste profiles, in the ui_specs template.
+function applyDesignProfile(spec: string, profile: string): string {
+  let out = spec.replace(/^(- \*\*Profile:\*\*).*$/m, `$1 ${profile}`);
+  if (profile.startsWith('taste-')) {
+    const digest = `.ai/design/taste/${profile.slice('taste-'.length)}/DIGEST.md`;
+    out = out.replace(/^(- \*\*Digest:\*\*).*$/m, `$1 ${digest}`);
+  }
+  return out;
+}
+
+function listBundle(dir: string, base = dir, out: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return out;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) listBundle(full, base, out);
+    else out.push(path.relative(base, full));
+  }
+  return out;
+}
+
+function installTasteBundle(templatesDir: string, aiDir: string, force?: boolean) {
+  const src = path.join(templatesDir, 'design', 'taste');
+  const manifestPath = path.join(aiDir, 'design', 'taste', '.manifest.json');
+  let manifest: Record<string, string> = {};
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch { /* none yet */ }
+  for (const rel of listBundle(src)) {
+    const dest = path.join(aiDir, 'design', 'taste', rel);
+    if (fs.existsSync(dest) && !force) continue;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(path.join(src, rel), dest);
+    const text = fs.readFileSync(dest, 'utf8').replace(/\r/g, '');
+    manifest[rel.split(path.sep).join('/')] = createHash('sha256').update(text).digest('hex');
+  }
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  console.log(pc.green('✔ Installed design bundle .ai/design/taste/'));
+}
+
+export async function runInit(
+  targetDirArg?: string,
+  options: { force?: boolean; design?: string } = {},
+) {
+  if (options.design !== undefined && !(DESIGN_PROFILES as readonly string[]).includes(options.design)) {
+    const list = DESIGN_PROFILES.join(', ');
+    console.error(pc.red(`✖ Unknown design profile "${options.design}". Use one of: ${list}`));
+    process.exitCode = 1;
+    return;
+  }
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const templatesDir = getTemplatesDir();
 
@@ -91,9 +142,11 @@ export async function runInit(targetDirArg?: string, options: { force?: boolean 
   const uiTemplate = fs.readFileSync(path.join(templatesDir, 'dot-ai/ui_specs.md'), 'utf8');
   const uiPath = path.join(aiDir, 'ui_specs.md');
   if (!fs.existsSync(uiPath) || options.force) {
-    fs.writeFileSync(uiPath, uiTemplate, 'utf8');
+    const uiContent = options.design ? applyDesignProfile(uiTemplate, options.design) : uiTemplate;
+    fs.writeFileSync(uiPath, uiContent, 'utf8');
     console.log(pc.green('✔ Created .ai/ui_specs.md'));
   }
+  installTasteBundle(templatesDir, aiDir, options.force);
 
   // 7. Write .ai/master_plan.json
   const planTemplate = fs.readFileSync(path.join(templatesDir, 'dot-ai/master_plan.json'), 'utf8');

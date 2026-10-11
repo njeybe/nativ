@@ -738,7 +738,7 @@ const doctorJson = async (root, options = {}) => {
   assert.ok(!second.checks.some((c) => c.id.startsWith('secret:.ai/context.md')), 'a port plus an @ path is not a password');
   assert.equal(check(second, 'secret:.claude/settings.local.json:Anthropic or OpenAI key').status, 'fail');
   assert.equal(check(second, 'guardrail:.claude/settings.json:unreadable').status, 'warn');
-  assert.match(check(second, 'specs:marketing').message, /predates the Marketing pages/);
+  assert.equal(check(second, 'specs:marketing'), undefined, 'no Marketing pages finding is reported');
   assert.equal(check(second, 'learnings:unreadable').status, 'warn', 'an unreadable lessons file is reported');
   assert.ok(!JSON.stringify(second).includes(fakeKey), 'still never prints the secret');
   cleanup(root);

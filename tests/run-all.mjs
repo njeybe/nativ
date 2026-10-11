@@ -11,6 +11,7 @@ const NODE_SUITES = [
   'worktree-lifecycle', 'agent-supervisor', 'native-tools', 'concurrency-locks', 'task-claims', 'telemetry-engine', 'benchmark-suite',
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
   'model-routing', 'notify', 'token-budget', 'v2-e2e',
+  'taste-bundle', 'taste-digest', 'init-design', 'design-check',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',
