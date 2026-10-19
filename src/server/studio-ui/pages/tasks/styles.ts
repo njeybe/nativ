@@ -51,24 +51,25 @@ export const tasksCss = String.raw`#panel-tasks .board { display: grid; grid-tem
 #panel-tasks .tg-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
 #panel-tasks .trow {
   display: grid; grid-template-columns: 76px minmax(0, 1fr) 110px 150px 72px; gap: 12px;
-  align-items: center; height: 36px; padding: 0 8px; border-bottom: 1px solid var(--line);
+  align-items: center; height: 36px; padding: 0 8px;
   font-size: 13px; cursor: pointer;
 }
 #panel-tasks .trow:hover, #panel-tasks .trow:focus-visible { background: var(--surface-2); }
 #panel-tasks .trow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-#panel-tasks .trow.thead { cursor: default; color: var(--fg-3); font-size: 12px; background: none; }
+#panel-tasks .trow.thead { border-bottom: 1px solid var(--line); cursor: default; color: var(--fg-3); font-size: 12px; background: none; }
 #panel-tasks .trow .mono { font-variant-numeric: tabular-nums; font-size: 12px; }
 #panel-tasks .c-id { color: var(--fg-3); }
 #panel-tasks .c-title, #panel-tasks .c-agent { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #panel-tasks .c-agent { color: var(--fg-2); }
 #panel-tasks .c-time { text-align: right; color: var(--fg-2); }
 #panel-tasks .c-status { display: flex; align-items: center; gap: 6px; }
-#panel-tasks .c-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
-#panel-tasks .st-ok { color: var(--ok); }
-#panel-tasks .st-run { color: var(--run); }
-#panel-tasks .st-bad { color: var(--bad); }
-#panel-tasks .st-fg { color: var(--fg); }
-#panel-tasks .st-faint { color: var(--fg-3); }
+#panel-tasks .c-status { white-space: nowrap; overflow: hidden; }
+#panel-tasks .st-done { color: var(--ok); }
+#panel-tasks .st-running { color: var(--run); }
+#panel-tasks .st-stuck { color: var(--bad); }
+#panel-tasks .st-next { color: var(--fg); }
+#panel-tasks .board-empty { margin: 10px 0 0; font-size: 12.5px; }
+#panel-tasks .panel-title .lead { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 #panel-tasks .tdispatch {
   display: none; margin-left: auto; border: 1px solid var(--line-2); background: var(--surface);
   color: var(--fg); border-radius: 6px; padding: 2px 8px; font-size: 12px; cursor: pointer;

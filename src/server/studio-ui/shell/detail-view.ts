@@ -28,8 +28,8 @@ export const detailViewScript = String.raw`  // ─── Task detail panel (pur
     }
     if (t.status === 'in_progress') {
       var live = t.run && isRunActive(t.run);
-      return dBtn('task-logs', 'Open live logs', { busy: b }) +
-        dBtn('task-abort', 'Stop', { danger: true, busy: b, disabled: !live, title: live ? '' : 'No runner is attached to this task' });
+      return (t.run ? dBtn('task-logs', 'Watch live', { busy: b }) : '') +
+        (live ? dBtn('task-abort', 'Stop', { danger: true, busy: b }) : '');
     }
     if (t.status === 'pending' && !t.waitingOn.length) {
       return dBtn('task-start', 'Start', { primary: true, busy: b }) + dBtn('task-dispatch', 'Dispatch', { busy: b });
@@ -73,7 +73,7 @@ export const detailViewScript = String.raw`  // ─── Task detail panel (pur
       chipList('Needs first', t.deps.length ? t.deps.map(function (d) { return depChip(model, d); }).join('') : '<span class="faint">Nothing. It can start right away.</span>') +
       chipList('Unblocks', t.children.length ? t.children.map(function (d) { return depChip(model, d); }).join('') : '<span class="faint">No later task depends on this.</span>') +
       chipList('Files it may change', files) +
-      '<div><div class="dlabel">How it is checked</div><div class="code">' + esc(t.verify || 'No check command.') + '</div></div>' +
+      '<div><div class="dlabel">How it is checked</div><div class="code wrap">' + esc(t.verify || 'No check command.') + '</div></div>' +
       '<div class="chips"><button type="button" class="btn" data-act="show-flow">' + ui.icon('flow') + 'Show in Flow</button></div></div>';
   };
 

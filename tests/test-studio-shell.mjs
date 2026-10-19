@@ -186,7 +186,7 @@ const api = {
   const running = html('task-run');
   assert.match(running, /Latest step/);
   assert.match(running, /running tests now/);
-  assert.match(running, /Open live logs/);
+  assert.match(running, /Watch live/);
   assert.match(running, /data-act="task-abort"/);
   assert.match(running, /data-since="\d+"/);
   assert.match(running, /so far/);

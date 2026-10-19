@@ -72,7 +72,7 @@ assert.ok(html.includes('took 2m 05s'), 'took duration');
 
 // Card texts.
 assert.ok(html.includes('Ready to start'));
-assert.ok(html.includes('Waiting on r-1, p-ready'), 'waiting lists only unfinished deps');
+assert.ok(html.includes('Waits for r-1, p-ready'), 'waiting lists only unfinished deps');
 assert.ok(html.includes('attempt 2 of 3'), 'running attempt');
 assert.ok(/Running <span data-since="\d+">/.test(html), 'live timer');
 assert.ok(html.includes('Paused after 3 of 3 attempts'));
@@ -81,9 +81,9 @@ assert.ok(!/<button[^>]*data-act="task-/.test(html), 'no action buttons on cards
 // Empty columns.
 const lone = { milestones: [{ id: 'm9', name: 'Solo', tasks: [task('x', 'pending')] }] };
 html = renderPage('tasks', lone, B);
-for (const text of ['Nothing queued', 'No task is running', 'Nothing finished yet', 'Nothing is stuck']) {
-  assert.equal(html.includes(text), text !== 'Nothing queued', text);
-}
+assert.ok(html.includes('Empty right now: Running, Done, Stuck.'), 'empty lanes folded into one line');
+assert.ok(!html.includes('data-col="completed"') && !html.includes('Nothing queued'), 'empty lanes left out');
+assert.ok(!html.includes('Just finished'), 'lane renamed');
 assert.ok(!html.includes('Other milestones'), 'no other milestones section when alone');
 
 // Selecting another milestone; all-done fallback goes to the last milestone.
@@ -151,7 +151,7 @@ function listStudio(fixture = api, stored = null) {
   ctx.__store = store;
   loadModel(ctx, fixture);
   vm.runInContext(wrapPage(pages.find((p) => p.id === 'tasks').script), ctx);
-  vm.runInContext('Studio.calls = []; Studio.taskAction = function (n, id) { Studio.calls.push(n + ":" + id); };'
+  vm.runInContext('Studio.calls = []; Studio.openTask = function (id) { Studio.calls.push("open:" + id); }; Studio.taskAction = function (n, id) { Studio.calls.push(n + ":" + id); };'
     + ' Studio.repaint = function () {};', ctx);
   const paint = () => vm.runInContext("Studio.pages.tasks.render({ model: Studio.model, state: Studio.state, "
     + "fmt: Studio.fmt, ui: Studio.ui, width: 1200 })", ctx);
@@ -172,8 +172,8 @@ assert.ok(html.includes('role="columnheader">Id<'), 'header row with column labe
 assert.ok(html.includes('7 of 11'), 'group shows done of total');
 
 // Filter counts: running r-1, ready p-ready and z-1, blocked s-1, done 9.
-for (const [f, n] of [['all', 14], ['running', 1], ['ready', 2], ['blocked', 1], ['done', 9]]) {
-  assert.match(html, new RegExp(`data-filter="${f}" aria-pressed="(true|false)">[A-Za-z]+ <span class="num">${n}<`),
+for (const [f, n] of [['all', 14], ['running', 1], ['next', 3], ['stuck', 1], ['done', 9]]) {
+  assert.match(html, new RegExp(`data-filter="${f}" aria-pressed="(true|false)">[A-Za-z ]+ <span class="num">${n}<`),
     'count for ' + f);
 }
 assert.equal((html.match(/aria-pressed="true"/g) || []).length, 2, 'one filter and one view pressed');
@@ -190,21 +190,22 @@ assert.ok(html.includes('data-tid="t-1"'), 'expanded group shows rows');
 // Rows: focusable, open the inspector, truncation title, Dispatch only on ready rows.
 assert.match(html, /class="trow" role="row" tabindex="0" data-act="tasks-open" data-tid="r-1"/);
 assert.ok(html.includes('title="Title of r-1"'), 'title attribute keeps the full text');
+assert.ok(!html.includes('class="dot"'), 'no status dot');
 assert.ok(html.includes('data-act="tasks-dispatch" data-tid="p-ready"'), 'ready row has Dispatch');
 assert.ok(!html.includes('data-act="tasks-dispatch" data-tid="p-wait"'), 'waiting row has no Dispatch');
 assert.ok(!html.includes('data-act="tasks-dispatch" data-tid="r-1"'), 'running row has no Dispatch');
 L.press('tasks-open', { 'data-tid': 'r-1' });
 L.press('tasks-dispatch', { 'data-tid': 'p-ready' });
-assert.deepEqual([...L.ctx.Studio.calls], ['logs:r-1', 'dispatch:p-ready'], 'row and Dispatch actions');
+assert.deepEqual([...L.ctx.Studio.calls], ['open:r-1', 'dispatch:p-ready'], 'row and Dispatch actions');
 
 // Filter application and the empty-filter state.
-L.press('tasks-filter', { 'data-filter': 'blocked' });
+L.press('tasks-filter', { 'data-filter': 'stuck' });
 html = L.paint();
-assert.match(html, /data-filter="blocked" aria-pressed="true"/);
+assert.match(html, /data-filter="stuck" aria-pressed="true"/);
 assert.ok(html.includes('data-tid="s-1"') && !html.includes('data-tid="r-1"'), 'filter applies to list');
 const noBlock = { milestones: [m3] };
 const E = listStudio(noBlock);
-E.press('tasks-filter', { 'data-filter': 'blocked' });
+E.press('tasks-filter', { 'data-filter': 'stuck' });
 html = E.paint();
 assert.ok(html.includes('No tasks match this filter.'), 'empty filter copy');
 assert.ok(html.includes('data-act="tasks-clear">Clear filter<'), 'Clear filter button');
