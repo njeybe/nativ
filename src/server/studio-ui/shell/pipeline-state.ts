@@ -117,18 +117,9 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
     return main;
   }
 
-  /** 1234 becomes "1.2k" so the sidebar badge stays small. */
-  function compactNum(n) {
-    if (!isFinite(n)) return '-';
-    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
-    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
-    return String(Math.round(n));
-  }
-
-  /** Newest Just-finished style helpers live in pages; here only what the runner tools need. */
   var RUN_LABEL = {
-    spawning_worktree: 'Worktree', running: 'Claude Running', verifying: 'Verifying', merging: 'Merging',
-    completed: 'Run completed', failed: 'Run failed', aborted: 'Run aborted'
+    spawning_worktree: 'Running', running: 'Running', verifying: 'Running', merging: 'Running',
+    completed: 'Done', failed: 'Stuck', aborted: 'Up next'
   };
   function runFor(taskId) {
     var found = null;

@@ -7,6 +7,7 @@ import { startStudioServer } from '../src/server/studio-server.ts';
 import { renderStudioHtml } from '../src/server/studio-ui.ts';
 import { paletteScript } from '../src/server/studio-ui/shell/palette.ts';
 import { routerScript } from '../src/server/studio-ui/shell/router.ts';
+import { pulseScript } from '../src/server/studio-ui/shell/pulse.ts';
 import { wrapPage } from '../src/server/studio-ui/shell/pure.ts';
 import { pages } from '../src/server/studio-ui/pages/index.ts';
 import { NOW, createStudio, loadModel, renderPage, run } from './helpers/studio-harness.mjs';
@@ -193,12 +194,12 @@ try {
     same(idsIn(html, 'in_progress'), ['e-2']);
     same(idsIn(html, 'blocked'), ['e-3']);
     const done = idsIn(html, 'completed');
-    eq(done.length, 5, 'Just finished capped at 5 cards');
+    eq(done.length, 5, 'Done lane capped at 5 cards');
     match(html, /Show all 7/, 'Show all 7');
     match(html, /Ready to start/);
-    match(html, /Waiting on e-2/, 'waiting names its unfinished dependency');
-    match(html, /Waiting on e-4/);
-    no(html, /Waiting on [^<]*f-1/, 'finished cross-milestone dependency is not waited on');
+    match(html, /Waits for e-2/, 'waiting names its unfinished dependency');
+    match(html, /Waits for e-4/);
+    no(html, /Waits for [^<]*f-1/, 'finished cross-milestone dependency is not waited on');
     match(html, /Running <span data-since="\d+">/, 'running timer');
     match(html, /Paused after/, 'stuck card');
     const page = withActions('tasks', api, { tasksView: 'board' });
@@ -290,6 +291,31 @@ try {
     no(html, /Play Simulation|nav-pods|panel-canvas|Cockpit/, `${id} has no removed features`);
   }
   console.log('✔ Every new page renders from the real API with no emojis or removed features');
+
+  // 7. New vocabulary: no old words, plain agent names, no middle dot or em dash, quiet pulse.
+  {
+    const oldWords = ['Just finished', 'Ready', 'Blocked', 'Waiting', 'Idle', 'Nothing ready', 'Abort'];
+    for (const id of ['home', 'tasks', 'flow', 'team']) {
+      const html = renderPage(id, api);
+      const text = html.replace(/<[^>]*>/g, ' ');
+      for (const w of oldWords) no(text, new RegExp('\\b' + w + '\\b'), `${id} shows no "${w}"`);
+      no(html, / · /, `${id} has no middle dot separator`);
+      no(html, /—/, `${id} has no em dash`);
+    }
+    const tasksText = renderPage('tasks', api).replace(/<[^>]*>/g, ' ');
+    match(tasksText, /\bBackend\b/, 'agent names are plain');
+    no(tasksText, /\b(backend|frontend|database)\b/, 'no raw agent ids in cell text');
+    ok(renderPage('team', api).includes('data-agent="backend"'), 'data-agent keeps the raw id');
+    const stub = { addEventListener() {} };
+    const pctx = vm.createContext({
+      Studio: { onPaint() {} }, pipe: { loaded: {}, escalations: [] },
+      live: { mode: 'live' }, $: () => stub, esc: (v) => String(v), location: {},
+    });
+    const parts = vm.runInContext(`${pulseScript}; pulseParts`, pctx);
+    const zero = parts({ loaded: true, offline: false, ms: 'm2 3/7', running: 0, blocked: 0, decisions: 0 });
+    eq(vm.runInContext('pulseHtml', pctx)(zero), '', 'pulse strip renders nothing when all counts are zero');
+    console.log('✔ Vocabulary: no old words, plain agent names, no middle dot or em dash, quiet pulse');
+  }
 
   // 7. Command palette keys, driven through the real handler in a stubbed page.
   {

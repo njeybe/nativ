@@ -21,6 +21,12 @@ for (const [tab, pane] of [['logs', 'rc-body'], ['diff', 'rc-diff'], ['heal', 'r
 has(/id="rc-body" role="log" aria-live="polite"/, 'log pane');
 has(/id="rc-diff" role="tabpanel"/, 'diff pane');
 has(/id="rc-heal" role="tabpanel"/, 'heal pane');
+has(/id="rc-abort"[^>]*aria-label="Stop the running agent" hidden>Stop</, 'Stop control');
+has(/id="rc-more"[^>]*aria-haspopup="true" aria-expanded="false"/, 'More menu button');
+for (const id of ['rc-open-diff', 'rc-clear', 'rc-autoscroll']) {
+  assert.ok(drawer.indexOf(id) > drawer.indexOf('id="rc-more-menu"'), id + ' in More menu');
+}
+assert.ok(!/Abort|Idle/.test(drawer), 'no Abort or Idle in console');
 for (const copy of ['Live Logs', 'Worktree Changes', 'Self-Healing Proposal', 'Open diff']) {
   assert.ok(drawer.includes(copy), `copy ${copy}`);
 }

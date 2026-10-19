@@ -79,4 +79,4 @@ If `nativ` is installed globally, use `"command": "nativ"` and `"args": ["mcp", 
 
 ## Talking to the human
 
-Use plain language: what the user would see, why it happens, what is affected and what is safe, then two or three options with the best marked `(Recommended)` and one direct question. Never paste stack traces; collapse raw output in a `<details>` block.
+Use plain language: what the user would see, why it happens, what is affected and what is safe, then two or three options with the best marked `(Recommended)`, plus one line on when the other option would be the better choice, and one direct question. Never paste stack traces; collapse raw output in a `<details>` block.

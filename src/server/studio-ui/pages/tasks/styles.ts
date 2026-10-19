@@ -3,7 +3,7 @@ export const tasksCss = String.raw`#panel-tasks .board { display: grid; grid-tem
 #panel-tasks .col { background: var(--surface-2); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 #panel-tasks .col-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 2px; font-weight: 500; font-size: 13px; }
 #panel-tasks .col-head .count { margin-left: auto; background: var(--surface); border-radius: 999px; padding: 0 8px; font-size: 12px; color: var(--fg-2); }
-#panel-tasks .col-empty { font-size: 12.5px; color: var(--fg-3); padding: 14px 8px; text-align: center; border: 1px dashed var(--line-2); border-radius: 6px; }
+#panel-tasks .col-empty { margin: 0; font-size: 12.5px; color: var(--fg-3); padding: 4px 2px; }
 #panel-tasks .tcard { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px; text-align: left; width: 100%; cursor: pointer; }
 #panel-tasks .tcard:hover { border-color: var(--line-2); }
 #panel-tasks .tcard.in_progress { border-color: color-mix(in srgb, var(--run) 45%, var(--line)); }
@@ -51,24 +51,24 @@ export const tasksCss = String.raw`#panel-tasks .board { display: grid; grid-tem
 #panel-tasks .tg-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
 #panel-tasks .trow {
   display: grid; grid-template-columns: 76px minmax(0, 1fr) 110px 150px 72px; gap: 12px;
-  align-items: center; height: 36px; padding: 0 8px; border-bottom: 1px solid var(--line);
+  align-items: center; height: 36px; padding: 0 8px;
   font-size: 13px; cursor: pointer;
 }
 #panel-tasks .trow:hover, #panel-tasks .trow:focus-visible { background: var(--surface-2); }
 #panel-tasks .trow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-#panel-tasks .trow.thead { cursor: default; color: var(--fg-3); font-size: 12px; background: none; }
+#panel-tasks .trow.thead { border-bottom: 1px solid var(--line); cursor: default; color: var(--fg-3); font-size: 12px; background: none; }
 #panel-tasks .trow .mono { font-variant-numeric: tabular-nums; font-size: 12px; }
 #panel-tasks .c-id { color: var(--fg-3); }
 #panel-tasks .c-title, #panel-tasks .c-agent { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #panel-tasks .c-agent { color: var(--fg-2); }
 #panel-tasks .c-time { text-align: right; color: var(--fg-2); }
 #panel-tasks .c-status { display: flex; align-items: center; gap: 6px; }
-#panel-tasks .c-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
-#panel-tasks .st-ok { color: var(--ok); }
-#panel-tasks .st-run { color: var(--run); }
-#panel-tasks .st-bad { color: var(--bad); }
-#panel-tasks .st-fg { color: var(--fg); }
-#panel-tasks .st-faint { color: var(--fg-3); }
+#panel-tasks .c-status { white-space: nowrap; overflow: hidden; }
+#panel-tasks .st-done { color: var(--ok); }
+#panel-tasks .st-running { color: var(--run); }
+#panel-tasks .st-stuck { color: var(--bad); }
+#panel-tasks .st-next { color: var(--fg); }
+#panel-tasks .panel-title .lead { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 #panel-tasks .tdispatch {
   display: none; margin-left: auto; border: 1px solid var(--line-2); background: var(--surface);
   color: var(--fg); border-radius: 6px; padding: 2px 8px; font-size: 12px; cursor: pointer;

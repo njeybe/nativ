@@ -67,11 +67,9 @@ export const paintScript = String.raw`  // ─── Painting ──────
     var side = $('side-nav');
     var main = mainWorktree();
     var agents = pipe.worktrees.filter(function (w) { return w.isAgentWorktree; }).length;
-    var s = pipe.report && pipe.report.summary;
     var navHtml = Studio.sidebarHtml({
       model: Studio.model, view: Studio.state.view,
-      worktreeCount: pipe.loaded.worktrees && !pipe.errors.worktrees ? agents : null,
-      benchmarkText: s ? compactNum(Number(s.averageThroughputOpsPerSec) || 0) : ''
+      worktreeCount: pipe.loaded.worktrees && !pipe.errors.worktrees ? agents : null
     });
     if (side.__html !== navHtml) { side.innerHTML = navHtml; side.__html = navHtml; }
     var foot = $('side-foot');

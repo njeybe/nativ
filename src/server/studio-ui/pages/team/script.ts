@@ -13,6 +13,7 @@ export const teamScript = String.raw`  var esc = Studio.ui.esc;
     var stamps = tasks.map(function (t) { return t.status === 'in_progress' ? (t.startT || 0) : (t.endT || 0); });
     return {
       agent: key || null,
+      tasks: tasks,
       total: tasks.length,
       done: done.length,
       work: timed.length ? timed.reduce(function (n, t) { return n + t.durationMs; }, 0) : null,
@@ -26,18 +27,38 @@ export const teamScript = String.raw`  var esc = Studio.ui.esc;
   function buildRows(model) {
     var groups = {};
     var order = [];
+    var ids = {};
     model.tasks.forEach(function (t) {
-      var key = t.agent || '';
-      if (!groups[key]) { groups[key] = []; order.push(key); }
+      var key = t.agent ? Studio.agentInfo(t.agent).label : '';
+      if (!groups[key]) { groups[key] = []; ids[key] = []; order.push(key); }
       groups[key].push(t);
+      if (ids[key].indexOf(t.agent) < 0) ids[key].push(t.agent);
     });
-    return order.map(function (k) { return statsFor(k, groups[k]); })
+    return order.map(function (k) {
+      var plain = ids[k].filter(function (i) { return !/-agent$/.test(i || ''); });
+      var id = plain.length ? plain[0] : String(ids[k][0] || '').replace(/-agent$/, '');
+      var r = statsFor(k ? id : '', groups[k]);
+      r.label = k || 'Unassigned';
+      if (ids[k].length === 1) r.agent = ids[k][0] || null;
+      return r;
+    })
       .sort(function (a, b) { return b.total - a.total; });
   }
 
   function currentTask(r) {
     var t = r.running;
-    if (!t) return '<span class="idle">Idle</span>';
+    if (!t) return waiting(r);
+    return taskButton(t);
+  }
+
+  function waiting(r) {
+    var stuck = r.tasks.filter(function (t) { return Studio.status.bucket(t) === 'stuck'; })[0];
+    if (stuck) return '<span class="idle">Stuck</span> ' + taskButton(stuck);
+    var next = r.tasks.some(function (t) { return Studio.status.bucket(t) === 'next'; });
+    return '<span class="idle">' + (next ? 'Up next' : 'Done') + '</span>';
+  }
+
+  function taskButton(t) {
     return '<button type="button" class="cur" data-act="team-open" data-tid="' + esc(t.id) +
       '" title="' + esc(t.title || t.id) + '"><span class="mono">' + esc(t.id) + '</span>' +
       '<span class="ttl">' + esc(t.title || '') + '</span></button>';
@@ -53,9 +74,7 @@ export const teamScript = String.raw`  var esc = Studio.ui.esc;
   }
 
   function row(r) {
-    var dot = r.running ? '<i class="run-dot"></i>' : '';
-    return '<tr data-agent="' + esc(r.agent || 'unassigned') + '"><td class="who">' + dot +
-      esc(r.agent || 'unassigned') + '</td>' +
+    return '<tr data-agent="' + esc(r.agent || 'unassigned') + '"><td class="who">' + esc(r.label) + '</td>' +
       '<td>' + currentTask(r) + '</td>' +
       '<td class="mono r">' + r.done + '</td>' +
       '<td class="mono r hide-sm">' + (r.work == null ? DASH : esc(Studio.fmt.dur(r.work))) + '</td>' +
@@ -102,7 +121,7 @@ export const teamScript = String.raw`  var esc = Studio.ui.esc;
 
   Studio.registerPage('team', {
     deps: ['tasks', 'telemetry', 'runs'],
-    actions: { 'team-open': function (el) { Studio.taskAction('logs', el.getAttribute('data-tid')); } },
+    actions: { 'team-open': function (el) { Studio.openTask(el.getAttribute('data-tid')); } },
     render: render,
     skeleton: skeleton
   });

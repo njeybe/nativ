@@ -24,7 +24,7 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     var t = item.task;
     if (t.status === 'blocked') return t.reason || 'Paused after 3 attempts.';
     var e = item.escalation || {};
-    return e.reason || e.summary || e.details || 'Waiting for your decision.';
+    return e.reason || e.summary || e.details || 'Needs your decision.';
   }
 
   function needActions(item) {
@@ -55,16 +55,8 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
       rightText(count) + '</div>' + n.map(needItem).join('') + '</section>';
   }
 
-  function isReady(model, t) {
-    if (t.status !== 'pending') return false;
-    return t.isAvailable || t.deps.every(function (d) {
-      var dep = model.byId[d];
-      return !dep || dep.status === 'completed';
-    });
-  }
-
   function readyTasks(model) {
-    return model.tasks.filter(function (t) { return isReady(model, t); });
+    return model.tasks.filter(Studio.status.isReady);
   }
 
   function dispatchBtn(id, label, cls) {
@@ -75,17 +67,18 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
   function taskCells(t) {
     return '<span class="mono id">' + esc(t.id) + '</span>' +
       '<button type="button" class="t link" data-task="' + esc(t.id) + '">' + esc(t.title) + '</button>' +
-      '<span class="agent">' + esc(t.agent || '') + '</span>';
+      '<span class="agent">' + esc(Studio.agentInfo(t.agent).label) + '</span>';
   }
 
   function runRow(t) {
     var since = t.startT ? ' data-since="' + t.startT + '">' + Studio.fmt.dur(Studio.now() - t.startT) : '>';
     var row = '<div class="row run-row">' + taskCells(t) +
-      '<span class="state"><i class="dot run"></i>Running</span>' +
+      '<span class="state">Running</span>' +
       '<span class="mono num timer"' + since + '</span></div>';
     var log = '<span class="mono log">' + esc(t.latestLog || '') + '</span>';
-    return row + '<div class="row sub-row">' + log + '<button type="button" class="btn" data-act="home-console"' +
-      ' data-id="' + esc(t.id) + '">Open console</button></div>';
+    var watch = t.run ? '<button type="button" class="btn" data-act="home-console" data-id="' +
+      esc(t.id) + '">Watch live</button>' : '';
+    return row + '<div class="row sub-row">' + log + watch + '</div>';
   }
 
   function nowRunning(model) {
@@ -96,23 +89,18 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     return section('running', 'Now running', '', '<div class="row calm"><span>No agent is running.</span>' + btn + '</div>');
   }
 
-  function waitOn(model, t) {
-    var open = t.deps.filter(function (d) { var x = model.byId[d]; return x && x.status !== 'completed'; });
-    return open[0] || '';
-  }
-
-  function nextRow(model, t) {
-    var end = isReady(model, t) ? dispatchBtn(t.id, 'Dispatch') :
-      '<span class="wait">waits <span class="mono">' + esc(waitOn(model, t)) + '</span></span>';
+  function nextRow(t) {
+    var end = Studio.status.isReady(t) ? dispatchBtn(t.id, 'Dispatch') :
+      '<span class="wait">' + esc(Studio.status.waitText(t)) + '</span>';
     return '<div class="row next-row">' + taskCells(t) + end + '</div>';
   }
 
   function upNext(model) {
     var list = model.tasks.filter(function (t) { return t.status === 'pending'; });
-    var ready = list.filter(function (t) { return isReady(model, t); });
-    var waiting = list.filter(function (t) { return !isReady(model, t); });
+    var ready = list.filter(Studio.status.isReady);
+    var waiting = list.filter(function (t) { return !Studio.status.isReady(t); });
     var rows = ready.concat(waiting).slice(0, UP_NEXT_CAP);
-    var body = rows.length ? rows.map(function (t) { return nextRow(model, t); }).join('') :
+    var body = rows.length ? rows.map(nextRow).join('') :
       '<div class="row calm">Nothing is waiting.</div>';
     return section('next', 'Up next', '', body);
   }
@@ -127,18 +115,27 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     return section('milestone', 'Milestone', '', body);
   }
 
+  // One event per task that has started or finished; the state word comes from its status now.
   function activityEvents(model) {
     var out = [];
     model.tasks.forEach(function (t) {
-      if (t.endT) out.push({ at: t.endT, id: t.id, what: 'completed' });
-      if (t.startT) out.push({ at: t.startT, id: t.id, what: 'started' });
+      var at = t.status === 'completed' ? (t.endT || t.startT) : t.startT;
+      if (at) out.push({ at: at, task: t });
     });
     return out.sort(function (a, b) { return b.at - a.at; }).slice(0, ACTIVITY_CAP);
   }
 
+  function activityState(t) {
+    var word = Studio.status.word(Studio.status.bucket(t));
+    var took = t.status === 'completed' && t.durationMs ? ', took ' + Studio.fmt.dur(t.durationMs) : '';
+    return word + took;
+  }
+
   function activityRow(e) {
-    return '<div class="row act-row" data-event="' + esc(e.id) + '"><span class="mono num when">' +
-      Studio.ui.when(e.at) + '</span><span class="mono id">' + esc(e.id) + '</span><span>' + e.what + '</span></div>';
+    var t = e.task;
+    return '<div class="row act-row" data-event="' + esc(t.id) + '"><span class="mono num when">' +
+      Studio.ui.when(e.at) + '</span><button type="button" class="t link" data-task="' + esc(t.id) + '">' +
+      esc(t.title) + '</button><span class="state">' + esc(activityState(t)) + '</span></div>';
   }
 
   function recentActivity(model) {

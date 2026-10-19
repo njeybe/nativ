@@ -32,6 +32,7 @@ const fixture = api(
     task('f-3', 'frontend', 'pending'),
     task('q-1', 'qa-tester', 'blocked'),
     task('q-2', 'qa-tester', 'pending'),
+    task('q-3', 'qa-agent', 'pending'),
   ],
   [
     timing('b-1', 60, 60_000, 0.5),
@@ -41,6 +42,12 @@ const fixture = api(
     { taskId: 'f-2', startedAt: iso(3) },
   ],
 );
+
+// A stale claim (over 4 hours, no run) is not running work.
+const stale = api([{ ...task('s-1', 'devops-agent', 'in_progress'), claimedAt: iso(300) }]);
+const staleHtml = renderPage('team', stale);
+const sRow = staleHtml.slice(staleHtml.indexOf('<tr data-agent="devops-agent"'));
+assert.ok(!/Running/.test(sRow.slice(0, sRow.indexOf('</tr>'))), 'stale task row does not say Running');
 
 const html = renderPage('team', fixture);
 const rowOf = (agent) => {
@@ -61,8 +68,12 @@ assert.deepEqual(heads, ['Agent', 'Current task', 'Tasks done', 'Time', 'Cost', 
 assert.ok(html.includes('<table') && !html.includes('class="panel"'), 'table, no cards');
 assert.equal(cells('backend').length, 7);
 
+// Aliases merge into one row; the id is kept raw in data-agent
+assert.equal(order.length, 4);
 // Agent name as text, tasks done as a plain number
-assert.equal(text(cells('backend')[0]), 'backend');
+assert.equal(text(cells('backend')[0]), 'Backend');
+assert.equal(text(cells('qa-tester')[0]), 'QA tester');
+assert.equal(text(cells('database')[0]), 'Database');
 assert.equal(text(cells('backend')[2]), '3');
 assert.equal(text(cells('frontend')[2]), '1');
 assert.equal(text(cells('database')[2]), '0');
@@ -78,24 +89,24 @@ assert.ok(cells('backend')[6].includes('title="'), 'exact time on hover');
 assert.equal(text(cells('backend')[6]), '30m ago');
 assert.equal(text(cells('database')[6]), '-');
 
-// Current task: running agent shows id and title, others are Idle
+// Current task: running shows id and title, others a state word
 const f = cells('frontend');
 assert.ok(f[1].includes('data-tid="f-2"') && text(f[1]) === 'f-2Title of f-2', 'running task');
 assert.ok(f[1].includes('title="Title of f-2"'), 'truncated title has hover text');
-assert.equal(text(cells('backend')[1]), 'Idle');
-assert.equal(text(cells('qa-tester')[1]), 'Idle');
-assert.ok(cells('backend')[1].includes('class="idle"'), 'idle is muted');
+assert.equal(text(cells('backend')[1]), 'Up next');
+assert.equal(text(cells('qa-tester')[1]), 'Stuck q-1Title of q-1');
+assert.ok(cells('qa-tester')[1].includes('data-tid="q-1"'), 'stuck task button');
+assert.ok(cells('backend')[1].includes('class="idle"'), 'state word is muted');
+assert.ok(!html.includes('Idle'), 'no Idle word');
 
 // Inspector link
 assert.ok(f[1].includes('data-act="team-open"'), 'opens the inspector');
 import { teamScript } from '../src/server/studio-ui/pages/team/script.ts';
-assert.ok(teamScript.includes("Studio.taskAction('logs'"), 'uses taskAction logs');
+assert.ok(teamScript.includes('Studio.openTask('), 'opens the task drawer');
 
-// Running dot only on running agents, colours come from tokens
-assert.ok(cells('frontend')[0].includes('class="run-dot"'));
-assert.ok(!cells('backend')[0].includes('run-dot'));
+// No status dots, colours come from tokens
+assert.ok(!html.includes('run-dot'));
 import { teamCss } from '../src/server/studio-ui/pages/team/styles.ts';
-assert.ok(teamCss.includes('background: var(--run)'), 'run dot token');
 assert.ok(!/background:\s*#|style="[^"]*background/.test(rowOf('frontend')), 'no inline colours');
 assert.ok(!html.includes('--ag-') && !html.includes('agent-chip'), 'no per-agent colours');
 

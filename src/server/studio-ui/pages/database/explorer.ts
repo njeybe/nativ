@@ -45,7 +45,7 @@ export const databaseExplorerScript = String.raw`  // ─── Database Studio:
       : '';
     var docMeta = coll && (t.documentCount != null || t.sampledDocuments != null)
       ? '<p class="desc">' + (t.documentCount != null ? '~' + t.documentCount + ' documents' : 'Document count unavailable') +
-        (t.sampledDocuments != null ? ' · fields inferred from ' + t.sampledDocuments + ' sampled' : '') + '</p>'
+        (t.sampledDocuments != null ? ', fields inferred from ' + t.sampledDocuments + ' sampled' : '') + '</p>'
       : '';
     return '<details class="table-card"><summary><span class="tname">' + esc(t.name) + '</span>' +
       (coll ? '<span class="badge badge-collection">COLLECTION</span>' : '') +
@@ -87,7 +87,7 @@ export const databaseExplorerScript = String.raw`  // ─── Database Studio:
     var parts = [m.mimeType || 'unknown type'];
     if (m.width && m.height) parts.push(m.width + '×' + m.height);
     if (m.sizeBytes != null) parts.push(formatBytes(m.sizeBytes));
-    return parts.join(' · ');
+    return parts.join(', ');
   }
 
   function showThumb(el) {
@@ -117,7 +117,7 @@ export const databaseExplorerScript = String.raw`  // ─── Database Studio:
     hideThumb();
     var m = entry.media;
     $('media-title').textContent = entry.table + '.' + entry.field;
-    $('media-sub').textContent = (m ? SOURCE_LABEL[m.source] || m.source : 'Image field') + ' · ' + entry.type;
+    $('media-sub').textContent = (m ? SOURCE_LABEL[m.source] || m.source : 'Image field') + ', ' + entry.type;
     $('media-thumb').innerHTML = thumbHtml(m);
     var rows = [];
     if (m) {
@@ -144,7 +144,7 @@ export const databaseExplorerScript = String.raw`  // ─── Database Studio:
     var body;
     if (!s || !s.connected) {
       body = '<div class="empty" style="padding:28px 12px"><p>' + esc(s && s.error ? s.error : 'No database connected.') + '</p>' +
-        '<button class="btn small" type="button" data-action="open-settings">Connect</button></div>';
+        '<p class="muted">Use Connection Settings at the top.</p></div>';
     } else if (!tables.length) {
       body = '<p class="muted">Connected, but this database has no ' + entityNoun(s, true).toLowerCase() + ' yet.</p>';
     } else if (!filtered.length) {

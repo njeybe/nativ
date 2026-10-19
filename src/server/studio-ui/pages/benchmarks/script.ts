@@ -34,9 +34,9 @@ export const benchmarksScript = String.raw`  // ─── View 4: Synthetic benc
     if (env.cpuCount) meta.push(env.cpuCount + ' CPUs');
     var score = clampPct(s.score);
     return '<section class="card hero' + (running ? ' is-running' : '') + '" aria-labelledby="hero-h" aria-busy="' + running + '">' +
-      '<div><h2 class="eyebrow" id="hero-h">Average throughput</h2>' +
+      '<div><h2 class="hero-title" id="hero-h">Average throughput</h2>' +
       '<div class="hero-value">' + num(Math.round(s.averageThroughputOpsPerSec || 0)) + '<span class="badge badge-accent">ops/sec</span></div>' +
-      '<p class="hero-meta">' + meta.join(' · ') + '</p></div>' +
+      '<p class="hero-meta">' + meta.join(', ') + '</p></div>' +
       '<dl class="hero-stats">' +
         '<div><dt>Score</dt><dd class="' + (score < 100 ? 'text-danger' : '') + '">' + score + '%</dd></div>' +
         '<div><dt>Scenarios passed</dt><dd>' + num(s.passedScenarios) + '/' + num(s.totalScenarios) + '</dd></div>' +
@@ -48,16 +48,17 @@ export const benchmarksScript = String.raw`  // ─── View 4: Synthetic benc
   function scenarioCards(r) {
     var byId = {}, known = {};
     (r.scenarios || []).forEach(function (s) { byId[s.id] = s; });
-    var cards = SCENARIOS.map(function (meta) { known[meta.id] = true; return scenarioCard(meta.label, byId[meta.id]); });
+    var cards = [], idle = [];
+    SCENARIOS.forEach(function (meta) {
+      known[meta.id] = true;
+      if (byId[meta.id]) cards.push(scenarioCard(meta.label, byId[meta.id])); else idle.push(meta.label);
+    });
     (r.scenarios || []).forEach(function (s) { if (!known[s.id]) cards.push(scenarioCard(s.name || s.id, s)); });
+    if (idle.length) cards.push('<p class="muted not-run">Not run: ' + idle.map(esc).join(', ') + '.</p>');
     return cards.join('');
   }
 
   function scenarioCard(label, s) {
-    if (!s) {
-      return '<article class="card scenario is-idle"><header class="scenario-head"><h3>' + esc(label) + '</h3><span class="badge badge-neutral">Not run</span></header>' +
-        '<p class="muted">Not part of the last run. Run the full matrix to score it.</p></article>';
-    }
     var total = (s.assertionsPassed || 0) + (s.assertionsFailed || 0);
     var passed = s.status === 'passed';
     var score = total ? Math.round((s.assertionsPassed || 0) / total * 100) : (passed ? 100 : 0);
@@ -76,7 +77,7 @@ export const benchmarksScript = String.raw`  // ─── View 4: Synthetic benc
       '<div class="metrics"><div><span class="metric-v">' + score + '%</span><span class="metric-l">Score</span></div>' +
       '<div><span class="metric-v">' + fmtMs(s.durationMs) + '</span><span class="metric-l">Latency</span></div>' +
       '<div><span class="metric-v">' + num(Math.round(s.throughputOpsPerSec || 0)) + '</span><span class="metric-l">ops/sec</span></div></div>' +
-      progressBar(score, 'sc-' + s.id, label + ' score', passed ? 'success' : 'danger') +
+      progressBar(score, 'sc-' + s.id, label + ' score', passed ? '' : 'danger') +
       (details ? '<dl class="details">' + details + '</dl>' : '') + errors + '</article>';
   }
 
