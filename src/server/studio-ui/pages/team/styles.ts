@@ -8,7 +8,6 @@ export const teamCss = String.raw`#panel-team .page-head h1 { font-size: 22px; f
 #panel-team .r { text-align: right; }
 #panel-team .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 #panel-team .who { font-weight: 500; }
-#panel-team .run-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--run); margin-right: 8px; }
 #panel-team .idle { color: var(--fg-3); }
 #panel-team .cur { display: inline-flex; gap: 8px; max-width: 360px; padding: 0; border: 0; background: none; color: var(--fg); font: inherit; cursor: pointer; }
 #panel-team .cur:hover .ttl { text-decoration: underline; }
