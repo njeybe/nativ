@@ -8,6 +8,17 @@ export const eventsToolsScript = String.raw`  // ─── Events: live runner c
   $('rc-clear').addEventListener('click', function () {
     $('rc-body').innerHTML = '<span class="rc-empty">Console cleared. New output will stream in here.</span>';
   });
+  function setMoreMenu(open) {
+    $('rc-more-menu').hidden = !open;
+    $('rc-more').setAttribute('aria-expanded', String(open));
+  }
+  $('rc-more').addEventListener('click', function () { setMoreMenu($('rc-more-menu').hidden); });
+  $('rc-more-menu').addEventListener('click', function (e) {
+    if (e.target.closest('#rc-open-diff')) setMoreMenu(false);
+  });
+  document.addEventListener('click', function (e) {
+    if (!$('rc-more-menu').hidden && !e.target.closest('.rc-more')) setMoreMenu(false);
+  });
   $('rc-abort').addEventListener('click', function () { if (rc.taskId) confirmAbort(rc.taskId); });
   document.querySelectorAll('.rc-tab').forEach(function (btn) {
     btn.addEventListener('click', function () { setConsoleTab(btn.getAttribute('data-rc-tab')); });

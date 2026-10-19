@@ -32,6 +32,9 @@ body.has-console-min main { margin-right: 56px; }
 .rc-step.is-active { color: var(--term-text); background: color-mix(in srgb, var(--primary) 32%, transparent); border-color: var(--primary); }
 .rc-step.is-failed { color: var(--term-text); background: color-mix(in srgb, var(--danger) 32%, transparent); border-color: var(--danger); }
 .rc-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.rc-more { position: relative; }
+.rc-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 2; display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--term-bg); border: 1px solid var(--term-line); border-radius: var(--r-control); }
+.rc-menu[hidden], .rc-btn[hidden], .rc-steps[hidden], .rc-foot[hidden] { display: none; }
 .rc-btn { padding: 5px 9px; font: 500 11px/1 var(--font); color: var(--term-text); background: transparent; border: 1px solid var(--term-line); border-radius: var(--r-control); cursor: pointer; }
 .rc-btn:hover { background: color-mix(in srgb, var(--term-muted) 22%, transparent); }
 .rc-btn:disabled { opacity: .45; cursor: not-allowed; }

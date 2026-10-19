@@ -38,6 +38,7 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
 
   function rcStepper(run) {
     var status = run ? run.status : null;
+    if (!run) return '';
     var stage = RC_STAGE[status] != null ? RC_STAGE[status] : rc.stage;
     var settled = !!status && !RUN_ACTIVE[status];
     var failed = status === 'failed' || status === 'aborted';
@@ -60,15 +61,19 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
     $('rc-task').textContent = rc.taskId || '';
     $('rc-title').textContent = task ? task.title : '';
     $('rc-steps').innerHTML = rcStepper(run);
-    $('rc-abort').disabled = !isRunActive(run);
+    $('rc-abort').hidden = !isRunActive(run);
+    $('rc-steps').hidden = !run;
+    $('rc-foot').hidden = !run;
     $('rc-elapsed').textContent = mmss(elapsedOf(run) || 0);
     $('rc-clock').textContent = $('rc-elapsed').textContent;
     syncInspectorStatus(run);
     $('rc-bytes').textContent = formatBytes((run && run.logBytes) || 0);
-    var gate = 'Idle';
+    $('rc-bytes-wrap').hidden = !(run && run.logBytes > 0);
+    var gate = '';
     if (run && run.verification) gate = run.verification.success ? 'Passed' : 'Failed';
     else if (run && run.status === 'verifying') gate = 'Running';
     $('rc-gate').textContent = gate;
+    $('rc-gate-wrap').hidden = !gate;
     // Native runs report grounded usage; cli runs have none to show.
     var usage = run && run.usage;
     $('rc-spend-wrap').hidden = !usage;
@@ -81,7 +86,7 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
     if (run && !isRunActive(run)) {
       exit = RUN_LABEL[run.status] || run.status;
       if (typeof run.exitCode === 'number') exit += ' (exit ' + run.exitCode + ')';
-      if (run.error) exit += ' · ' + run.error;
+      if (run.error) exit += ', ' + run.error;
     }
     $('rc-exit').textContent = exit;
   }
@@ -148,7 +153,7 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
     return api('/api/pipeline/worktrees/diff?taskId=' + encodeURIComponent(taskId)).then(function (body) {
       if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
       var files = Array.isArray(body.filesChanged) ? body.filesChanged : [];
-      var summary = '<code>' + esc(body.branch || '') + '</code> · ' + (body.hasChanges ? files.length + ' uncommitted file' + (files.length === 1 ? '' : 's') : 'working tree clean');
+      var summary = '<code>' + esc(body.branch || '') + '</code>, ' + (body.hasChanges ? files.length + ' uncommitted file' + (files.length === 1 ? '' : 's') : 'working tree clean');
       setDiffState(summary, files, body.diff ? diffToHtml(body.diff) : '<span class="rc-empty">No uncommitted changes in this worktree yet.</span>', files.length);
     }, function (e) {
       if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
@@ -196,10 +201,11 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
 
   // Inspector header status: dot color follows the run state only.
   function syncInspectorStatus(run) {
-    var st = run ? run.status : '';
-    var tone = !st ? 'idle' : st === 'completed' ? 'ok' : (st === 'failed' || st === 'aborted') ? 'err' : 'run';
+    var task = rc.taskId ? taskById(rc.taskId) : null;
+    var bucket = Studio.status.runBucket(run) || (task ? Studio.status.bucket(task) : 'next');
+    var tone = { done: 'ok', stuck: 'err', running: 'run' }[bucket] || 'idle';
     $('rc-status').setAttribute('data-tone', tone);
-    $('rc-status-text').textContent = st ? (RUN_LABEL[st] || st) : 'Idle';
+    $('rc-status-text').textContent = Studio.status.word(bucket);
   }
 
   // Below 1024px the inspector is a modal sheet over the content.

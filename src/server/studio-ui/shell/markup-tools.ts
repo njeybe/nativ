@@ -17,16 +17,21 @@ export const markupTools = String.raw`</main>
   <header class="rc-head">
     <div class="rc-id-row">
       <code class="rc-task" id="rc-task"></code>
-      <span class="rc-status" id="rc-status"><span class="rc-dot" aria-hidden="true"></span><span id="rc-status-text">Idle</span></span>
+      <span class="rc-status" id="rc-status"><span class="rc-dot" aria-hidden="true"></span><span id="rc-status-text">Up next</span></span>
       <code class="rc-clock" id="rc-clock">00:00</code>
     </div>
     <span class="rc-title" id="rc-title"></span>
     <ol class="rc-steps" id="rc-steps" aria-label="Runner lifecycle"></ol>
     <div class="rc-controls">
-      <button class="rc-btn danger" type="button" id="rc-abort" aria-label="Abort the running agent">Abort</button>
-      <button class="rc-btn" type="button" id="rc-open-diff" aria-label="Open the worktree diff">Open diff</button>
-      <button class="rc-btn" type="button" id="rc-autoscroll" aria-pressed="true" aria-label="Toggle console auto-scroll">Auto-scroll</button>
-      <button class="rc-btn" type="button" id="rc-clear" aria-label="Clear the console buffer">Clear</button>
+      <button class="rc-btn danger" type="button" id="rc-abort" aria-label="Stop the running agent" hidden>Stop</button>
+      <span class="rc-more">
+        <button class="rc-btn" type="button" id="rc-more" aria-haspopup="true" aria-expanded="false" aria-controls="rc-more-menu">More</button>
+        <div class="rc-menu" id="rc-more-menu" hidden>
+          <button class="rc-btn" type="button" id="rc-open-diff" aria-label="Open the worktree diff">Open diff</button>
+          <button class="rc-btn" type="button" id="rc-clear" aria-label="Clear the console buffer">Clear</button>
+          <button class="rc-btn" type="button" id="rc-autoscroll" aria-pressed="true" aria-label="Toggle console auto-scroll">Auto-scroll</button>
+        </div>
+      </span>
       <button class="rc-btn" type="button" id="rc-minimize" aria-expanded="true" aria-controls="rc-body" aria-label="Collapse the inspector">Collapse</button>
       <button class="rc-btn" type="button" id="rc-close" aria-label="Close the runner console">Close</button>
     </div>
@@ -46,12 +51,12 @@ export const markupTools = String.raw`</main>
     <pre class="rc-diff-body" id="rc-diff-body" aria-label="Unified diff" tabindex="0"></pre>
   </div>
   <div class="rc-heal" id="rc-heal" role="tabpanel" aria-labelledby="rc-tab-heal" tabindex="0" hidden></div>
-  <footer class="rc-foot">
+  <footer class="rc-foot" id="rc-foot" hidden>
     <span>Elapsed <strong id="rc-elapsed">00:00</strong></span>
-    <span>Output <strong id="rc-bytes">0 B</strong></span>
+    <span id="rc-bytes-wrap" hidden>Output <strong id="rc-bytes">0 B</strong></span>
     <span id="rc-spend-wrap" hidden>Spend <strong id="rc-spend">$0.0000</strong></span>
     <span id="rc-cache-wrap" hidden>Cache hit <strong id="rc-cache">0%</strong></span>
-    <span>Gatekeeper <strong id="rc-gate">Idle</strong></span>
+    <span id="rc-gate-wrap" hidden>Gatekeeper <strong id="rc-gate"></strong></span>
     <span id="rc-exit"></span>
   </footer>
 </section>
