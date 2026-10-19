@@ -43,6 +43,12 @@ const fixture = api(
   ],
 );
 
+// A stale claim (over 4 hours, no run) is not running work.
+const stale = api([{ ...task('s-1', 'devops-agent', 'in_progress'), claimedAt: iso(300) }]);
+const staleHtml = renderPage('team', stale);
+const sRow = staleHtml.slice(staleHtml.indexOf('<tr data-agent="devops-agent"'));
+assert.ok(!/Running/.test(sRow.slice(0, sRow.indexOf('</tr>'))), 'stale task row does not say Running');
+
 const html = renderPage('team', fixture);
 const rowOf = (agent) => {
   const start = html.indexOf('<tr data-agent="' + agent + '"');

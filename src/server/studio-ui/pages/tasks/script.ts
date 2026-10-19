@@ -121,7 +121,8 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
 
   function metaHtml(t, fmt) {
     if (t.status === 'completed') {
-      return '<span>' + ui.esc(fmt.ago(t.endT)) + '</span>' + (t.durationMs ? '<span>took ' + ui.esc(fmt.dur(t.durationMs)) + '</span>' : '');
+      var took = t.durationMs ? '<span>took ' + ui.esc(fmt.dur(t.durationMs)) + '</span>' : '';
+      return '<span>' + ui.esc(fmt.ago(t.endT)) + '</span>' + took;
     }
     if (t.status === 'in_progress') {
       var live = t.startT ? '<span data-since="' + t.startT + '">' + fmt.dur(Studio.now() - t.startT) + '</span>' : '';
@@ -130,7 +131,7 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
     if (t.status === 'blocked') {
       return '<span class="bad">Paused after ' + (t.attempt || t.maxAttempts) + ' of ' + t.maxAttempts + ' attempts</span>';
     }
-    if (t.waitingOn.length) return '<span>Waits for ' + t.waitingOn.map(ui.esc).join(', ') + '</span>';
+    if (t.waitingOn.length && !t.stale) return '<span>Waits for ' + t.waitingOn.map(ui.esc).join(', ') + '</span>';
     return '<span>Ready to start</span>';
   }
 
@@ -141,7 +142,8 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
   }
 
   function column(label, status, list, shown, extra, fmt) {
-    var body = shown.map(function (t) { return card(t, fmt); }).join('');
+    var body = shown.length ? shown.map(function (t) { return card(t, fmt); }).join('')
+      : '<p class="col-empty">None</p>';
     return '<div class="col" data-col="' + status + '"><div class="col-head">' + ui.statusIcon(status) + label +
       '<span class="count">' + list.length + '</span></div>' + body + (extra || '') + '</div>';
   }
@@ -154,13 +156,10 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
       ? '<button type="button" class="more" data-act="tasks-more">' + (view.showAll ? 'Show fewer' : 'Show all ' + done.length) + '</button>' : '';
     var lanes = [['Up next', 'pending', by('pending'), null], ['Running', 'in_progress', by('in_progress'), null],
       ['Done', 'completed', done, shown], ['Stuck', 'blocked', by('blocked'), null]];
-    var empty = [];
     var cols = lanes.map(function (l) {
-      if (!l[2].length) { empty.push(l[0]); return ''; }
       return column(l[0], l[1], l[2], l[3] || l[2], l[1] === 'completed' ? more : '', fmt);
     }).join('');
-    var note = empty.length ? '<p class="board-empty faint">Empty right now: ' + empty.join(', ') + '.</p>' : '';
-    return '<div class="board">' + cols + '</div>' + note;
+    return '<div class="board">' + cols + '</div>';
   }
 
   function histRow(m, fmt) {

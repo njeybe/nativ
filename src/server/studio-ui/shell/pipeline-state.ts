@@ -117,7 +117,6 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
     return main;
   }
 
-  /** Newest Just-finished style helpers live in pages; here only what the runner tools need. */
   var RUN_LABEL = {
     spawning_worktree: 'Running', running: 'Running', verifying: 'Running', merging: 'Running',
     completed: 'Done', failed: 'Stuck', aborted: 'Up next'

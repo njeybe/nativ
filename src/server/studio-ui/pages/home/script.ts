@@ -24,7 +24,7 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     var t = item.task;
     if (t.status === 'blocked') return t.reason || 'Paused after 3 attempts.';
     var e = item.escalation || {};
-    return e.reason || e.summary || e.details || 'Waiting for your decision.';
+    return e.reason || e.summary || e.details || 'Needs your decision.';
   }
 
   function needActions(item) {

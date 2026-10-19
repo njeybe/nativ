@@ -54,7 +54,7 @@ export const databaseDataScript = String.raw`  // ─── View 5: Database Stu
     if (!s) return '<span class="pill"><span class="dot"></span><b>' + label + ':</b> loading…</span>';
     if (!s.connected) {
       if (/No (Dev|Prod) database configured/.test(s.error || '')) {
-        return '<span class="pill"><span class="dot"></span><b>' + label + ':</b> Not set up ' +
+        return '<span class="pill"><span class="dot"></span><b>' + label + ':</b> ' +
           '<span class="badge badge-neutral">Not set up</span></span>';
       }
       return '<span class="pill" title="' + esc(s.error || '') + '"><span class="dot off"></span><b>' + label + ':</b> offline' +

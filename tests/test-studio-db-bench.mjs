@@ -11,7 +11,8 @@ for (const f of files) assert.ok(!read(f).includes(' · '), `${f} has a middle-d
 
 const shell = read('database/data-shell.ts');
 assert.match(shell, /Not set up/);
-assert.match(shell, /dot"><\/span><b>' \+ label \+ ':<\/b> Not set up/, 'Not set up uses a plain dot');
+assert.match(shell, /dot"><\/span><b>' \+ label \+ ':<\/b> ' \+\s+'<span class="badge badge-neutral">Not set up/, 'plain dot');
+assert.equal((shell.match(/Not set up/g) || []).length, 1, 'Not set up shown once in the pill');
 assert.match(shell, /badge-neutral">Not set up/);
 assert.ok(!/not configured' : 'offline'/.test(shell), 'old red not-configured path remains');
 assert.match(read('database/connection.ts'), /Not set up/);

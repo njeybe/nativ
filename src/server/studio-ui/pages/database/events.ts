@@ -123,8 +123,7 @@ export const databaseEventsScript = String.raw`  // ─── Events: Database S
       return;
     }
     var action = el.getAttribute('data-action');
-    if (action === 'open-settings') openSettings();
-    else if (action === 'copy-sql') copyText(state.sql, el);
+    if (action === 'copy-sql') copyText(state.sql, el);
     else if (action === 'edit-record') openEditRecordModal(Number(el.getAttribute('data-row')));
     else if (action === 'delete-record') handleDeleteRecord(Number(el.getAttribute('data-row')));
     else if (action === 'preview-url') {

@@ -78,11 +78,23 @@ assert.ok(/Running <span data-since="\d+">/.test(html), 'live timer');
 assert.ok(html.includes('Paused after 3 of 3 attempts'));
 assert.ok(!/<button[^>]*data-act="task-/.test(html), 'no action buttons on cards');
 
+// A stale claim (over 4 hours, no run) sits in Up next, not Running.
+const staleApi = { milestones: [{ id: 'm8', name: 'Stale', tasks: [
+  { ...task('stale-1', 'in_progress'), claimedAt: iso(300) }] }] };
+html = renderPage('tasks', staleApi, B);
+assert.deepEqual(idsIn(html, 'pending'), ['stale-1'], 'stale claim lands in Up next');
+assert.deepEqual(idsIn(html, 'in_progress'), [], 'stale claim is not running');
+assert.ok(!/data-since|Waits for/.test(html), 'stale card has no timer or waits text');
+
 // Empty columns.
 const lone = { milestones: [{ id: 'm9', name: 'Solo', tasks: [task('x', 'pending')] }] };
 html = renderPage('tasks', lone, B);
-assert.ok(html.includes('Empty right now: Running, Done, Stuck.'), 'empty lanes folded into one line');
-assert.ok(!html.includes('data-col="completed"') && !html.includes('Nothing queued'), 'empty lanes left out');
+for (const col of ['pending', 'in_progress', 'completed', 'blocked']) {
+  assert.ok(html.includes('data-col="' + col + '"'), 'lane ' + col + ' renders');
+}
+for (const name of ['Up next', 'Running', 'Done', 'Stuck']) assert.ok(html.includes(name), name);
+assert.equal((html.match(/class="col-empty">None</g) || []).length, 3, 'empty lanes show None');
+assert.ok(!html.includes('Empty right now'), 'no empty-lanes note');
 assert.ok(!html.includes('Just finished'), 'lane renamed');
 assert.ok(!html.includes('Other milestones'), 'no other milestones section when alone');
 

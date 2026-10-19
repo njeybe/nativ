@@ -130,5 +130,5 @@ export const shellCss = String.raw`/* Layout */
   .drawer { width: 100%; }
   #runner-console-drawer { inset: auto 0 0 0; }
 }
-@media (prefers-reduced-motion: reduce) { .pulse, .live-dot.flash, #pulse .pdot { animation: none !important; } * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .pulse, .live-dot.flash { animation: none !important; } * { transition: none !important; } }
 `;
