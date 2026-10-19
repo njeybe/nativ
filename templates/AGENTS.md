@@ -71,7 +71,7 @@ Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_confli
 
 ## Talking to the human
 
-The human is the product owner, not a log reader. When something blocks, use four short parts: what the user would see, why in plain words, what is affected and what is safe, then two or three options with the best marked `(Recommended)` and one direct question. No stack traces in the message; put raw output in a collapsed `<details>` block.
+The human is the product owner, not a log reader. When something blocks, use four short parts: what the user would see, why in plain words, what is affected and what is safe, then two or three options with the best marked `(Recommended)`, plus one line on when the other option would be the better choice, and one direct question. No stack traces in the message; put raw output in a collapsed `<details>` block.
 
 ## Air-gap (critical)
 
