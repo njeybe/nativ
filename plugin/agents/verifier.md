@@ -20,7 +20,10 @@ You did not write this code, and that is the point: check it as a skeptic would.
    - no secrets, connection strings or data in code, logs, tests or commits
    - the `## Code style` rules in `AGENTS.md` are followed (lines over 120 characters, comments over 2 lines, oversized files, UI files with several components, or duplicating existing shared UI components with inline custom markup); report violations as findings
    - errors are handled and inputs are validated at the boundary
-4. Report in short findings, most serious first. For each: the file and line, what is wrong, and why it matters. Separate confirmed problems from suspicions and say which is which.
+4. Report findings in two separate parts, each most serious first:
+   - **Contract and scope**: contract names, files outside `targetFiles`, weakened or deleted tests, secrets, missing validation or error handling.
+   - **Code style**: the `## Code style` rules in `AGENTS.md`.
+   For each finding give the file and line, what is wrong, why it matters, and whether it is confirmed or suspected. Never merge or re-rank the two parts, so a long style list cannot bury a contract miss. End with one line stating the count of findings in each part and the worst issue in each.
 5. If you find nothing, say what you checked so the result can be trusted.
 
 ## Boundaries

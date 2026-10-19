@@ -101,6 +101,10 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
     assert.ok(!/\b(Edit|Write|MultiEdit|NotebookEdit)\b/.test(tools), `the ${agent} stays read-only`);
   }
   assert.equal(frontmatter(read(`${PLUGIN_DIR}/agents/explorer.md`)).tools, 'Read, Grep, Glob', 'the explorer cannot run commands or nativ tools');
+  const verifierText = read(`${PLUGIN_DIR}/agents/verifier.md`);
+  for (const part of ['Contract and scope', 'Code style']) {
+    assert.ok(verifierText.includes(part), `the verifier reports the "${part}" part separately`);
+  }
   console.log('✔ Test 5: plugin agents mirror the templates and use the plugin MCP prefix');
 }
 
