@@ -6,10 +6,11 @@ export const pulseScript = String.raw`  // ─── Pulse strip ─────
     if (!s.loaded) return { kind: 'loading', text: '-- -- -- --' };
     var counts = [
       { key: 'running', label: 'running', n: s.running, tone: 'run' },
-      { key: 'blocked', label: 'blocked', n: s.blocked, tone: 'bad' },
-      { key: 'decisions', label: 'decisions', n: s.decisions, tone: 'warn' }
+      { key: 'stuck', label: 'stuck', n: s.blocked, tone: 'bad' },
+      { key: 'decisions', label: s.decisions === 1 ? 'decision' : 'decisions', n: s.decisions, tone: 'warn' }
     ];
-    counts.forEach(function (c) { c.zero = !c.n; });
+    counts = counts.filter(function (c) { return c.n > 0; });
+    counts.forEach(function (c) { c.zero = false; });
     return { kind: 'ready', ms: s.ms, counts: counts };
   }
 
@@ -17,11 +18,10 @@ export const pulseScript = String.raw`  // ─── Pulse strip ─────
     if (p.kind !== 'ready') {
       return '<span class="pulse-note ' + p.kind + '">' + esc(p.text) + '</span>';
     }
+    if (!p.counts.length) return '';
     var out = '<span class="pulse-ms num">' + esc(p.ms) + '</span>';
     p.counts.forEach(function (c) {
-      var tone = c.zero ? 'zero' : c.tone;
-      out += '<button type="button" class="pulse-item ' + tone + '" data-pulse="' + c.key + '">' +
-        (c.zero ? '' : '<span class="pdot"></span>') +
+      out += '<button type="button" class="pulse-item ' + c.tone + '" data-pulse="' + c.key + '">' +
         '<span class="num">' + c.n + '</span> ' + c.label + '</button>';
     });
     return out;
@@ -49,10 +49,11 @@ export const pulseScript = String.raw`  // ─── Pulse strip ─────
     var html = pulseHtml(pulseParts(pulseInput()));
     if (pulseEl.__html === html) return;
     pulseEl.innerHTML = html;
+    pulseEl.hidden = !html;
     pulseEl.__html = html;
   }
 
-  // Studio.taskFilter ('running' or 'blocked') is read by the Tasks page when it opens.
+  // Studio.taskFilter ('running' or 'stuck') is read by the Tasks page when it opens.
   if (pulseEl) pulseEl.addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('[data-pulse]') : null;
     if (!b) return;

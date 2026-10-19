@@ -35,11 +35,16 @@ assert.ok(/^-/.test(loading.text));
 
 const zero = plain(parts(base));
 assert.equal(zero.kind, 'ready');
-assert.ok(zero.counts.every((c) => c.zero));
+assert.equal(zero.counts.length, 0, 'zero counts are dropped');
+const html0 = vm.runInContext(`${pulseScript}; pulseHtml`, ctx);
+assert.equal(html0(zero), '', 'all zero renders nothing');
 
 const busy = plain(parts({ ...base, running: 2, blocked: 1 }));
-assert.deepEqual(busy.counts.map((c) => [c.key, c.zero, c.tone]),
-  [['running', false, 'run'], ['blocked', false, 'bad'], ['decisions', true, 'warn']]);
+assert.deepEqual(busy.counts.map((c) => [c.key, c.label, c.tone]),
+  [['running', 'running', 'run'], ['stuck', 'stuck', 'bad']]);
+const one = plain(parts({ ...base, decisions: 1 }));
+assert.equal(one.counts[0].label, 'decision');
+assert.ok(!html0(busy).includes('pdot'), 'no status dots');
 assert.equal(busy.ms, 'm2 3/7');
 
 const off = plain(parts({ ...base, offline: true, running: 5 }));
@@ -57,6 +62,11 @@ const shellDir = new URL('../src/server/studio-ui/shell/', import.meta.url);
 for (const f of ['format.ts', 'pipeline-state.ts']) {
   assert.ok(!readFileSync(new URL(f, shellDir), 'utf8').includes('–'), `${f}: no en dash`);
 }
+
+const shellCss = readFileSync(new URL('../src/server/studio-ui/styles/shell.ts', import.meta.url), 'utf8');
+assert.ok(!shellCss.includes('break-all'), 'no break-all in shell CSS');
+const sideSrc = readFileSync(new URL('../src/server/studio-ui/shell/sidebar-view.ts', import.meta.url), 'utf8');
+assert.ok(!sideSrc.includes('benchmarkText'), 'no benchmarks badge');
 
 for (const [name, src] of [['pulse', pulseScript], ['paint', paintScript], ['dispatch', dispatchScript]]) {
   assert.ok(!src.includes('`'), `${name}: no backticks`);

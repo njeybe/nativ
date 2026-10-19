@@ -5,15 +5,14 @@ export const sidebarViewScript = String.raw`  // ─── Sidebar markup (pure)
   function navBadges(env) {
     var badges = {}, model = env.model;
     if (model && model.needsYou.length) badges.home = ['warn', model.needsYou.length];
-    var ready = model ? model.tasks.filter(function (t) { return t.status === 'pending' && t.isAvailable; }).length : 0;
+    var ready = model ? model.tasks.filter(Studio.status.isReady).length : 0;
     var active = model ? model.running.length + ready : 0;
     if (active) badges.tasks = [model.running.length ? 'run' : '', active];
     if (env.worktreeCount != null) badges.worktrees = ['', env.worktreeCount];
-    if (env.benchmarkText) badges.benchmarks = ['', env.benchmarkText];
     return badges;
   }
 
-  /** env = { model, view, worktreeCount, benchmarkText }. */
+  /** env = { model, view, worktreeCount }. */
   Studio.sidebarHtml = function (env) {
     var badges = navBadges(env);
     var item = function (p) {

@@ -25,9 +25,9 @@ export const dispatchScript = String.raw`  // ─── Autonomous dispatch: POS
     pipe.busy[key] = 'abort';
     refreshUi([]);
     postJson('/api/pipeline/tasks/abort', { taskId: taskId, reason: 'Aborted from Nativ Studio' }).then(function () {
-      toast('Abort signal sent to ' + taskId, 'ok');
+      toast('Stop signal sent to ' + taskId, 'ok');
     }, function (e) {
-      toast('Could not abort ' + taskId + ': ' + e.message);
+      toast('Could not stop ' + taskId + ': ' + e.message);
     }).then(function () {
       delete pipe.busy[key];
       return fetchPipeline(['status', 'tasks', 'runs']);
@@ -47,9 +47,9 @@ export const dispatchScript = String.raw`  // ─── Autonomous dispatch: POS
 
   function confirmAbort(taskId) {
     confirmDialog({
-      title: 'Abort agent run',
+      title: 'Stop agent run',
       body: 'Terminate the Claude process tree for ' + taskId + '? The isolated worktree and its branch are left in place so the partial work can be inspected.',
-      confirmLabel: 'Abort Run',
+      confirmLabel: 'Stop',
       danger: true
     }, function () { runAbort(taskId); });
   }
@@ -152,14 +152,15 @@ export const dispatchScript = String.raw`  // ─── Autonomous dispatch: POS
   function syncDispatchNext() {
     var m = Studio.model;
     if (!m) return;
-    var t = m.tasks.filter(function (x) { return x.status === 'pending' && x.isAvailable; })[0];
+    var t = m.tasks.filter(function (x) { return Studio.status.isReady(x); })[0];
     var key = t ? t.id : '';
     if (key === nextSeen) return;
     nextSeen = key;
     nextId = t ? t.id : null;
-    nextBtn.disabled = !t;
-    $('dispatch-next-label').textContent = t ? 'Dispatch ' + t.id : 'Nothing ready';
-    nextBtn.title = t ? 'Open the dispatch dialog for ' + t.id : 'No pending task has its dependencies met';
+    nextBtn.hidden = !t;
+    if (!t) return;
+    $('dispatch-next-label').textContent = 'Dispatch ' + t.id;
+    nextBtn.title = 'Open the dispatch dialog for ' + t.id;
   }
   nextBtn.addEventListener('click', function () { if (nextId) openDispatchDialog(nextId); });
   Studio.onPaint(syncDispatchNext);
