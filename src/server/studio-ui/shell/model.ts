@@ -2,6 +2,7 @@
 export const modelScript = String.raw`  // ─── Studio client model: buildModel(api) is pure ──────────────────────────
   var RUN_ACTIVE = { spawning_worktree: 1, running: 1, verifying: 1, merging: 1 };
   function isRunActive(run) { return !!run && !!RUN_ACTIVE[run.status]; }
+  var STALE_MS = 4 * 3600 * 1000;
 
   /** Text before the first colon, at most 46 characters. */
   function shortName(name) {
@@ -46,6 +47,8 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     if (startT == null && run && isRunActive(run)) startT = toTime(run.startedAt);
     var cost = b && b.actual ? positive(b.actual.costUsd) : null;
     if (cost == null && b && b.estimated) cost = positive(b.estimated.costUsd);
+    var claimT = toTime(t.claimedAt);
+    var stale = running && claimT != null && Studio.now() - claimT > STALE_MS && !isRunActive(run);
     return {
       id: t.id,
       title: t.title || t.id,
@@ -62,6 +65,8 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       reason: t.status === 'blocked' && t.notes ? String(t.notes).replace(/^\s+|\s+$/g, '') || null : null,
       attempt: attemptsOf(t, running),
       maxAttempts: (t.circuitBreaker && t.circuitBreaker.maxThreshold) || 3,
+      claimT: claimT,
+      stale: stale,
       startT: startT,
       endT: t.status === 'completed' && b ? toTime(b.completedAt) : null,
       durationMs: b ? positive(b.durationMs) : null,
@@ -175,7 +180,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       tasks: tasks,
       byId: byId,
       activeMilestoneId: active,
-      running: tasks.filter(function (t) { return t.status === 'in_progress'; }),
+      running: tasks.filter(function (t) { return t.status === 'in_progress' && !t.stale; }),
       stuck: tasks.filter(function (t) { return t.status === 'blocked'; }),
       needsYou: needsYouItems(tasks, byId, api.escalations),
       summary: summaryOf(api, milestones, tasks)

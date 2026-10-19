@@ -25,7 +25,34 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
     });
   }
 
-  var STATUS_LABEL = { completed: 'Done', in_progress: 'Running', pending: 'Up next', blocked: 'Stuck' };
+  var BUCKETS = [['next', 'Up next'], ['running', 'Running'], ['done', 'Done'], ['stuck', 'Stuck']];
+  var BUCKET_WORD = {};
+  BUCKETS.forEach(function (b) { BUCKET_WORD[b[0]] = b[1]; });
+  var STATUS_BUCKET = { completed: 'done', in_progress: 'running', pending: 'next', blocked: 'stuck' };
+  var STATUS_LABEL = {};
+  Object.keys(STATUS_BUCKET).forEach(function (k) { STATUS_LABEL[k] = BUCKET_WORD[STATUS_BUCKET[k]]; });
+  var RUN_BUCKET = { spawning_worktree: 'running', running: 'running', verifying: 'running',
+    merging: 'running', completed: 'done', failed: 'stuck', aborted: 'next' };
+
+  var status = {
+    buckets: BUCKETS,
+    isReady: function (t) {
+      return t.status === 'pending' && (!!t.isAvailable || !(t.waitingOn || []).length);
+    },
+    bucket: function (t) {
+      if (t.status === 'completed') return 'done';
+      if (t.status === 'in_progress') return t.stale ? 'next' : 'running';
+      if (t.status === 'blocked') return 'stuck';
+      return 'next';
+    },
+    runBucket: function (run) { return run ? (RUN_BUCKET[run.status] || null) : null; },
+    word: function (key) { return BUCKET_WORD[key] || STATUS_LABEL[key] || 'Unknown'; },
+    waitText: function (t) {
+      if (t.status !== 'pending' || status.isReady(t)) return '';
+      var n = (t.waitingOn || []).length;
+      return n === 1 ? 'Waits for 1 task' : 'Waits for ' + n + ' tasks';
+    }
+  };
   var AGENTS = {
     'backend': ['Backend', '--ag-backend'],
     'frontend': ['Frontend', '--ag-frontend'],
@@ -119,7 +146,8 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
       if (!model) return '';
       var current = Studio.state.milestoneId;
       var opts = model.milestones.slice().reverse().map(function (m) {
-        var text = m.id + ' · ' + m.short + ' (' + m.done + '/' + m.total + ')' + (m.id === model.activeMilestoneId ? ' · active' : '');
+        var count = m.done + '/' + m.total + (m.id === model.activeMilestoneId ? ', active' : '');
+        var text = m.id + ' ' + m.short + ' (' + count + ')';
         return '<option value="' + esc(m.id) + '"' + (m.id === current ? ' selected' : '') + '>' + esc(text) + '</option>';
       }).join('');
       return '<select class="sel" data-ms-select aria-label="Milestone">' + opts + '</select>';
@@ -137,6 +165,7 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
 
   Studio.fmt = fmt;
   Studio.ui = ui;
+  Studio.status = status;
   Studio.agentInfo = agentInfo;
   Studio.statusLabel = function (status) { return STATUS_LABEL[status] || 'Unknown'; };
 
