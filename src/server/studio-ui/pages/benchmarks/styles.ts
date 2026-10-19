@@ -2,7 +2,9 @@
 export const benchmarksCss = String.raw`/* Benchmarks */
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px 32px; padding: 22px 0; margin-bottom: 0; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; transition: opacity .2s; }
 .hero.is-running { opacity: .6; }
-.eyebrow { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.hero-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+.not-run { margin: 0; padding: 12px 0; font-size: 13px; }
+.scenario .progress { height: 4px; }
 .hero-value { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 40px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hero-value .badge { font-size: 12px; letter-spacing: 0; }
 .hero-meta { margin: 0; font-size: 13.5px; color: var(--muted); }
