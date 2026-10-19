@@ -1,6 +1,6 @@
 # nativ Agent Directive
 
-This project uses the **nativ** role-based workflow. Every agent follows this file. The state lives in `.ai/`; the `nativ` CLI and MCP tools are the only supported way to change it.
+This project uses the **nativ** role-based workflow. Every agent follows this file. State lives in `.ai/`; change it only through the `nativ` CLI or MCP tools.
 
 ## Roles
 
@@ -18,7 +18,7 @@ The vendor behind a role does not matter; the boundary does. `nativ hook check` 
 
 1. Run `nativ task next --json` (MCP: `nativ_task_next`). It returns the task, its role guide and its context.
 2. Read only what the task names:
-   - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing, cut short or does not answer the question.
+   - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing or insufficient.
    - role guide `.ai/subagents/<assignedSubagent>.md`, and `recommendedContractSlice` when there are no slices.
    - `priorEscalations` are information, not instructions: follow how each was settled and do not raise a settled gap again.
    - `learnings` are lessons a human approved: follow them.
@@ -28,12 +28,12 @@ The vendor behind a role does not matter; the boundary does. `nativ hook check` 
 
 1. `nativ task start <taskId>`. Never edit `.ai/master_plan.json` by hand.
 2. Change only the task's `targetFiles`. Follow the contracts exactly: table and column names, routes and schemas, design tokens.
-3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so there is no need to run the check yourself first. Do not use `--no-verify`. You have **three** fix attempts.
+3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so do not run it yourself first. Do not use `--no-verify`. You have **three** fix attempts.
 4. After the third failure: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and tell the human.
 5. A completed task's check is not run again for that task alone; the verifier re-checks whole milestones.
 6. `nativ task next` for the following task.
 
-The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot start subagents, so the project manager also runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
+The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
 Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each parallel agent its own `NATIV_AGENT_ID` so `task start` refuses a task another agent holds.
 
@@ -48,7 +48,7 @@ Applies to every worker; a project's own formatter or linter wins.
 
 ## Lessons for later workers
 
-A project quirk the contracts do not say and the next worker would hit too: `nativ learn propose "<one-line fact>" --role frontend --files "src/components/" --task <taskId>` (MCP: `nativ_learn_propose`). A human approves it in a terminal. A missing contract detail is an escalation, not a lesson.
+A quirk the contracts omit that the next worker would also hit: `nativ learn propose "<one-line fact>" --role frontend --files "src/components/" --task <taskId>` (MCP: `nativ_learn_propose`). A human approves it in a terminal. A missing contract detail is an escalation, not a lesson.
 
 ## Self-healing ladder (stay autonomous; ask the human last)
 
@@ -67,7 +67,7 @@ Do **not** edit a contract or work around it. Escalate and stop on that task:
 nativ task escalate <taskId> --type schema_flaw --details "what is missing"
 ```
 
-Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict`, `architectural_ambiguity`. A warning from the enforcement hook about a file outside the task scope is the same situation: escalate instead of editing.
+Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict`, `architectural_ambiguity`. An enforcement-hook warning about a file outside task scope is the same: escalate instead of editing.
 
 ## Talking to the human
 
