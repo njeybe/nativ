@@ -3,10 +3,11 @@ export const databaseConnectionScript = String.raw`  // ─── Database Studi
   function renderModalStatus() {
     ['dev', 'prod'].forEach(function (env) {
       var s = state.status && state.status[env];
-      $('mdot-' + env).className = 'dot ' + (s && s.connected ? 'on' : 'off');
+      var unset = !s || /No (Dev|Prod) database configured/.test(s.error || '');
+      $('mdot-' + env).className = 'dot ' + (s && s.connected ? 'on' : unset ? '' : 'off');
       $('current-' + env).innerHTML = s && s.maskedUrl
         ? 'Current: <code>' + esc(s.maskedUrl) + '</code><span class="copy-wrap"><span class="tooltip">Copied!</span><button class="btn small" type="button" data-copy-masked="' + env + '">Copy</button></span>'
-        : 'Current: <span class="muted">not configured</span>';
+        : 'Current: <span class="muted">Not set up</span>';
     });
   }
 
@@ -139,8 +140,8 @@ export const databaseConnectionScript = String.raw`  // ─── Database Studi
       if (r.success) {
         var count = r.entityCount != null ? r.entityCount : r.tableCount;
         out.className = 'result ok';
-        out.textContent = 'Connected to ' + (ENGINE_LABEL[r.engine] || r.engine) + ' in ' + Math.round(r.pingMs) + 'ms · ' + count + ' ' +
-          entityNoun({ engine: r.engine }, true).toLowerCase() + ' · saved to session as ' + r.maskedUrl;
+        out.textContent = 'Connected to ' + (ENGINE_LABEL[r.engine] || r.engine) + ' in ' + Math.round(r.pingMs) + 'ms, ' + count + ' ' +
+          entityNoun({ engine: r.engine }, true).toLowerCase() + ', saved to session as ' + r.maskedUrl;
         $('url-' + env).value = '';
         $('ppass-' + env).value = '';
         return true;
