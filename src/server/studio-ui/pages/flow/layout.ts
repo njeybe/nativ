@@ -1,5 +1,5 @@
 // Plan layout: rounds, lanes, links and the highlight set. Pure, no DOM.
-export const flowLayoutScript = String.raw`  var FLOW = { W: 206, H: 58, GX: 52, GY: 10, PAD: 14, LX: 128, TOP: 30 };
+export const flowLayoutScript = String.raw`  var FLOW = { W: 206, H: 74, GX: 52, GY: 10, PAD: 14, LX: 128, TOP: 30 };
 
   function flowAgentKey(t) { return t.agent || 'unassigned'; }
 

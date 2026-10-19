@@ -25,7 +25,7 @@ export const flowCss = String.raw`#panel-flow .seg { display: inline-flex; borde
 #panel-flow .node .l1 { display: flex; align-items: center; gap: 6px; }
 #panel-flow .node .l1 .d { margin-left: auto; font: 11px var(--mono); color: var(--fg-3); }
 #panel-flow .node .l1 .mono { font-size: 11px; }
-#panel-flow .node .title { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#panel-flow .node .title { font-size: 12.5px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 #panel-flow .canvas.focus .node:not(.hot) { opacity: .3; }
 #panel-flow .node.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 #panel-flow .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--fg-2); align-items: center; }

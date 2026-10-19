@@ -51,7 +51,7 @@ export const flowTimelineScript = String.raw`  function flowStat(k, v, s) {
     var cw = t.checkMs && t.status === 'completed' ? Math.min(w, t.checkMs * tm.sg.k) : 0;
     var lx = w > 64 ? x1 + 6 : x2 + 4;
     var took = (t.status === 'in_progress' ? 'running' : 'took ' + fmt.dur(t.durationMs)) + (t.checkMs ? ', check ' + fmt.dur(t.checkMs) : '');
-    var tip = ui.esc(t.id + ' · ' + t.title) + '&#10;' + ui.esc(took);
+    var tip = ui.esc(t.id + ', ' + t.title) + '&#10;' + ui.esc(took);
     return '<g><rect class="bar-w ' + ui.esc(t.status) + '" data-task="' + ui.esc(t.id) + '" data-row="' + row + '" x="' + x1 + '" y="' + by +
       '" width="' + w + '" height="21" rx="4"><title>' + tip + '</title></rect>' +
       (cw > 1 ? '<rect class="bar-c" x="' + (x2 - cw) + '" y="' + (by + 17) + '" width="' + cw + '" height="4" rx="1"/>' : '') +
