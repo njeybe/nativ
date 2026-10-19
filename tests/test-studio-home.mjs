@@ -92,16 +92,21 @@ test('decision queue shows only when decisions exist', () => {
   assert.equal((q.match(/data-act="home-start"/g) || []).length, 2);
 });
 
-test('now running row with timer, log and Open console', () => {
-  const r = sec(renderPage('home', busyApi()), 'running');
+test('now running row with timer, log and Watch live only when a run exists', () => {
+  const noRun = sec(renderPage('home', busyApi()), 'running');
+  assert.doesNotMatch(noRun, /home-console/);
+  assert.doesNotMatch(noRun, /class="dot/);
+  const api = busyApi();
+  api.runs = [{ taskId: 'task-c', runId: 'r1', status: 'running' }];
+  const r = sec(renderPage('home', api), 'running');
   assert.match(r, /<span class="mono id">task-c<\/span>/);
   assert.match(r, /Running/);
   assert.match(r, new RegExp('data-since="' + (NOW - 2 * 60_000) + '">2m 00s<'));
   assert.match(r, /Writing the home page/);
-  assert.match(r, /data-act="home-console" data-id="task-c">Open console/);
+  assert.match(r, /data-act="home-console" data-id="task-c">Watch live</);
 });
 
-test('Open console and Dispatch call the shell task actions', () => {
+test('Watch live and Dispatch call the shell task actions', () => {
   const page = withActions(busyApi());
   page.act('home-console', 'task-c');
   page.act('home-dispatch', 'task-f');
@@ -115,10 +120,10 @@ test('idle state offers Dispatch for the next ready task', () => {
   assert.match(r, /data-act="home-dispatch" data-id="task-9"/);
 });
 
-test('up next: ready tasks dispatch, waiting tasks name what they wait on', () => {
+test('up next: ready tasks dispatch, waiting tasks say how many they wait for', () => {
   const u = sec(renderPage('home', busyApi()), 'next');
   assert.match(u, /data-act="home-dispatch" data-id="task-f">Dispatch</);
-  assert.match(u, /waits <span class="mono">task-c<\/span>/);
+  assert.match(u, /Waits for 1 task/);
   assert.doesNotMatch(u, /data-act="home-dispatch" data-id="task-d"/);
 });
 
@@ -131,12 +136,18 @@ test('milestone progress shows done of total with no filled track', () => {
   assert.doesNotMatch(rule, /background/);
 });
 
-test('recent activity lists at most 8 events newest first', () => {
+test('recent activity: one row per task, titles and state words', () => {
   const a = sec(renderPage('home', calmApi()), 'activity');
   const rows = [...a.matchAll(/data-event="([^"]+)"/g)].map((x) => x[1]);
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 7);
   assert.equal(rows[0], 'task-2');
   assert.match(a, /class="mono num when"/);
+  assert.match(a, /data-task="task-2">Title of task-2</);
+  assert.match(a, /Done, took 4m 00s/);
+  assert.doesNotMatch(a, />(completed|started)</);
+  const b = sec(renderPage('home', busyApi()), 'activity');
+  assert.match(b, /data-event="task-c"[^]*?Running/);
+  assert.match(b, /data-event="task-e"[^]*?Done, took 4m 00s/);
 });
 
 test('empty plan and loading copy', () => {
@@ -179,8 +190,8 @@ test('now running lists only running tasks', () => {
   assert.match(r, /1 running/);
   assert.doesNotMatch(r, /No agent is running/);
   assert.doesNotMatch(r, /task-a|task-e/);
-  assert.match(r, /frontend/);
-  assert.match(r, /class="dot run"/);
+  assert.match(r, />Frontend</);
+  assert.doesNotMatch(r, /class="dot/);
 });
 
 test('up next caps rows and puts ready tasks first', () => {
@@ -197,7 +208,7 @@ test('styles follow the Ink rules', () => {
   assert.match(css, /\.decisions \{[^}]*box-shadow: var\(--shadow\)/);
   assert.match(css, /\.decisions \{[^}]*border-radius: 6px/);
   assert.match(css, /\.row \{[^}]*min-height: 36px/);
-  assert.match(css, /max-width: 960px/);
+  assert.doesNotMatch(css, /960px|.dot/);
   assert.match(css, /@media \(max-width: 1024px\)/);
   assert.match(css, /\.progress i \{[^}]*height: 4px/);
   assert.doesNotMatch(css, /border-radius: 12px/);
