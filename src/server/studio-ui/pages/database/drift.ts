@@ -292,7 +292,7 @@ export const databaseDriftScript = String.raw`  // ─── Database Studio: dr
     var lang = state.scriptLang;
     var unit = lang === 'json' ? ' change(s)' : ' statement(s)';
     return '<div class="sql-wrap card"><div class="sql-head"><span class="muted"><span class="lang">' + LANG_LABEL[lang] + '</span>' +
-      (destructive ? '<span class="badge badge-dropped">DESTRUCTIVE</span> ' : '') + state.scriptCount + unit + ' · read-only preview</span>' +
+      (destructive ? '<span class="badge badge-dropped">DESTRUCTIVE</span> ' : '') + state.scriptCount + unit + ', read-only preview</span>' +
       '<span class="copy-wrap"><span class="tooltip">Copied!</span><button class="btn small" type="button" data-action="copy-sql">Copy ' +
       (lang === 'sql' ? 'SQL' : lang === 'js' ? 'Script' : 'JSON') + '</button></span></div>' +
       '<pre class="sql" tabindex="0" aria-label="Migration script (' + LANG_LABEL[lang] + ')"><code>' + highlightScript(state.sql, lang) + '</code></pre></div>';

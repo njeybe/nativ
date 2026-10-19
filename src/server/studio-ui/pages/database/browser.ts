@@ -168,7 +168,7 @@ export const databaseBrowserScript = String.raw`  // ─── Database Studio: 
     table.columns.forEach(function (col) {
       var isPk = col.primaryKey;
       var fieldLabel = esc(col.name) + (isPk ? ' (Primary Key - Optional/Auto)' : '');
-      var placeholder = col.type + (col.default ? ' · default: ' + col.default : '');
+      var placeholder = col.type + (col.default ? ', default: ' + col.default : '');
       var isLong = /json|map|array|text/i.test(col.type);
       if (isLong) {
         html += '<div class="field field-full"><label><b>' + fieldLabel + '</b></label><textarea class="input" name="' + esc(col.name) + '" placeholder="' + esc(placeholder) + '"></textarea></div>';
