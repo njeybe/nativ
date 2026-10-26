@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import {
   applyBlock, listGeneratedPaths, trackedNativPaths, BLOCK_START, BLOCK_END,
 } from '../dist/core/setup/gitignore-block.js';
+import { buildDesiredConfig, mergeClaudeSettings, mergeMcpConfig } from '../dist/core/setup/config-merger.js';
 import { stampManaged } from '../dist/core/setup/types.js';
 
 console.log('--- Starting Gitignore Block Tests ---');
@@ -33,11 +34,10 @@ put(root, 'CLAUDE.md', '# My own notes\n');
 put(root, 'GEMINI.md', '# Gemini / Antigravity directive\n\n@AGENTS.md\n');
 put(root, '.claude/agents/worker.md', stampManaged('worker'));
 put(root, '.claude/agents/mine.md', 'custom');
-put(root, '.mcp.json', JSON.stringify({ mcpServers: { nativ: { command: 'nativ' } } }));
-put(root, '.claude/settings.json', JSON.stringify({
-  permissions: { allow: ['Bash(nativ *)'] },
-  hooks: { PreToolUse: [{ hooks: [{ command: 'nativ hook check' }] }] },
-}));
+const desired = buildDesiredConfig({ command: 'nativ', prefixArgs: [], portable: true });
+const generated = mergeClaudeSettings({}, desired).merged;
+put(root, '.mcp.json', JSON.stringify(mergeMcpConfig({}, desired).merged));
+put(root, '.claude/settings.json', JSON.stringify(generated));
 const hidden = listGeneratedPaths(root);
 for (const p of ['/.ai/', '/.nativ/', '/.worktrees/', '/AGENTS.md', '/GEMINI.md',
   '/.claude/agents/worker.md', '/.mcp.json', '/.claude/settings.json']) assert.ok(hidden.includes(p), p);
@@ -48,6 +48,34 @@ put(root, '.mcp.json', JSON.stringify({ mcpServers: { nativ: {}, other: {} } }))
 put(root, '.claude/settings.json', JSON.stringify({ permissions: { allow: ['Bash(ls)'] } }));
 const mixed = listGeneratedPaths(root);
 assert.ok(!mixed.includes('/.mcp.json') && !mixed.includes('/.claude/settings.json'));
+
+// user entries that merely mention nativ keep the files out
+const setSettings = (v) => put(root, '.claude/settings.json', JSON.stringify(v));
+const settingsListed = () => listGeneratedPaths(root).includes('/.claude/settings.json');
+const withAllow = (e) => ({ ...generated, permissions: { ...generated.permissions,
+  allow: [...generated.permissions.allow, e] } });
+setSettings(withAllow('Bash(echo nativ-notes:*)'));
+assert.ok(!settingsListed());
+setSettings(withAllow('Bash(node cli.js)'));
+assert.ok(!settingsListed());
+setSettings({ ...generated, hooks: { ...generated.hooks, PreToolUse: [
+  ...generated.hooks.PreToolUse,
+  { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo nativ-note', timeout: 5 }] }] } });
+assert.ok(!settingsListed());
+setSettings({ ...generated, hooks: { ...generated.hooks, Stop: generated.hooks.PreToolUse } });
+assert.ok(!settingsListed());
+setSettings(generated);
+assert.ok(settingsListed());
+// a custom invocation is still recognised
+const npx = buildDesiredConfig({ command: 'npx', prefixArgs: ['-y', '@scope/tool'], portable: true });
+setSettings(mergeClaudeSettings({}, npx).merged);
+assert.ok(settingsListed());
+put(root, '.mcp.json', JSON.stringify(mergeMcpConfig({}, npx).merged));
+assert.ok(listGeneratedPaths(root).includes('/.mcp.json'));
+put(root, '.mcp.json', JSON.stringify({ mcpServers: { nativ: { command: 'echo', args: ['hi'] } } }));
+assert.ok(!listGeneratedPaths(root).includes('/.mcp.json'));
+put(root, '.mcp.json', JSON.stringify({ mcpServers: { nativ: { command: 'nativ', args: ['mcp'], env: {} } } }));
+assert.ok(!listGeneratedPaths(root).includes('/.mcp.json'));
 
 const shared = listGeneratedPaths(root, 'shared');
 assert.deepEqual(shared, ['/.nativ/*.local.json', '/.nativ/logs/', '/.nativ/*.log',
