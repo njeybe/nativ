@@ -19,6 +19,9 @@ write('scripts/seed.sh', 'echo "<ADMIN_NAME>" "<ADMIN_MAIL>"\n');
 write('src/app.js', 'const p = process.env.SERVICE_PORT;\n');
 write('.env.example', 'SERVICE_TOKEN=\n');
 write('real.md', 'x\n');
+write('src/c.js', "const k = 'TOKEN_CONST';\n");
+spawnSync('git', ['init', '-q'], { cwd: root });
+spawnSync('git', ['add', '-A'], { cwd: root });
 
 // Clean doc: exits 0
 write('good.md', [
@@ -26,6 +29,14 @@ write('good.md', [
   '',
   'Set `SERVICE_PORT` and `SERVICE_TOKEN=abc`. See `real.md` and `https://example.com/x.md`.',
   'Use `nativ check docs --json` and `npm run --silent`.',
+  'Runtime: `.ai/learnings.json`, `.nativ/x.json`, `db_schema.json`, `@scope/pkg`, `.env.example`.',
+  'Words `AUTO_RESOLVE`, `TOKEN_CONST`, `${SERVICE_PORT}`, `$SERVICE_TOKEN`.',
+  'Quoted: `nativ setup --command "npx -y tool"`.',
+  '<!-- nativ-check-ignore -->',
+  'Skipped `gone/one.md`.',
+  '<!-- nativ-check-ignore-start -->',
+  'Skipped `gone/two.md` `nativ check docs --nope`.',
+  '<!-- nativ-check-ignore-end -->',
   '',
   '```',
   '`missing/in-fence.md` NOT_A_SETTING',
@@ -38,7 +49,7 @@ assert.equal(r.status, 0, r.stdout + r.stderr);
 write('bad.md', [
   'Run `scripts/seed.sh` with `<your-name>` and `<your-mail>`.',
   '',
-  'Set `SERVICE_PORTS` first. See `docs/missing.md`.',
+  'Set `SERVICE_PORTS=1` first. See `docs/missing.md`.',
   'Try `nativ check docs --nope`.',
 ].join('\n'));
 r = run('bad.md', '--json');
@@ -47,6 +58,12 @@ const out = JSON.parse(r.stdout);
 const kinds = out.findings.map((f) => `${f.kind}@${f.line}`);
 assert.deepEqual(kinds, ['placeholder@1', 'placeholder@1', 'setting@3', 'path@3', 'flag@4']);
 assert.equal(out.findings[0].file, 'bad.md');
+
+// This repo's own docs report nothing
+const repo = spawnSync(process.execPath, [cli, 'check', 'docs', 'README.md', 'templates/AGENTS.md'], {
+  cwd: path.resolve('.'), encoding: 'utf8',
+});
+assert.equal(repo.status, 0, repo.stdout + repo.stderr);
 
 // Plain output: file:line
 r = run('bad.md');
