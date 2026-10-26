@@ -130,11 +130,15 @@ export function collectChecks(root: string, options: DoctorOptions = {}): Doctor
 
   // Generated assets: whatever setup would still change is drift
   for (const change of plan.changes) {
-    if (change.action === 'created') add(`asset:${change.path}`, 'fail', `${change.path} is missing`, true);
+    if (change.path === '.gitignore' && change.action !== 'unchanged') {
+      const what = change.action === 'created' ? 'has no' : 'has an outdated';
+      add('gitignore', 'warn', `.gitignore ${what} nativ block, so generated files may be committed by accident`, true);
+    } else if (change.action === 'created') add(`asset:${change.path}`, 'fail', `${change.path} is missing`, true);
     else if (change.action === 'updated') add(`asset:${change.path}`, 'warn', `${change.path} is out of date${change.detail ? ` (${change.detail})` : ''}`, true);
     else if (change.action === 'skipped') add(`asset:${change.path}`, 'warn', `${change.path}: ${change.detail ?? 'not managed by nativ'}`);
     else if (change.detail) add(`asset:${change.path}`, 'info', `${change.path}: ${change.detail}`);
   }
+  if (plan.gitRmCommand) add('gitignore-tracked', 'info', `nativ files are already tracked by git. To stop tracking them, run: ${plan.gitRmCommand}`);
   if (!plan.changes.some((c) => c.action === 'created' || c.action === 'updated')) add('assets', 'ok', 'MCP server, hooks, permissions, agents and directives are in place');
 
   // Claude Code's own view (opt-in: it connects to every configured MCP server)
