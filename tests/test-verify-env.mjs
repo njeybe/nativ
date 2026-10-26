@@ -26,7 +26,8 @@ const q = (s) => JSON.stringify(s);
 // isCiEnvironment under the sandbox marker
 {
   const saved = { ...process.env };
-  for (const k of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE']) delete process.env[k];
+  const keys = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE'];
+  for (const k of keys) delete process.env[k];
   process.env.CI = 'true';
   assert.equal(isCiEnvironment(), true);
   process.env.NATIV_VERIFY_SANDBOX = '1';
@@ -70,7 +71,8 @@ const q = (s) => JSON.stringify(s);
   fs.writeFileSync(child, `require('fs').openSync(${q(held)}, 'w'); setTimeout(() => {}, 60000);`);
   fs.writeFileSync(
     parent,
-    `require('child_process').spawn(process.execPath, [${q(child)}], { stdio: 'ignore' }); setTimeout(() => {}, 60000);`,
+    `require('child_process').spawn(process.execPath, [${q(child)}], { stdio: 'ignore' }); `
+    + 'setTimeout(() => {}, 60000);',
   );
   const r = await executeVerification(`node ${q(parent)}`, tmp, 1500);
   assert.equal(r.success, false);

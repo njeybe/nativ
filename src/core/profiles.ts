@@ -38,7 +38,9 @@ export const PROFILE_DEFAULTS: Record<NativProfile, ProfileSettings> = {
     verifyIsolation: 'clean',
     verifyIsolationFailure: 'warn',
     skippedCheck: 'warn',
-    description: 'Single-developer agility: advisory scope warnings, self-evolving contracts, and streamlined execution.',
+    description:
+      'Single-developer agility: advisory scope warnings, self-evolving contracts, '
+      + 'and streamlined execution.',
   },
   enterprise: {
     profile: 'enterprise',
@@ -49,7 +51,9 @@ export const PROFILE_DEFAULTS: Record<NativProfile, ProfileSettings> = {
     verifyIsolation: 'clean',
     verifyIsolationFailure: 'block',
     skippedCheck: 'block',
-    description: 'Full team rigor: strict contract boundaries, test integrity protection, circuit breakers, and air-gap.',
+    description:
+      'Full team rigor: strict contract boundaries, test integrity protection, '
+      + 'circuit breakers, and air-gap.',
   },
 };
 
