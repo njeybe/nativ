@@ -387,6 +387,49 @@ async function runTests() {
     console.log('  ✔ isolation flag overrides the profile, reports warnings, and is gated under block');
   }
 
+  // Skipped-check policy
+  {
+    const { execFileSync } = await import('node:child_process');
+    const mkSkip = (profile, task) => {
+      const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-skip-test-'));
+      execFileSync('git', ['init', '-q'], { cwd: repo });
+      fs.mkdirSync(path.join(repo, '.nativ'));
+      fs.writeFileSync(path.join(repo, '.nativ', 'config.json'), JSON.stringify({ profile }));
+      fs.mkdirSync(path.join(repo, '.ai'));
+      const t = { id: 'task-k', title: 'K', assignedSubagent: 'backend', dependencies: [],
+        targetFiles: [], status: 'in_progress', notes: '', verificationCommand: 'skip', ...task };
+      const plan = { projectName: 'skip', overallStatus: 'in_progress', activeMilestoneId: 'm1',
+        lastUpdated: new Date().toISOString(),
+        milestones: [{ id: 'm1', name: 'M', status: 'in_progress', tasks: [t] }] };
+      fs.writeFileSync(path.join(repo, '.ai', 'master_plan.json'), JSON.stringify(plan));
+      return repo;
+    };
+    const statusOf = (r) => JSON.parse(fs.readFileSync(path.join(r, '.ai', 'master_plan.json'), 'utf8'))
+      .milestones[0].tasks[0].status;
+    const cases = [
+      ['enterprise', { verificationKind: 'unit' }, 1, 'in_progress'],
+      ['enterprise', {}, undefined, 'completed'],
+      ['enterprise', { verificationKind: 'manual', notes: 'checked by hand' }, undefined, 'completed'],
+      ['enterprise', { verificationKind: 'manual' }, 1, 'in_progress'],
+      ['solo', { verificationKind: 'unit' }, undefined, 'completed'],
+      ['prototype', { verificationKind: 'unit' }, undefined, 'completed'],
+    ];
+    for (const [profile, task, code, status] of cases) {
+      const repo = mkSkip(profile, task);
+      process.exitCode = undefined;
+      await runTaskComplete('task-k', repo);
+      assert.equal(process.exitCode, code, `${profile} ${JSON.stringify(task)} exit code`);
+      assert.equal(statusOf(repo), status, `${profile} ${JSON.stringify(task)} status`);
+      process.exitCode = undefined;
+      if (profile === 'enterprise' && task.verificationKind === 'unit') {
+        await runVerify('task-k', repo);
+        assert.equal(process.exitCode, undefined, 'verify never fails on a skip');
+      }
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+    console.log('  ✔ skipped-check policy follows kind, notes and profile');
+  }
+
   // Cleanup
   try {
     fs.rmSync(dir, { recursive: true, force: true });

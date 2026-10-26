@@ -5,6 +5,7 @@ import { resolveActiveProfileSettings } from '../../core/profiles.js';
 import { resolveMainRoot } from '../../core/root-resolver.js';
 import { MasterPlanTask } from '../../scanner/types.js';
 import { runTaskVerification, VerificationResult } from '../../core/verifier.js';
+import { evaluateSkip } from '../../core/verifier/skip-policy.js';
 import { digestFailure } from '../../core/verifier/output-digest.js';
 import {
   CircuitBreaker,
@@ -229,6 +230,17 @@ export async function runTaskComplete(
     }
 
     if (vResult.skipped) {
+      const skip = evaluateSkip(foundTask, profile.skippedCheck);
+      if (skip.action === 'block') {
+        console.error(pc.red(`
+✖ Task [${pc.bold(taskId)}] cannot complete: ${skip.message}`));
+        console.error(pc.yellow(`  Task remains '${foundTask.status}'.
+`));
+        process.exitCode = 1;
+        return;
+      }
+      if (skip.action === 'warn') console.log(pc.yellow(`
+⚠ ${skip.message}`));
       console.log(pc.dim(`\n○ Verification skipped: no verification command specified for [${taskId}]`));
     } else {
       const elapsed = (vResult.durationMs / 1000).toFixed(2);

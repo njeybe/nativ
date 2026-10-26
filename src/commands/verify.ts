@@ -1,6 +1,9 @@
 import path from 'node:path';
 import pc from 'picocolors';
 import { verifyBatch, BatchVerificationResult } from '../core/verifier.js';
+import { loadPlan } from '../core/lock-manager.js';
+import { evaluateSkip } from '../core/verifier/skip-policy.js';
+import { resolveActiveProfileSettings } from '../core/profiles.js';
 import { digestFailure } from '../core/verifier/output-digest.js';
 
 /** Passing runs need no output; failing ones get a digest and the path to the full log. */
@@ -62,11 +65,17 @@ export async function runVerify(
     return batch;
   }
 
+  const skipMode = resolveActiveProfileSettings(targetDir).skippedCheck;
+  const plan = loadPlan(path.join(targetDir, '.ai', 'master_plan.json'), { silent: true });
+  const planTasks = plan?.milestones.flatMap((m) => m.tasks) ?? [];
   for (const t of batch.tasks) {
     const elapsed = (t.result.durationMs / 1000).toFixed(2);
 
     if (t.result.skipped) {
       console.log(pc.dim(`  ○ [${t.taskId}] ${t.title} — no verification command (skipped)`));
+      const pt = planTasks.find((x) => x.id === t.taskId);
+      const skip = pt && evaluateSkip(pt, skipMode);
+      if (skip?.message) console.log(pc.yellow(`    ⚠ ${skip.message}`));
       continue;
     }
 
