@@ -3,7 +3,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createCleanTree, sweepStaleCleanTrees } from '../dist/core/verifier/clean-tree.js';
+import { createCleanTree, sweepStaleCleanTrees, disposeTree } from '../dist/core/verifier/clean-tree.js';
 
 const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' });
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-ct-'));
@@ -68,6 +68,17 @@ assert.ok(!fs.existsSync(s.dir));
 assert.ok(fs.existsSync(fresh.dir));
 assert.equal(keep(), 'k');
 await fresh.dispose();
+
+// A link that cannot be unlinked blocks all deletion; the sweep finishes the job later.
+const b = await createCleanTree(root, { links: ['node_modules'] });
+await disposeTree(root, b.dir, ['node_modules'], () => false);
+assert.ok(fs.existsSync(b.dir));
+assert.ok(fs.existsSync(path.join(b.dir, 'node_modules', 'keep.txt')));
+assert.equal(keep(), 'k');
+fs.utimesSync(b.dir, old, old);
+assert.ok((await sweepStaleCleanTrees(root)) >= 1);
+assert.ok(!fs.existsSync(b.dir));
+assert.equal(keep(), 'k');
 
 // Not a git repository.
 const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-ct-plain-'));

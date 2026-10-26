@@ -37,9 +37,27 @@ async function removeDir(dir: string): Promise<void> {
 }
 
 // Links go first: removing a tree can follow a junction into the real folder.
-async function disposeTree(root: string, dir: string, names: string[]): Promise<void> {
+function linkRemains(dir: string, names: string[]): boolean {
+  return names.some((n) => {
+    try {
+      return fs.lstatSync(path.join(dir, n)).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  });
+}
+
+// unlink is injectable so tests can simulate a link that refuses to go away.
+export async function disposeTree(
+  root: string,
+  dir: string,
+  names: string[],
+  unlink: (dir: string, name: string) => boolean = safeUnlinkWorktreeDir,
+): Promise<void> {
   try {
-    for (const n of names) safeUnlinkWorktreeDir(dir, n);
+    for (const n of names) unlink(dir, n);
+    // A surviving link means a recursive delete could reach the real folder: leave it for the sweep.
+    if (linkRemains(dir, names)) return;
     for (let i = 0; i < 4; i++) {
       const r = await git(root, ['worktree', 'remove', '--force', dir]);
       if (r.code === 0 || !fs.existsSync(dir)) break;
