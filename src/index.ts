@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { runInit } from './commands/init.js';
 import { runStatus } from './commands/status.js';
 import { runValidate } from './commands/validate.js';
@@ -37,6 +37,13 @@ import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
 import { packageVersion } from './core/version.js';
 
+function parseGitVisibility(value: string): 'hidden' | 'shared' {
+  if (value !== 'hidden' && value !== 'shared') {
+    throw new InvalidArgumentError('Use hidden or shared.');
+  }
+  return value;
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -50,6 +57,7 @@ export function createProgram(): Command {
     .description('Scaffold the workflow (.ai/, AGENTS.md, directives) and the Claude Code configuration in the target directory')
     .option('-f, --force', 'Overwrite existing specification and directive files')
     .option('--design <profile>', 'Design profile: nativ, taste-v1 or taste-v2')
+    .option('--git-visibility <mode>', 'Git visibility of generated files: hidden (default) or shared', parseGitVisibility)
     .action(async (targetDir, options) => {
       await runInit(targetDir, options);
     });
@@ -60,10 +68,11 @@ export function createProgram(): Command {
     .option('--command <cli>', 'How Claude Code should start nativ, e.g. "npx -y @njeybe/nativ" (default: nativ when installed globally)')
     .option('--enforcement <mode>', 'Role enforcement mode: warn (default), block or off')
     .option('--dry-run', 'Show what would change without writing anything')
+    .option('--git-visibility <mode>', 'Git visibility of generated files: hidden (default) or shared', parseGitVisibility)
     .option('-f, --force', 'Also overwrite agent and directive files that were edited by hand')
     .option('--json', 'Output the result as JSON')
     .action(async (targetDir, options) => {
-      await runSetup(targetDir, { command: options.command, enforcement: options.enforcement, dryRun: options.dryRun, force: options.force, json: options.json });
+      await runSetup(targetDir, { command: options.command, enforcement: options.enforcement, dryRun: options.dryRun, force: options.force, gitVisibility: options.gitVisibility, json: options.json });
     });
 
   program
@@ -81,8 +90,9 @@ export function createProgram(): Command {
     .command('update [targetDir]')
     .description('Refresh directives, role guides and the Claude Code configuration to the latest templates. Files you edited are kept; contracts and the plan are never touched')
     .option('-f, --force', 'Also replace directive and role-guide files that were edited by hand')
+    .option('--git-visibility <mode>', 'Git visibility of generated files: hidden (default) or shared', parseGitVisibility)
     .action(async (targetDir, options) => {
-      await runUpdate(targetDir, { force: options.force });
+      await runUpdate(targetDir, { force: options.force, gitVisibility: options.gitVisibility });
     });
 
   program

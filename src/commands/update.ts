@@ -52,6 +52,7 @@ function syncTasteBundle(templatesDir: string, aiDir: string, force?: boolean): 
 export interface UpdateOptions {
   /** Also replace directive and role-guide files that were edited by hand. */
   force?: boolean;
+  gitVisibility?: 'hidden' | 'shared';
 }
 
 const ICON: Record<string, string> = { created: '+', updated: '~', unchanged: '=', skipped: '!' };
@@ -122,7 +123,7 @@ export async function runUpdate(targetDirArg?: string, options: UpdateOptions = 
 
   // 2. Everything `nativ setup` manages: AGENTS.md, .claude/agents/, settings, MCP server
   console.log(pc.bold('\nClaude Code configuration'));
-  const setup = applySetup(targetDir, { force: options.force });
+  const setup = applySetup(targetDir, { force: options.force, gitVisibility: options.gitVisibility });
   printSetupResult(setup);
 
   // 3. Backfill missing core contracts safely (NEVER overwrite existing project state)

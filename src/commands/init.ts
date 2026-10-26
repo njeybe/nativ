@@ -62,7 +62,7 @@ function installTasteBundle(templatesDir: string, aiDir: string, force?: boolean
 
 export async function runInit(
   targetDirArg?: string,
-  options: { force?: boolean; design?: string } = {},
+  options: { force?: boolean; design?: string; gitVisibility?: 'hidden' | 'shared' } = {},
 ) {
   if (options.design !== undefined && !(DESIGN_PROFILES as readonly string[]).includes(options.design)) {
     const list = DESIGN_PROFILES.join(', ');
@@ -191,7 +191,7 @@ export async function runInit(
 
   // 10. Claude Code configuration: MCP server, hooks, permissions, agents, AGENTS.md. Merges; never overwrites.
   console.log(pc.yellow('Configuring Claude Code (MCP server, hooks, agents)...'));
-  const setup = await runSetup(targetDir, { quiet: true });
+  const setup = await runSetup(targetDir, { quiet: true, gitVisibility: options.gitVisibility });
   if (setup) {
     printSetupResult(setup);
   }
