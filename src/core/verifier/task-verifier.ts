@@ -6,6 +6,7 @@ import { resolveActiveProfileSettings, loadVerifySettings } from '../profiles.js
 import { resolveMainRoot } from '../root-resolver.js';
 import { executeVerification } from './executor.js';
 import { createCleanTree, sweepStaleCleanTrees } from './clean-tree.js';
+import { lintPortability } from './portability-lint.js';
 import { buildVerifyEnv } from './verify-env.js';
 import { loadVerifyPhases, runVerifyPhases } from './phases.js';
 import type {
@@ -152,7 +153,8 @@ async function diagnose(
   if (failed.error?.startsWith('Command timed out')) return failed;
   const local = await runInPlan(task, { ...o, phases: undefined }, NO_ISOLATION);
   if (!local.success) return failed;
-  const note = 'Passes only on this machine: it failed in a clean copy of the project.';
+  const base = 'Passes only on this machine: it failed in a clean copy of the project.';
+  const note = [base, ...lintPortability(o.cwd, task.targetFiles || [])].join(' ');
   if (failure === 'warn') {
     return { ...local, isolation: 'clean', warnings: [...(failed.warnings ?? []), note] };
   }
