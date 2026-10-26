@@ -35,6 +35,7 @@ import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
+import { runCheckDocs } from './commands/check.js';
 import { packageVersion } from './core/version.js';
 
 function parseGitVisibility(value: string): 'hidden' | 'shared' {
@@ -296,6 +297,16 @@ export function createProgram(): Command {
     .option('--revoke', 'Re-lock the task to its target files')
     .action(async (taskId, targetDir, options) => {
       await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
+    });
+
+  const check = program.command('check').description('Checks on project files');
+
+  check
+    .command('docs <files...>')
+    .description('Check backticked paths, placeholders, settings and nativ flags in markdown files')
+    .option('--json', 'Output findings as JSON')
+    .action(async (files, options) => {
+      await runCheckDocs(files, options);
     });
 
   const design = program.command('design').description('Design profile tools');
