@@ -85,6 +85,10 @@ export interface TaskAddOptions {
   kind?: string;
   /** "Done when" lines: an array, or one string with "|" separators. */
   accept?: string | string[];
+  /** Create the next milestone with this name and add the task to it. */
+  newMilestone?: string;
+  /** With newMilestone, allow it while a planned milestone is still open (CLI only). */
+  force?: boolean;
   json?: boolean;
 }
 

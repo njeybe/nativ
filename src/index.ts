@@ -193,6 +193,8 @@ export function createProgram(): Command {
       'Acceptance ("done when") line; repeatable, each value kept whole',
       (value: string, prev: string[] = []) => [...prev, value],
     )
+    .option('--new-milestone <name>', 'Create the next milestone with this name and add the task to it')
+    .option('--force', 'With --new-milestone, allow it while a planned milestone is still open')
     .option('--json', 'Output the created task as JSON')
     .action(async (title, targetDir, options) => {
       await runTaskAdd(title, targetDir, options);

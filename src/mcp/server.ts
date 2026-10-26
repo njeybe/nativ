@@ -109,9 +109,10 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         acceptanceCriteria: z.array(z.string()).optional().describe('Plain-language "done when" lines'),
         verificationKind: z.string().optional().describe('unit, integration, static-config, docs, probe or manual'),
         notes: z.string().optional().describe('Task notes; required for a manual check'),
+        newMilestone: z.string().optional().describe('Create the next milestone with this name and add the task to it'),
       },
     },
-    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria, verificationKind, notes }) =>
+    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria, verificationKind, notes, newMilestone }) =>
       captureOutput(() =>
         runTaskAdd(title, targetDir, {
           description,
@@ -126,6 +127,7 @@ export function createMcpServer(targetDirArg?: string): McpServer {
           kind: verificationKind,
           notes,
           accept: acceptanceCriteria,
+          newMilestone,
           json: true,
         }),
       ),

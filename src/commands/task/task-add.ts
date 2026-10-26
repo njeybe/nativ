@@ -119,7 +119,29 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
     let milestone: MasterPlanMilestone | undefined;
     let createdMilestone = false;
 
-    if (options.milestone) {
+    const newName = options.newMilestone?.trim();
+    if (options.newMilestone !== undefined && !newName) {
+      ctx.abort();
+      return failTaskAdd('INVALID_MILESTONE_NAME', 'A new milestone needs a name', options.json);
+    }
+    if (newName && (options.milestone || fastPath)) {
+      ctx.abort();
+      return failTaskAdd('CONFLICTING_OPTIONS', '--new-milestone cannot be used with --milestone or --fast-path', options.json);
+    }
+    const stillOpen = plan.milestones.filter((m) => !m.fastPath && m.status !== 'completed');
+    if (newName && stillOpen.length && !options.force) {
+      ctx.abort();
+      const ids = stillOpen.map((m) => m.id).join(', ');
+      return failTaskAdd('MILESTONE_STILL_OPEN', `Milestone ${ids} is not completed yet. Finish it first, or pass --force`, options.json);
+    }
+
+    if (newName) {
+      milestone = { id: generateNextMilestoneId(plan), name: newName, status: 'in_progress', tasks: [] };
+      plan.milestones.push(milestone);
+      plan.activeMilestoneId = milestone.id;
+      plan.overallStatus = 'in_progress';
+      createdMilestone = true;
+    } else if (options.milestone) {
       const found = findMilestone(plan, options.milestone);
       if (Array.isArray(found)) {
         ctx.abort();
@@ -199,7 +221,7 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
 
     const track = fastPath ? pc.magenta(' [fast path]') : '';
     console.log(pc.green(`\n✔ Task [${pc.bold(task.id)}] added to [${milestone.id}] ${milestone.name}`) + track);
-    if (createdMilestone) console.log(pc.cyan(`  Created fast-path milestone [${milestone.id}]`));
+    if (createdMilestone) console.log(pc.cyan(`  Created ${fastPath ? 'fast-path ' : ''}milestone [${milestone.id}]`));
     if (reopenedMilestone) console.log(pc.yellow(`  Reopened completed milestone [${milestone.id}]`));
     console.log(pc.dim('  Title:    ') + task.title);
     console.log(pc.dim('  Agent:    ') + pc.magenta(`[${task.assignedSubagent}]`) + pc.dim(` -> ${getRoleGuide(task.assignedSubagent)}`));
