@@ -36,14 +36,19 @@ export function applyCodeShape(
 ): VerificationResult {
   if (result.skipped || !result.success) return result;
   const report = checkCodeShape(targetDir, task.targetFiles || []);
-  if (report.mode === 'off') return result;
+  if (report.issues.length === 0) return result;
   result.codeShape = report;
   const summary = formatCodeShapeReport(report);
   if (summary) console.error(summary);
-  if (report.mode === 'block' && report.issues.length > 0) {
+  const blocking = report.issues.filter((i) =>
+    (i.category === 'config' ? report.configMode : report.mode) === 'block');
+  if (blocking.length > 0) {
+    const names = [...new Set(blocking.filter((i) => i.category === 'config')
+      .map((i) => i.message.split(' ')[0]))];
+    const config = names.length > 0 ? `; unset-variable fallbacks: ${names.join(', ')}` : '';
     result.success = false;
     result.exitCode = 1;
-    result.error = `Code shape check failed: ${report.issues.length} issue(s) (codeStyle.mode is "block")`;
+    result.error = `Code shape check failed: ${blocking.length} issue(s) set to block${config}`;
   }
   return result;
 }
