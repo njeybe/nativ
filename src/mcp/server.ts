@@ -107,9 +107,11 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         specRefs: z.array(z.string()).optional().describe('Spec anchors, e.g. ui_specs.md#appointment-list'),
         complexity: z.string().optional().describe('simple, standard or complex'),
         acceptanceCriteria: z.array(z.string()).optional().describe('Plain-language "done when" lines'),
+        verificationKind: z.string().optional().describe('unit, integration, static-config, docs, probe or manual'),
+        notes: z.string().optional().describe('Task notes; required for a manual check'),
       },
     },
-    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria }) =>
+    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria, verificationKind, notes }) =>
       captureOutput(() =>
         runTaskAdd(title, targetDir, {
           description,
@@ -121,6 +123,8 @@ export function createMcpServer(targetDirArg?: string): McpServer {
           fastPath,
           specRefs,
           complexity,
+          kind: verificationKind,
+          notes,
           accept: acceptanceCriteria,
           json: true,
         }),

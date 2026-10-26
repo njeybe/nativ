@@ -79,6 +79,19 @@ try {
   assert.equal(bad.json.error.code, 'INVALID_TASK');
   assert.equal(fs.readFileSync(planFile(dir), 'utf8'), planBefore, 'rejected add does not write');
   console.log('  ok bad complexity rejected');
+  assert.deepEqual(validateMasterPlanTask({ ...base, verificationKind: 'docs' }), []);
+  assert.ok(validateMasterPlanTask({ ...base, verificationKind: 'vibes' }).length, 'unknown kind rejected');
+  const kd = await add(dir, 'Docs', ['--kind', 'docs', '--files', 'docs/a.md,src/x.ts']);
+  assert.equal(kd.code, 0);
+  assert.equal(kd.json.task.verificationKind, 'docs');
+  assert.match(kd.json.task.verificationCommand, /check docs docs\/a\.md$/);
+  const km = await add(dir, 'Manual', ['--kind', 'manual']);
+  assert.equal(km.code, 1);
+  const kn = await add(dir, 'Manual ok', ['--kind', 'manual', '--notes', 'Owner confirms']);
+  assert.equal(kn.json.task.notes, 'Owner confirms');
+  const kb = await add(dir, 'Bad kind', ['--kind', 'nope']);
+  assert.equal(kb.code, 1);
+  console.log('  ok verification kind');
   console.log('\nAll task field checks passed.');
 } finally {
   for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true });
