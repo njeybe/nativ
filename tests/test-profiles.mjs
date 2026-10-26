@@ -54,6 +54,22 @@ try {
   else delete process.env.CI;
 }
 
+{
+  const { loadVerifySettings, resolveActiveProfileSettings: rs } = await import('../dist/core/profiles.js');
+  const s = rs(dir);
+  assert.equal(s.verifyIsolation, 'clean');
+  assert.equal(s.skippedCheck, 'warn');
+  fs.writeFileSync(path.join(dir, '.nativ', 'config.json'), JSON.stringify({
+    profile: 'solo', skippedCheck: 'block', verifyIsolation: 'bogus',
+    verifyEnv: ['FOO', 'CI', 'NATIV_X', 'GITLAB_CI'],
+  }));
+  const o = rs(dir);
+  assert.equal(o.skippedCheck, 'block');
+  assert.equal(o.verifyIsolation, 'clean', 'invalid ignored');
+  const v = loadVerifySettings(dir);
+  assert.deepEqual(v.verifyEnv, ['FOO']);
+  assert.deepEqual(v.verifyLinks, ['node_modules', '.venv', 'venv']);
+}
 console.log('✔ Test 1: Default enterprise profile');
 console.log('✔ Test 2: Prototype profile relaxation');
 console.log('✔ Test 3: Test integrity bypass in prototype');
