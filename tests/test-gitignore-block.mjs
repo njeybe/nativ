@@ -72,6 +72,16 @@ setSettings(mergeClaudeSettings({}, npx).merged);
 assert.ok(settingsListed());
 put(root, '.mcp.json', JSON.stringify(mergeMcpConfig({}, npx).merged));
 assert.ok(listGeneratedPaths(root).includes('/.mcp.json'));
+// regression: setup with a custom node <abs path> over an earlier default setup
+const abs = path.resolve('bin', 'cli.js');
+const node = buildDesiredConfig({ command: 'node', prefixArgs: [abs], portable: false });
+const layered = mergeClaudeSettings(mergeClaudeSettings({}, desired).merged, node).merged;
+setSettings(layered);
+assert.ok(settingsListed());
+setSettings({ ...layered, permissions: { ...layered.permissions, deny: [...layered.permissions.deny, 'Bash(ls *)'] } });
+assert.ok(!settingsListed());
+put(root, '.mcp.json', JSON.stringify(mergeMcpConfig({}, node).merged));
+assert.ok(listGeneratedPaths(root).includes('/.mcp.json'));
 put(root, '.mcp.json', JSON.stringify({ mcpServers: { nativ: { command: 'echo', args: ['hi'] } } }));
 assert.ok(!listGeneratedPaths(root).includes('/.mcp.json'));
 put(root, '.mcp.json', JSON.stringify({ mcpServers: { nativ: { command: 'nativ', args: ['mcp'], env: {} } } }));

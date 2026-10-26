@@ -72,18 +72,19 @@ function onlyNativMcp(root: string): boolean {
   return names.length > 0 && names.every((n) => n === MCP_SERVER_NAME && ownedServer(servers[n]));
 }
 
-/** The CLI string setup wrote into the hook commands, or null when no hook shows it. */
-function cliFromHooks(hooks: unknown): string | null {
-  if (!isObject(hooks)) return null;
+/** CLI strings that setup wrote into hook commands; `nativ` is always a candidate. */
+function clisFromHooks(hooks: unknown): string[] {
+  const found = new Set<string>(['nativ']);
+  if (!isObject(hooks)) return [...found];
   for (const groups of Object.values(hooks)) {
     for (const g of Array.isArray(groups) ? groups : []) {
       for (const h of isObject(g) && Array.isArray(g.hooks) ? g.hooks : []) {
         const m = isObject(h) ? /^(.+) hook (check|context)$/.exec(String(h.command)) : null;
-        if (m) return m[1];
+        if (m) found.add(m[1]);
       }
     }
   }
-  return null;
+  return [...found];
 }
 
 /** The generated config for an already-rendered CLI string (it may hold spaces or quotes). */
@@ -93,25 +94,26 @@ function desiredFor(cli: string): DesiredClaudeConfig {
   return JSON.parse(text.split(mark).join(JSON.stringify(cli).slice(1, -1))) as DesiredClaudeConfig;
 }
 
-function ownedHooks(hooks: unknown, want: DesiredClaudeConfig): boolean {
+function ownedHooks(hooks: unknown, wants: DesiredClaudeConfig[]): boolean {
   if (!isObject(hooks)) return false;
-  const expected: Record<string, DesiredClaudeConfig['preToolUse']> = {
-    PreToolUse: want.preToolUse,
-    SessionStart: want.sessionStart,
-  };
-  return Object.entries(hooks).every(([event, groups]) => {
-    const w = expected[event];
+  const groupOk = (event: string, g: unknown): boolean => wants.some((want) => {
+    const w = event === 'PreToolUse' ? want.preToolUse : event === 'SessionStart' ? want.sessionStart : null;
     const hook = w && { type: 'command', command: w.command, timeout: w.timeout };
-    return w !== undefined && Array.isArray(groups) &&
-      groups.every((g) => sameJson(g, { matcher: w.matcher, hooks: [hook] }));
+    return w !== null && sameJson(g, { matcher: w.matcher, hooks: [hook] });
   });
+  return Object.entries(hooks).every(([event, groups]) =>
+    Array.isArray(groups) && groups.every((g) => groupOk(event, g)));
 }
 
-function ownedPermissions(perms: unknown, want: DesiredClaudeConfig): boolean {
+// Setup unions entries, so a file may hold those of an older invocation too.
+function ownedPermissions(perms: unknown, wants: DesiredClaudeConfig[]): boolean {
   if (!isObject(perms)) return false;
-  const lists: Record<string, string[]> = { allow: want.allow, deny: want.deny, ask: want.ask };
-  return Object.entries(perms).every(([k, v]) =>
-    k in lists && Array.isArray(v) && v.every((e) => typeof e === 'string' && lists[k].includes(e)));
+  const keys = ['allow', 'deny', 'ask'] as const;
+  return Object.entries(perms).every(([k, v]) => {
+    const key = keys.find((x) => x === k);
+    return key !== undefined && Array.isArray(v) &&
+      v.every((e) => typeof e === 'string' && wants.some((w) => w[key].includes(e)));
+  });
 }
 
 function onlyNativSettings(root: string): boolean {
@@ -119,10 +121,9 @@ function onlyNativSettings(root: string): boolean {
   if (!json) return false;
   const allowed = new Set(['permissions', 'hooks', 'enabledMcpjsonServers']);
   if (Object.keys(json).some((k) => !allowed.has(k))) return false;
-  const cli = cliFromHooks(json.hooks) ?? 'nativ';
-  const want = desiredFor(cli);
-  if (json.permissions !== undefined && !ownedPermissions(json.permissions, want)) return false;
-  if (json.hooks !== undefined && !ownedHooks(json.hooks, want)) return false;
+  const wants = clisFromHooks(json.hooks).map(desiredFor);
+  if (json.permissions !== undefined && !ownedPermissions(json.permissions, wants)) return false;
+  if (json.hooks !== undefined && !ownedHooks(json.hooks, wants)) return false;
   const enabled = json.enabledMcpjsonServers;
   return enabled === undefined || (Array.isArray(enabled) && enabled.every((s) => s === MCP_SERVER_NAME));
 }
