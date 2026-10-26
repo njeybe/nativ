@@ -108,6 +108,9 @@ export function validateMasterPlanTask(task: unknown): string[] {
   }
   if (typeof t.description !== 'string') errors.push(`${label}: "description" must be a string`);
   if (typeof t.verificationCommand !== 'string') errors.push(`${label}: "verificationCommand" must be a string`);
+  if (typeof t.verificationCommand === 'string' && /NATIV_(CI|HEADLESS)_OVERRIDE/.test(t.verificationCommand)) {
+    errors.push(`${label}: "verificationCommand" must not set NATIV_CI_OVERRIDE or NATIV_HEADLESS_OVERRIDE`);
+  }
   if (typeof t.assignedSubagent !== 'string' || !isSubagentType(t.assignedSubagent)) {
     errors.push(`${label}: "assignedSubagent" must be one of ${SUBAGENT_TYPES.join(', ')}`);
   }
