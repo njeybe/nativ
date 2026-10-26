@@ -173,6 +173,8 @@ export function createProgram(): Command {
     .option('--deps <ids>', 'Comma-separated dependency task IDs')
     .option('--spec-refs <refs>', 'Comma-separated spec anchors, e.g. ui_specs.md#appointment-list')
     .option('--complexity <level>', 'Task complexity: simple, standard or complex')
+    .option('--kind <kind>', 'Verification kind: unit, integration, static-config, docs, probe or manual')
+    .option('--notes <text>', 'Task notes (required with --kind manual)')
     .option(
       '--accept <text>',
       'Acceptance ("done when") line; repeatable or "|"-separated',

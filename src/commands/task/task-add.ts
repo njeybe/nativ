@@ -5,9 +5,12 @@ import {
   MasterPlanMilestone,
   MasterPlanTask,
   TaskComplexity,
+  VerificationKind,
   SUBAGENT_TYPES,
   validateMasterPlanTask,
 } from '../../scanner/types.js';
+import { configuredInvocation } from '../../core/setup/setup-planner.js';
+import { cliString, resolveCliInvocation } from '../../core/setup/types.js';
 import { withPlanLock } from '../../core/lock-manager.js';
 import {
   getPlanPath,
@@ -58,6 +61,15 @@ function failTaskAdd(code: string, message: string, json?: boolean): null {
   else console.error(pc.red(`\n✖ ${message}\n`));
   process.exitCode = 1;
   return null;
+}
+
+/** Default check for a docs task: `nativ check docs` on its markdown files, or '' without any. */
+function defaultDocsCheck(targetFiles: string[]): string {
+  const docs = targetFiles.filter((f) => /\.md$/i.test(f));
+  if (!docs.length) return '';
+  const root = process.cwd();
+  const cli = cliString(configuredInvocation(root) ?? resolveCliInvocation({}));
+  return `${cli} check docs ${docs.join(' ')}`;
 }
 
 /** Resolves a milestone by exact ID, exact name, or a unique partial name (all case-insensitive). */
@@ -141,19 +153,30 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       .filter(Boolean);
     const complexity = options.complexity?.trim().toLowerCase();
 
+    const kind = options.kind?.trim().toLowerCase();
+    const notes = (options.notes ?? '').trim();
+    if (kind === 'manual' && !notes) {
+      ctx.abort();
+      return failTaskAdd('MANUAL_NEEDS_NOTES', 'A manual check needs --notes saying what the person must confirm', options.json);
+    }
+    const files = splitList(options.files);
+    let verify = (options.verify ?? '').trim();
+    if (kind === 'docs' && !verify) verify = defaultDocsCheck(files);
+
     const task: MasterPlanTask = {
       id: generateNextTaskId(plan),
       title: cleanTitle,
       description: (options.description ?? '').trim(),
       assignedSubagent: agent,
       dependencies: deps,
-      targetFiles: splitList(options.files),
+      targetFiles: files,
       status: 'pending',
-      verificationCommand: (options.verify ?? '').trim(),
-      notes: (options.notes ?? '').trim(),
+      verificationCommand: verify,
+      notes,
       ...(fastPath ? { fastPath: true } : {}),
       ...(specRefs.length ? { specRefs } : {}),
       ...(complexity ? { complexity: complexity as TaskComplexity } : {}),
+      ...(kind ? { verificationKind: kind as VerificationKind } : {}),
       ...(acceptanceCriteria.length ? { acceptanceCriteria } : {}),
     };
 

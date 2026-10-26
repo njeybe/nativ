@@ -81,6 +81,8 @@ export interface TaskAddOptions {
   specRefs?: string | string[];
   /** simple | standard | complex. */
   complexity?: string;
+  /** unit | integration | static-config | docs | probe | manual. */
+  kind?: string;
   /** "Done when" lines: an array, or one string with "|" separators. */
   accept?: string | string[];
   json?: boolean;

@@ -76,6 +76,8 @@ export interface MasterPlanTask {
   /** Spec anchors, e.g. "ui_specs.md#appointment-list" or "api_contracts.json#/paths/~1appointments". */
   specRefs?: string[];
   complexity?: TaskComplexity;
+  /** What kind of check proves the task; absent means unspecified. */
+  verificationKind?: VerificationKind;
   /** Plain-language "done when" lines. */
   acceptanceCriteria?: string[];
   /** Set by `task start` while in_progress: who claimed it (NATIV_AGENT_ID or --agent) and when. */
@@ -86,6 +88,12 @@ export interface MasterPlanTask {
 export type TaskComplexity = 'simple' | 'standard' | 'complex';
 
 export const TASK_COMPLEXITIES: readonly TaskComplexity[] = ['simple', 'standard', 'complex'];
+
+export type VerificationKind = 'unit' | 'integration' | 'static-config' | 'docs' | 'probe' | 'manual';
+
+export const TASK_VERIFICATION_KINDS: readonly VerificationKind[] = [
+  'unit', 'integration', 'static-config', 'docs', 'probe', 'manual',
+];
 
 /** Lists every structural problem with a task; empty when the task is valid. */
 export function validateMasterPlanTask(task: unknown): string[] {
@@ -115,6 +123,9 @@ export function validateMasterPlanTask(task: unknown): string[] {
   }
   if (t.complexity !== undefined && !(TASK_COMPLEXITIES as readonly unknown[]).includes(t.complexity)) {
     errors.push(`${label}: "complexity" must be one of ${TASK_COMPLEXITIES.join(', ')}`);
+  }
+  if (t.verificationKind !== undefined && !(TASK_VERIFICATION_KINDS as readonly unknown[]).includes(t.verificationKind)) {
+    errors.push(`${label}: "verificationKind" must be one of ${TASK_VERIFICATION_KINDS.join(', ')}`);
   }
   return errors;
 }
