@@ -86,4 +86,44 @@ const saved = JSON.parse(fs.readFileSync(path.join(dir, '.ai', 'master_plan.json
 assert.equal(saved.milestones[0].tasks[0].status, 'completed');
 console.log('✔ task complete warns on stderr and still completes');
 
+// Config fallbacks: invented generic fixtures.
+function cfgDir(config) {
+  const d = fixture(config);
+  const ts = ['A', 'B', 'C', 'D'].map((n) => `const v${n} = Deno.env.get('SVC_${n}') ?? '';`);
+  fs.writeFileSync(path.join(d, 'cfg.ts'), ts.join('\n') + '\n');
+  const py = ["import os", "A = os.getenv('PY_A', '')", "B = os.environ.get('PY_B') or ''",
+    "C = os.environ['PY_C']", ''];
+  fs.writeFileSync(path.join(d, 'cfg.py'), py.join('\n'));
+  fs.writeFileSync(path.join(d, 'cfg.go'), 'package x\nvar a = os.Getenv("GO_A")\n');
+  const p = path.join(d, '.ai', 'master_plan.json');
+  const plan = JSON.parse(fs.readFileSync(p, 'utf8'));
+  plan.milestones[0].tasks[0].targetFiles = ['cfg.ts'];
+  fs.writeFileSync(p, JSON.stringify(plan));
+  return d;
+}
+dir = cfgDir();
+report = checkCodeShape(dir, ['cfg.ts']);
+assert.equal(report.issues.length, 4);
+assert.ok(report.issues.every((i) => i.kind === 'config-fallback' && i.category === 'config'));
+assert.deepEqual(checkCodeShape(dir, ['cfg.py']).issues.map((i) => i.line), [2, 3]);
+assert.equal(checkCodeShape(dir, ['cfg.go']).issues.length, 1);
+assert.equal(report.mode, 'warn');
+assert.match(formatCodeShapeReport(report), /^Config: 4 .*\n {2}cfg\.ts:1 SVC_A /);
+const mixed = checkCodeShape(dir, ['cfg.ts', 'a.ts']);
+assert.match(formatCodeShapeReport(mixed), /Config: 4[\s\S]*Code shape: 2/);
+dir = cfgDir({ codeStyle: { mode: 'off' } });
+assert.equal(checkCodeShape(dir, ['cfg.ts']).issues.length, 4);
+dir = cfgDir({ codeStyle: { configFallback: 'off' } });
+assert.equal(checkCodeShape(dir, ['cfg.ts']).issues.length, 0);
+console.log('ok config fallback detection and report');
+
+dir = cfgDir();
+batch = await verifyBatch(dir, { taskId: 't1' });
+assert.equal(batch.passed, 1);
+dir = cfgDir({ codeStyle: { configFallback: 'block' } });
+batch = await verifyBatch(dir, { taskId: 't1' });
+assert.equal(batch.failed, 1);
+assert.match(batch.tasks[0].result.error, /SVC_A/);
+console.log('ok configFallback block fails with variable name');
+
 console.log('--- Code Shape Check Tests Passed ---');
