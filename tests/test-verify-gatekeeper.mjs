@@ -259,6 +259,77 @@ async function runTests() {
     console.log('  ✔ MCP server exposes nativ_verify and properly reports tool verification outcomes');
   }
 
+  // Clean-checkout isolation
+  {
+    const { runTaskVerification } = await import('../dist/core/verifier.js');
+    const { execFileSync } = await import('node:child_process');
+    const sh = (cwd, ...a) => execFileSync('git', a, { cwd, stdio: 'ignore' });
+    const mkRepo = (config) => {
+      const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-iso-test-'));
+      sh(repo, 'init', '-q');
+      sh(repo, 'config', 'user.email', 't@t.t');
+      sh(repo, 'config', 'user.name', 't');
+      sh(repo, 'config', 'core.autocrlf', process.platform === 'win32' ? 'true' : 'false');
+      fs.mkdirSync(path.join(repo, '.nativ'));
+      fs.writeFileSync(path.join(repo, '.nativ', 'config.json'), JSON.stringify(config));
+      fs.writeFileSync(path.join(repo, '.gitignore'), 'secret.txt\n');
+      fs.writeFileSync(path.join(repo, 'read-secret.js'), "require('fs').readFileSync('secret.txt');\n");
+      fs.writeFileSync(path.join(repo, 'crlf.js'),
+        "if (!require('fs').readFileSync('data.txt', 'utf8').includes('\\r\\n')) process.exit(1);\n");
+      fs.writeFileSync(path.join(repo, 'data.txt'), 'a\r\nb\r\n');
+      fs.writeFileSync(path.join(repo, 'secret.txt'), 'x');
+      sh(repo, 'add', '-A');
+      sh(repo, 'commit', '-q', '-m', 'init');
+      return repo;
+    };
+    const task = (cmd) => ({ id: 't', title: 't', verificationCommand: cmd, targetFiles: [] });
+    const trees = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('nativ-verify-')).length;
+    const before = trees();
+
+    const block = mkRepo({ profile: 'enterprise' });
+    const none = await runTaskVerification(task('node read-secret.js'), { cwd: block, isolation: 'none' });
+    assert.equal(none.success, true);
+    assert.equal(none.isolation, 'none');
+    const blocked = await runTaskVerification(task('node read-secret.js'), { cwd: block });
+    assert.equal(blocked.success, false, 'a gitignored file must be missing in the clean copy');
+    assert.equal(blocked.isolation, 'clean');
+    assert.match(blocked.error, /Passes only on this machine/);
+    assert.match(blocked.error, /block/);
+
+    const warn = mkRepo({ profile: 'enterprise', verifyIsolationFailure: 'warn' });
+    const warned = await runTaskVerification(task('node read-secret.js'), { cwd: warn });
+    assert.equal(warned.success, true);
+    assert.ok(warned.warnings.some((w) => /Passes only on this machine/.test(w)));
+
+    const good = await runTaskVerification(task('node -e "process.exit(0)"'), { cwd: warn });
+    assert.equal(good.success, true);
+    assert.equal(good.isolation, 'clean');
+    assert.equal(good.warnings, undefined);
+
+    const skipped = await runTaskVerification(task('none'), { cwd: warn });
+    assert.equal(skipped.skipped, true);
+    assert.equal(skipped.isolation, 'none');
+
+    if (process.platform === 'win32') {
+      const crlfNone = await runTaskVerification(task('node crlf.js'), { cwd: block, isolation: 'none' });
+      assert.equal(crlfNone.success, true);
+      const crlf = await runTaskVerification(task('node crlf.js'), { cwd: block });
+      assert.equal(crlf.success, false, 'a CRLF assertion must fail in the clean copy');
+    }
+
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-iso-plain-'));
+    const fallback = await runTaskVerification(task('node -e "process.exit(0)"'), {
+      cwd: plain, isolation: 'clean',
+    });
+    assert.equal(fallback.success, true);
+    assert.equal(fallback.isolation, 'none');
+    assert.match(fallback.warnings[0], /Clean isolation unavailable/);
+
+    assert.equal(trees(), before, 'clean trees must be disposed');
+    for (const d of [block, warn, plain]) fs.rmSync(d, { recursive: true, force: true });
+    console.log('  ✔ clean isolation fails on ignored files and CRLF, warns or blocks, falls back, disposes');
+  }
+
   // Cleanup
   try {
     fs.rmSync(dir, { recursive: true, force: true });

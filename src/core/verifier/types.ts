@@ -12,6 +12,10 @@ export interface VerificationResult {
   codeShape?: CodeShapeReport;
   /** Results of the configured `verifyPhases`, when any ran. */
   phases?: PhaseResult[];
+  /** Which isolation actually ran the check. */
+  isolation?: 'none' | 'clean';
+  /** Notes the reader should see, such as a fallback or a pass that holds only locally. */
+  warnings?: string[];
 }
 
 export interface PhaseResult {
