@@ -64,13 +64,17 @@ try {
     '--spec-refs', 'ui_specs.md#appointment-list, api_contracts.json#/paths/~1appointments',
     '--complexity', 'complex',
     '--accept', 'Shows an empty state',
-    '--accept', 'Errors are readable|Works offline',
+    '--accept', 'Errors are readable',
+    '--accept', 'Works offline',
+    '--accept', 'Status is open|closed',
   ]);
   assert.equal(rich.code, 0);
   const saved = readPlan(dir).milestones[0].tasks.find((t) => t.id === rich.json.task.id);
   assert.deepEqual(saved.specRefs, ['ui_specs.md#appointment-list', 'api_contracts.json#/paths/~1appointments']);
   assert.equal(saved.complexity, 'complex');
-  assert.deepEqual(saved.acceptanceCriteria, ['Shows an empty state', 'Errors are readable', 'Works offline']);
+  assert.deepEqual(saved.acceptanceCriteria, [
+    'Shows an empty state', 'Errors are readable', 'Works offline', 'Status is open|closed',
+  ]);
   console.log('  ok add with fields');
 
   const planBefore = fs.readFileSync(planFile(dir), 'utf8');

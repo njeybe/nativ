@@ -190,7 +190,7 @@ export function createProgram(): Command {
     .option('--notes <text>', 'Task notes (required with --kind manual)')
     .option(
       '--accept <text>',
-      'Acceptance ("done when") line; repeatable or "|"-separated',
+      'Acceptance ("done when") line; repeatable, each value kept whole',
       (value: string, prev: string[] = []) => [...prev, value],
     )
     .option('--json', 'Output the created task as JSON')
