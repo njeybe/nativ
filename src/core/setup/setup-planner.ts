@@ -21,6 +21,8 @@ import {
   isObject,
   Json,
 } from './config-merger.js';
+import { applyBlock, listGeneratedPaths, trackedNativPaths } from './gitignore-block.js';
+import type { GitVisibility } from './gitignore-block.js';
 import { loadEnforcementMode, parseJsonLoose } from '../enforcement.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,6 +65,18 @@ export function configuredInvocation(root: string): CliInvocation | null {
   }
 }
 
+/** Disk-derived paths plus files this run creates, in a fixed order so reruns match. */
+function blockPaths(root: string, visibility: GitVisibility, changes: AssetChange[]): string[] {
+  const disk = listGeneratedPaths(root, visibility);
+  if (visibility === 'shared') return disk;
+  const created = new Set(changes.filter((c) => c.action === 'created').map((c) => `/${c.path}`));
+  const canonical = [
+    '/.ai/', '/.nativ/', '/.worktrees/', '/AGENTS.md', '/CLAUDE.md', '/GEMINI.md',
+    ...AGENT_FILES.map((f) => `/.claude/agents/${f}`), '/.mcp.json', '/.claude/settings.json',
+  ];
+  return canonical.filter((p) => disk.includes(p) || created.has(p));
+}
+
 /** Computes what `nativ setup` would do, without touching disk. */
 export function planSetup(rootArg: string, options: SetupOptions = {}): SetupPlan {
   const root = path.resolve(rootArg);
@@ -74,6 +88,7 @@ export function planSetup(rootArg: string, options: SetupOptions = {}): SetupPla
   const changes: AssetChange[] = [];
   const warnings: string[] = [];
   const writes = new Map<string, string>();
+  let visibility: GitVisibility = options.gitVisibility ?? 'hidden';
 
   if (!invocation.portable) {
     warnings.push(
@@ -165,7 +180,7 @@ export function planSetup(rootArg: string, options: SetupOptions = {}): SetupPla
   }
   for (const [file, title] of [['CLAUDE.md', 'Claude Code'], ['GEMINI.md', 'Gemini / Antigravity']] as const) {
     const existing = readText(path.join(root, file));
-    if (existing === null) record(file, null, `# ${title} directive\n\n@AGENTS.md\n`);
+    if (existing === null) record(file, null, stampManaged(`# ${title} directive\n\n@AGENTS.md\n`));
     else changes.push({ path: file, action: 'unchanged', detail: /AGENTS\.md/.test(existing) ? undefined : 'exists; does not reference AGENTS.md' });
   }
 
@@ -181,10 +196,22 @@ export function planSetup(rootArg: string, options: SetupOptions = {}): SetupPla
       next.enforcement = loadEnforcementMode(root);
       detail = `enforcement=${String(next.enforcement)}`;
     }
+    if (options.gitVisibility && next.gitVisibility !== options.gitVisibility) {
+      next.gitVisibility = options.gitVisibility;
+      detail = [detail, `gitVisibility=${options.gitVisibility}`].filter(Boolean).join(', ');
+    }
     record('.nativ/config.json', config.text, detail || config.text === null ? serializeJson(next) : (config.text ?? ''), detail);
+    visibility = options.gitVisibility ?? (next.gitVisibility === 'shared' ? 'shared' : 'hidden');
   }
 
-  return { root, invocation, changes, warnings, writes };
+  // .gitignore: the managed block, from what is on disk plus what this run creates
+  const paths = blockPaths(root, visibility, changes);
+  const ignore = readText(path.join(root, '.gitignore'));
+  record('.gitignore', ignore, applyBlock(ignore, paths), 'nativ block');
+  const gitRmCommand = trackedNativPaths(root, paths).command;
+  if (gitRmCommand) warnings.push(`nativ files are already tracked by git. To stop tracking them, run: ${gitRmCommand}`);
+
+  return { root, invocation, changes, warnings, writes, gitRmCommand: gitRmCommand || undefined };
 }
 
 /** Writes the planned differences. Idempotent: applying twice changes nothing the second time. */
@@ -199,5 +226,12 @@ export function applySetup(rootArg: string, options: SetupOptions & { dryRun?: b
       fs.renameSync(tmp, file);
     }
   }
-  return { root: plan.root, dryRun: options.dryRun === true, invocation: plan.invocation, changes: plan.changes, warnings: plan.warnings };
+  return {
+    root: plan.root,
+    dryRun: options.dryRun === true,
+    invocation: plan.invocation,
+    changes: plan.changes,
+    warnings: plan.warnings,
+    gitRmCommand: plan.gitRmCommand,
+  };
 }
