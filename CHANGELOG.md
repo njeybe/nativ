@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 2.8.0
+
+### Changed
+
+- **One set of Studio state words.** Every page says Up next, Running, Done or Stuck. "Ready", "Blocked", "Waiting", "Just finished", "Idle" and "completed / started" are gone. A failed run shows as Stuck. A stopped run, or a claim older than 4 hours with no active run, shows as Up next.
+- **Plain agent names.** Home, Tasks and Team show names such as "QA tester" instead of `qa-tester`. Team merges alias rows of the same agent.
+- **Quieter shell.** The pulse strip shows only non-zero counts and hides when everything is zero. The dispatch button hides when nothing is ready instead of showing a grey "Nothing ready". "Abort" is now "Stop". The Benchmarks nav badge is gone. The workspace path no longer breaks mid-word.
+- **Slimmer runner console.** Stop shows only while a run is active. Open diff, Clear and Auto-scroll sit in a More menu. An idle console hides its empty stepper and zero totals.
+- **Tasks page.** A list row opens the task drawer, the same as a Board card. Filters with no tasks are hidden. The Board always shows its four lanes, and an empty lane says "None". The drawer has "Watch live", and "How it is checked" wraps.
+- **Home.** Recent activity shows one row per task with its title and state, for example "Done, took 4m 00s".
+- **Flow.** Plan cards show titles on up to two lines.
+- **Database and Benchmarks.** "Not set up" is neutral, and red means only a configured connection that is offline. The header Connection Settings button is the single way in. Benchmarks lists scenarios that were not run on one line.
+- **Option trade-offs.** The architect, the project manager and the shared directive add one line on when the non-recommended option would be the better choice.
+- **Verifier report.** The verifier reports contract findings and code style findings in separate parts.
+
+## 2.7.0
 
 ### Added
 

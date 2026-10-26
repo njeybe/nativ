@@ -11,7 +11,7 @@ const budgets = {
   'templates/AGENTS.md': 1750,
   'templates/CLAUDE.md': 700,
   'templates/claude-agents/worker.md': 700,
-  'templates/claude-agents/verifier.md': 520,
+  'templates/claude-agents/verifier.md': 620,
   'templates/claude-agents/explorer.md': 850,
   'templates/claude-agents/architect.md': 2000,
 };
