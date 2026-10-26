@@ -12,6 +12,8 @@ const NODE_SUITES = [
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
   'model-routing', 'notify', 'token-budget', 'v2-e2e',
   'taste-bundle', 'taste-digest', 'init-design', 'design-check',
+  'gitignore-block', 'env-reads', 'verify-env', 'clean-tree', 'check-docs', 'portability-lint', 'm16-templates',
+  'm16-e2e',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',
