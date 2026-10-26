@@ -269,7 +269,9 @@ export async function verifyTask(
  */
 export async function verifyBatch(
   targetDirArg?: string,
-  options: { taskId?: string; milestoneId?: string; all?: boolean; timeout?: number } = {}
+  options: {
+    taskId?: string; milestoneId?: string; all?: boolean; timeout?: number; isolation?: 'none' | 'clean';
+  } = {}
 ): Promise<BatchVerificationResult> {
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const { plan, error } = loadMasterPlan(targetDir);
@@ -350,7 +352,8 @@ export async function verifyBatch(
   let totalDuration = 0;
 
   // The phases check the whole project, so one run (and one clean tree) serves every task.
-  const wanted = resolveActiveProfileSettings(resolveMainRoot(targetDir)).verifyIsolation;
+  const wanted = options.isolation
+    ?? resolveActiveProfileSettings(resolveMainRoot(targetDir)).verifyIsolation;
   const commands = candidates.map((c) => c.task.verificationCommand);
   const isolation = candidates.length && needsRun(commands, targetDir, false)
     ? await openIsolation(targetDir, targetDir, wanted)

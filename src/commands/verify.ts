@@ -20,6 +20,16 @@ export interface VerifyOptions {
   milestone?: string;
   json?: boolean;
   timeout?: number;
+  isolation?: string;
+  clean?: boolean;
+}
+
+/** Reads --isolation / --clean; undefined means use the profile. */
+export function parseIsolation(o: { isolation?: string; clean?: boolean }): 'none' | 'clean' | undefined {
+  const v = o.clean ? 'clean' : o.isolation;
+  if (v === undefined) return undefined;
+  if (v !== 'none' && v !== 'clean') throw new Error(`--isolation must be none or clean, got "${v}"`);
+  return v;
 }
 
 export async function runVerify(
@@ -33,6 +43,7 @@ export async function runVerify(
     milestoneId: options.milestone,
     all: options.all,
     timeout: options.timeout,
+    isolation: parseIsolation(options),
   });
 
   if (options.json) {
@@ -62,18 +73,20 @@ export async function runVerify(
     if (t.result.success) {
       console.log(
         pc.green(`  ✔ [${pc.bold(t.taskId)}] ${t.title}`) +
-          pc.dim(` (${elapsed}s)`) +
+          pc.dim(` (${elapsed}s, isolation: ${t.result.isolation ?? 'none'})`) +
           pc.yellow(` \`${t.result.command}\``)
       );
+      for (const w of t.result.warnings ?? []) console.log(pc.yellow(`    ⚠ ${w}`));
       if (t.result.phases?.length) {
         console.log(pc.dim(`    Phases passed: ${t.result.phases.map((p) => p.name).join(', ')}`));
       }
     } else {
       console.log(
         pc.red(`  ✖ [${pc.bold(t.taskId)}] ${t.title}`) +
-          pc.dim(` (${elapsed}s, exit code: ${t.result.exitCode})`) +
+          pc.dim(` (${elapsed}s, exit ${t.result.exitCode}, isolation: ${t.result.isolation ?? 'none'})`) +
           pc.yellow(` \`${t.result.command}\``)
       );
+      for (const w of t.result.warnings ?? []) console.log(pc.yellow(`    ⚠ ${w}`));
       const failedPhase = t.result.phases?.find((p) => !p.success);
       if (failedPhase) console.log(pc.red(`    Failed in phase "${failedPhase.name}"`));
 

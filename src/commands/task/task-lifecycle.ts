@@ -1,4 +1,8 @@
+import path from 'node:path';
 import pc from 'picocolors';
+import { parseIsolation } from '../verify.js';
+import { resolveActiveProfileSettings } from '../../core/profiles.js';
+import { resolveMainRoot } from '../../core/root-resolver.js';
 import { MasterPlanTask } from '../../scanner/types.js';
 import { runTaskVerification, VerificationResult } from '../../core/verifier.js';
 import { digestFailure } from '../../core/verifier/output-digest.js';
@@ -112,9 +116,24 @@ export async function runTaskUnlock(taskId: string, targetDirArg?: string, optio
 export async function runTaskComplete(
   taskId: string,
   targetDirArg?: string,
-  options: TaskCompleteOptions = {}
+  options: TaskCompleteOptions & { isolation?: string } = {}
 ) {
   if (options.skipVerify && refuseHeadless('nativ task complete --no-verify')) return;
+  let isolation: 'none' | 'clean' | undefined;
+  try {
+    isolation = parseIsolation(options);
+  } catch (e) {
+    console.error(pc.red(`
+✖ ${(e as Error).message}
+`));
+    process.exitCode = 1;
+    return;
+  }
+  const root = resolveMainRoot(path.resolve(targetDirArg || process.cwd()));
+  const profile = resolveActiveProfileSettings(root);
+  if (isolation === 'none' &&
+    profile.verifyIsolationFailure === 'block' &&
+    refuseHeadless('nativ task complete --isolation none')) return;
   const { targetDir, planPath } = getPlanPath(targetDirArg);
   const plan = loadPlan(planPath);
   if (!plan) {
@@ -181,7 +200,7 @@ export async function runTaskComplete(
   // ── Verification Gatekeeper ────────────────────────────────────────────────
   let vResult: VerificationResult | null = null;
   if (!options.skipVerify) {
-    vResult = await runTaskVerification(foundTask, { cwd: targetDir, timeout: options.timeout });
+    vResult = await runTaskVerification(foundTask, { cwd: targetDir, timeout: options.timeout, isolation });
     if (!vResult.success) {
       console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] verification FAILED with exit code ${vResult.exitCode}:`));
       const failedPhase = vResult.phases?.find((p) => !p.success);
@@ -213,7 +232,10 @@ export async function runTaskComplete(
       console.log(pc.dim(`\n○ Verification skipped: no verification command specified for [${taskId}]`));
     } else {
       const elapsed = (vResult.durationMs / 1000).toFixed(2);
-      console.log(pc.green(`\n✔ Verification passed (${elapsed}s): `) + pc.yellow(`\`${foundTask.verificationCommand}\``));
+      const used = vResult.isolation ?? 'none';
+      console.log(pc.green(`\n✔ Verification passed (${elapsed}s, isolation: ${used}): `) +
+        pc.yellow(`\`${foundTask.verificationCommand}\``));
+      for (const w of vResult.warnings ?? []) console.log(pc.yellow(`  ⚠ ${w}`));
     }
   } else {
     vResult = {

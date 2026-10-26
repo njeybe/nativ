@@ -132,6 +132,8 @@ export function createProgram(): Command {
     .option('-m, --milestone <id>', 'Run verification commands for all tasks in a specific milestone')
     .option('--json', 'Output verification telemetry as JSON')
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
+    .option('--isolation <mode>', 'Run checks in place (none) or in a clean copy (clean)')
+    .option('--clean', 'Short for --isolation clean')
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
     });
@@ -219,8 +221,11 @@ export function createProgram(): Command {
     .option('-n, --notes <notes>', 'Completion notes or summary')
     .option('--no-verify', 'Skip automated verification command execution')
     .option('--timeout <ms>', 'Verification execution timeout in milliseconds', parseInt)
+    .option('--isolation <mode>', 'Run the check in place (none) or in a clean copy (clean)')
+    .option('--clean', 'Short for --isolation clean')
     .action(async (taskId, targetDir, options) => {
       await runTaskComplete(taskId, targetDir, {
+        isolation: options.clean ? 'clean' : options.isolation,
         notes: options.notes,
         skipVerify: options.verify === false,
         timeout: options.timeout,
@@ -234,6 +239,8 @@ export function createProgram(): Command {
     .option('-m, --milestone <id>', 'Run verification commands for all tasks in a specific milestone')
     .option('--json', 'Output verification telemetry as JSON')
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
+    .option('--isolation <mode>', 'Run checks in place (none) or in a clean copy (clean)')
+    .option('--clean', 'Short for --isolation clean')
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
     });

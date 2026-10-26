@@ -330,6 +330,63 @@ async function runTests() {
     console.log('  ✔ clean isolation fails on ignored files and CRLF, warns or blocks, falls back, disposes');
   }
 
+  // Isolation flags: override reaches verifyBatch; --isolation none is gated under block
+  {
+    const { execFileSync } = await import('node:child_process');
+    const { parseIsolation } = await import('../dist/commands/verify.js');
+    assert.equal(parseIsolation({}), undefined);
+    assert.equal(parseIsolation({ clean: true }), 'clean');
+    assert.equal(parseIsolation({ isolation: 'none' }), 'none');
+    assert.throws(() => parseIsolation({ isolation: 'bogus' }), /none or clean/);
+
+    const sh = (cwd, ...a) => execFileSync('git', a, { cwd, stdio: 'ignore' });
+    const mk = (config) => {
+      const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-flag-test-'));
+      sh(repo, 'init', '-q');
+      sh(repo, 'config', 'user.email', 't@t.t');
+      sh(repo, 'config', 'user.name', 't');
+      fs.mkdirSync(path.join(repo, '.nativ'));
+      fs.writeFileSync(path.join(repo, '.nativ', 'config.json'), JSON.stringify(config));
+      fs.writeFileSync(path.join(repo, '.gitignore'), 'secret.txt\n.ai/\n');
+      fs.writeFileSync(path.join(repo, 'read-secret.js'), "require('fs').readFileSync('secret.txt');\n");
+      fs.writeFileSync(path.join(repo, 'secret.txt'), 'x');
+      sh(repo, 'add', '-A');
+      sh(repo, 'commit', '-q', '-m', 'init');
+      fs.mkdirSync(path.join(repo, '.ai'));
+      const plan = {
+        projectName: 'flags', overallStatus: 'in_progress', activeMilestoneId: 'm1',
+        lastUpdated: new Date().toISOString(),
+        milestones: [{ id: 'm1', name: 'M', status: 'in_progress', tasks: [{
+          id: 'task-s', title: 'S', assignedSubagent: 'backend', dependencies: [], targetFiles: [],
+          status: 'in_progress', verificationCommand: 'node read-secret.js', notes: '',
+        }] }],
+      };
+      fs.writeFileSync(path.join(repo, '.ai', 'master_plan.json'), JSON.stringify(plan));
+      return repo;
+    };
+
+    const warn = mk({ profile: 'enterprise', verifyIsolationFailure: 'warn' });
+    const viaNone = await verifyBatch(warn, { taskId: 'task-s', isolation: 'none' });
+    assert.equal(viaNone.tasks[0].result.isolation, 'none');
+    assert.equal(viaNone.tasks[0].result.warnings, undefined);
+    const viaProfile = await verifyBatch(warn, { taskId: 'task-s' });
+    assert.equal(viaProfile.tasks[0].result.isolation, 'clean');
+    assert.ok(viaProfile.tasks[0].result.warnings.some((w) => /Passes only on this machine/.test(w)));
+
+    const block = mk({ profile: 'enterprise' });
+    process.exitCode = undefined;
+    await asHeadless(() => runTaskComplete('task-s', block, { isolation: 'none' }));
+    assert.equal(process.exitCode, 1, '--isolation none must be refused headless under block');
+    assert.equal(readPlan(block).milestones[0].tasks[0].status, 'in_progress');
+    process.exitCode = undefined;
+    await asHuman(() => runTaskComplete('task-s', block, { isolation: 'none' }));
+    assert.equal(readPlan(block).milestones[0].tasks[0].status, 'completed');
+    process.exitCode = undefined;
+
+    for (const d of [warn, block]) fs.rmSync(d, { recursive: true, force: true });
+    console.log('  ✔ isolation flag overrides the profile, reports warnings, and is gated under block');
+  }
+
   // Cleanup
   try {
     fs.rmSync(dir, { recursive: true, force: true });
