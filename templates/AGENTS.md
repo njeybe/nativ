@@ -8,7 +8,7 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 | :--- | :--- | :--- | :--- |
 | **Architect** | `architect` subagent, or `NATIV_ROLE=architect` | Design contracts, resolve escalations, write `.ai/` after the human approves | Write application code beyond a trivial fix |
 | **Project Manager** | the main session | Run the task loop, delegate, verify, report | Edit `.ai/`; implement what a worker can |
-| **Worker** | `worker` subagent  | Change the task's `targetFiles` | Touch anything else, edit contracts, run destructive commands |
+| **Worker** | `worker` subagent | Change the task's `targetFiles` | Touch anything else, edit contracts, run destructive commands |
 | **Verifier** | `verifier` subagent | Read, run checks, report | Edit files |
 | **Explorer** | `explorer` subagent | Report what exists, drift, and files a feature would touch | Edit, design, decide |
 
@@ -33,7 +33,7 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 5. The verifier re-checks whole milestones, not single tasks.
 6. `nativ task next` for the following task.
 
-The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. 
+The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
 Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each agent its own `NATIV_AGENT_ID` so `task start` refuses a task another agent holds.
 
@@ -83,5 +83,5 @@ Credentials exist only in `.env*` files and inside the local `nativ` process. Wo
 - For databases use the masked, structure-only commands: `nativ db status --json`, `nativ db inspect --json`, `nativ db diff --target contract`. Never read row data.
 - Do not run `nativ db sync --yes`: changing `.ai/db_schema.json` is an architect decision the human approves.
 - Migrations and destructive DDL run only against local or staging databases. Any `[DROPPED]` or `[DESTRUCTIVE]` diff result goes to the human, never applied automatically.
-- Check commands may not set `NATIV_CI_OVERRIDE` or `NATIV_HEADLESS_OVERRIDE`; a test setting them on its own child process is a verifier finding.
+- Check commands may not set `NATIV_CI_OVERRIDE` or `NATIV_HEADLESS_OVERRIDE`.
 - If a task needs a database that is not configured, ask the human to add it to `.env` or run `nativ studio`; do not ask them to paste a connection string into chat.
