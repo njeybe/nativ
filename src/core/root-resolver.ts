@@ -199,3 +199,32 @@ export function safeUnlinkWorktreeNodeModules(worktreeDir: string): boolean {
   return false;
 }
 
+
+/** Links a folder of the project root into a worktree (junction on Windows). */
+export function linkWorktreeDir(worktreeDir: string, rootDir: string, name: string): boolean {
+  const source = path.join(rootDir, name);
+  const target = path.join(worktreeDir, name);
+  if (!fs.existsSync(source) || fs.existsSync(target)) return false;
+  try {
+    fs.symlinkSync(source, target, process.platform === 'win32' ? 'junction' : 'dir');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Removes only the link, never the folder it points to. */
+export function safeUnlinkWorktreeDir(worktreeDir: string, name: string): boolean {
+  const target = path.join(worktreeDir, name);
+  try {
+    if (!fs.lstatSync(target).isSymbolicLink()) return false;
+    try {
+      fs.unlinkSync(target);
+    } catch {
+      fs.rmdirSync(target);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
