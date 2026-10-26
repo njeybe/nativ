@@ -148,7 +148,6 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
 
     const specRefs = [...new Set(splitList(options.specRefs))];
     const acceptanceCriteria = (Array.isArray(options.accept) ? options.accept : options.accept ? [options.accept] : [])
-      .flatMap((item) => item.split('|'))
       .map((item) => item.trim())
       .filter(Boolean);
     const complexity = options.complexity?.trim().toLowerCase();
