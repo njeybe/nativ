@@ -17,7 +17,7 @@ const qa = read('templates/dot-ai/subagents/qa-tester.md');
 
 // Test 1: AGENTS.md guards required settings and tracked-file tests
 {
-  assert.ok(agents.includes('Required settings fail loudly, naming the variable.'), 'fail-loudly rule');
+  assert.ok(agents.includes('Required settings fail loudly, naming the variable;'), 'fail-loudly rule');
   assert.ok(agents.includes('`nativ-allow-fallback`'), 'fallback marker named');
   assert.ok(agents.includes('git-tracked files'), 'tests read tracked files only');
   assert.ok(agents.includes('never spawn `nativ`'), 'tests do not spawn nativ');

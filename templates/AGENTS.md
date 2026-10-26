@@ -16,7 +16,7 @@ The vendor behind a role does not matter; the boundary does. `nativ hook check` 
 
 ## Orientation (load nothing else up front)
 
-1. Run `nativ task next --json` (MCP: `nativ_task_next`). It returns the task, its role guide and its context.
+1. Run `nativ task next --json` (MCP: `nativ_task_next`).
 2. Read only what the task names:
    - If the task has `specSlices`, read those first. Open a whole contract only when a slice falls short.
    - role guide `.ai/subagents/<assignedSubagent>.md`, and `recommendedContractSlice` when there are no slices.
@@ -35,7 +35,7 @@ The vendor behind a role does not matter; the boundary does. `nativ hook check` 
 
 The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot start subagents, so the project manager also runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
-Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each parallel agent its own `NATIV_AGENT_ID`.
+Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each parallel agent its own `NATIV_AGENT_ID` so `task start` refuses a task another agent holds.
 
 ## Code style
 
@@ -44,9 +44,8 @@ Applies to every worker; a project's own formatter or linter wins.
 - Lines about 100 characters, hard maximum 120. Functions about 40 lines, files about 300.
 - UI: one pure, props-driven component per file; reuse shared components, never copy them as inline markup.
 - Comments: at most 2 lines, why not what, plain words. No banners, no commented-out code.
-- Required settings fail loudly, naming the variable. A fallback is allowed only on a line
-  marked `nativ-allow-fallback`, for truly optional reads (may later become `optional: true`).
-- Tests read only git-tracked files, or skip when absent, and never spawn `nativ`.
+- Required settings fail loudly, naming the variable; a fallback needs `nativ-allow-fallback` on its line.
+- Tests read only git-tracked files and never spawn `nativ`.
 - Match the surrounding code.
 
 ## Lessons for later workers
@@ -83,5 +82,5 @@ Credentials exist only in `.env*` files and inside the local `nativ` process. Wo
 - Never open, print, search or copy `.env`, `.env.*` (except `.env.example`), `.nativ/*.local.json`, `*.pem`, `*.key`. Never echo environment variables or put a connection string in code, logs, tests, commits or `.ai/`.
 - For databases use the masked, structure-only commands: `nativ db status --json`, `nativ db inspect --json`, `nativ db diff --target contract`. Never read row data.
 - Do not run `nativ db sync --yes`: changing `.ai/db_schema.json` is an architect decision the human approves.
-- Destructive DDL runs only on local or staging databases. `[DROPPED]` or `[DESTRUCTIVE]` diffs go to the human.
+- Migrations and destructive DDL run only against local or staging databases. Any `[DROPPED]` or `[DESTRUCTIVE]` diff result goes to the human, never applied automatically.
 - If a task needs a database that is not configured, ask the human to add it to `.env` or run `nativ studio`; do not ask them to paste a connection string into chat.
