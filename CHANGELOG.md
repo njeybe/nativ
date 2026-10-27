@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.9.0
+
+### Added
+
+- **Clean checks.** A task's check runs in a throwaway copy of the repo with only the files git ships and a minimal environment. Defaults: prototype off, solo on, enterprise on. Use `--isolation none|clean` (or `--clean`) on `nativ verify` and `nativ task complete`. Under enterprise, `--isolation none` on `task complete` needs an interactive terminal. Config keys: `verifyIsolation`, `verifyIsolationFailure`, `verifyEnv`, `verifyLinks`.
+- **Portability warnings.** When a check passes only on your machine, a failure in the clean copy warns "Passes only on this machine". nativ names the test lines that read gitignored files or spawn `nativ`.
+- **Check types.** Tasks take a `verificationKind` (unit, integration, static-config, docs, probe, manual) through `nativ task add --kind`, plus `--notes`. `--kind docs` defaults its check to `nativ check docs`. A manual task needs notes.
+- **Skipped-check policy.** `skippedCheck` allows a skip in prototype, warns in solo and blocks in enterprise. A skip passes quietly only for a manual task with notes. Tasks with no kind only warn.
+- **`nativ check docs <files>`.** Checks backticked file paths, `<PLACEHOLDER>` tokens against the file the paragraph names, setting names used in assignments or as variable references, and nativ subcommands and flags. Supports `--json`. Skip lines with `<!-- nativ-check-ignore -->`, or wrap them in the `-start` and `-end` pair.
+- **Fail-loud config rule.** Code-shape reports "config" findings for reads of settings that silently fall back to empty, such as `?? ''`, `|| ''`, `?? null`, Python `os.getenv('X', '')` and unchecked Go `os.Getenv`. Setting: `codeStyle.configFallback` (off, warn or block; default warn). Opt out per line with `nativ-allow-fallback`.
+- **nativ stays out of git.** `nativ init`, `setup` and `update` add a managed `# >>> nativ (managed) >>>` block to the project's `.gitignore`, listing only files nativ generated. `--git-visibility hidden|shared` sets it (default hidden); shared keeps only secret and machine files ignored. `nativ doctor` warns when the block is missing (`--fix` adds it) and prints the `git rm --cached` command for nativ files already committed. It never runs that command.
+- **`nativ task add --new-milestone <name>`.** Starts the next milestone when the others are done. `--force` works only from the CLI.
+
+### Changed
+
+- **Verification environment.** Checks get an allowlisted environment, and a timed-out check stops its whole process tree. `CI` inside a check no longer bypasses human-only steps. A check command may not set `NATIV_CI_OVERRIDE` or `NATIV_HEADLESS_OVERRIDE`; `nativ validate` and `task add` reject it.
+- **`--accept` keeps each value whole.** A `|` no longer splits a criterion.
+- **Guides.** AGENTS.md says required settings fail loudly and tests read only tracked files. The verifier has a "Weak verification" step and a config-fallback checklist item. The architect says what a real check looks like for each kind.
+
+<!-- nativ-check-ignore-start -->
 ## 2.8.0
 
 ### Changed
@@ -262,3 +282,4 @@ nativ is now role-based and Claude-first. The roles (architect, project manager,
 ## 1.0.0
 
 Initial release.
+<!-- nativ-check-ignore-end -->
