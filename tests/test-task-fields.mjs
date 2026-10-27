@@ -64,13 +64,17 @@ try {
     '--spec-refs', 'ui_specs.md#appointment-list, api_contracts.json#/paths/~1appointments',
     '--complexity', 'complex',
     '--accept', 'Shows an empty state',
-    '--accept', 'Errors are readable|Works offline',
+    '--accept', 'Errors are readable',
+    '--accept', 'Works offline',
+    '--accept', 'Status is open|closed',
   ]);
   assert.equal(rich.code, 0);
   const saved = readPlan(dir).milestones[0].tasks.find((t) => t.id === rich.json.task.id);
   assert.deepEqual(saved.specRefs, ['ui_specs.md#appointment-list', 'api_contracts.json#/paths/~1appointments']);
   assert.equal(saved.complexity, 'complex');
-  assert.deepEqual(saved.acceptanceCriteria, ['Shows an empty state', 'Errors are readable', 'Works offline']);
+  assert.deepEqual(saved.acceptanceCriteria, [
+    'Shows an empty state', 'Errors are readable', 'Works offline', 'Status is open|closed',
+  ]);
   console.log('  ok add with fields');
 
   const planBefore = fs.readFileSync(planFile(dir), 'utf8');
@@ -79,6 +83,50 @@ try {
   assert.equal(bad.json.error.code, 'INVALID_TASK');
   assert.equal(fs.readFileSync(planFile(dir), 'utf8'), planBefore, 'rejected add does not write');
   console.log('  ok bad complexity rejected');
+  assert.deepEqual(validateMasterPlanTask({ ...base, verificationKind: 'docs' }), []);
+  assert.ok(validateMasterPlanTask({ ...base, verificationKind: 'vibes' }).length, 'unknown kind rejected');
+  const kd = await add(dir, 'Docs', ['--kind', 'docs', '--files', 'docs/a.md,src/x.ts']);
+  assert.equal(kd.code, 0);
+  assert.equal(kd.json.task.verificationKind, 'docs');
+  assert.match(kd.json.task.verificationCommand, /check docs docs\/a\.md$/);
+  const km = await add(dir, 'Manual', ['--kind', 'manual']);
+  assert.equal(km.code, 1);
+  const kn = await add(dir, 'Manual ok', ['--kind', 'manual', '--notes', 'Owner confirms']);
+  assert.equal(kn.json.task.notes, 'Owner confirms');
+  const kb = await add(dir, 'Bad kind', ['--kind', 'nope']);
+  assert.equal(kb.code, 1);
+  console.log('  ok verification kind');
+  const nm = createProject();
+  const open = await add(nm, 'Next', ['--new-milestone', 'Second']);
+  assert.equal(open.code, 1);
+  assert.equal(open.json.error.code, 'MILESTONE_STILL_OPEN');
+  const conflict = await add(nm, 'Next', ['--new-milestone', 'Second', '--fast-path']);
+  assert.equal(conflict.json.error.code, 'CONFLICTING_OPTIONS');
+  const conflict2 = await add(nm, 'Next', ['--new-milestone', 'Second', '--milestone', 'm1']);
+  assert.equal(conflict2.json.error.code, 'CONFLICTING_OPTIONS');
+  const p0 = readPlan(nm);
+  p0.milestones[0].status = 'completed';
+  p0.milestones.push({ id: 'm16b', name: 'Follow', status: 'completed', tasks: [] });
+  p0.milestones.push({ id: 'm5', name: 'Five', status: 'completed', tasks: [] });
+  p0.overallStatus = 'completed';
+  fs.writeFileSync(planFile(nm), JSON.stringify(p0, null, 2));
+  const made = await add(nm, 'Next', ['--new-milestone', 'Second', '--accept', 'A, B']);
+  assert.equal(made.code, 0);
+  assert.equal(made.json.milestoneId, 'm6');
+  assert.equal(made.json.createdMilestone, true);
+  assert.deepEqual(made.json.task.acceptanceCriteria, ['A, B']);
+  const p1 = readPlan(nm);
+  assert.equal(p1.activeMilestoneId, 'm6');
+  assert.equal(p1.overallStatus, 'in_progress');
+  const m6 = p1.milestones.find((m) => m.id === 'm6');
+  assert.equal(m6.status, 'in_progress');
+  assert.equal(m6.tasks.length, 1);
+  const refused = await add(nm, 'Again', ['--new-milestone', 'Third']);
+  assert.equal(refused.json.error.code, 'MILESTONE_STILL_OPEN');
+  const f2 = await add(nm, 'Forced', ['--new-milestone', 'Third', '--force']);
+  assert.equal(f2.json.milestoneId, 'm7');
+  assert.equal(readPlan(nm).activeMilestoneId, 'm7');
+  console.log('  ok new milestone');
   console.log('\nAll task field checks passed.');
 } finally {
   for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true });

@@ -90,6 +90,7 @@ const doctorJson = async (root, options = {}) => {
     'CLAUDE.md': 'created',
     'GEMINI.md': 'created',
     '.nativ/config.json': 'created',
+    '.gitignore': 'created',
   });
 
   assert.deepEqual(readJson(root, '.mcp.json'), { mcpServers: { nativ: { command: 'nativ', args: ['mcp'] } } });
@@ -106,7 +107,8 @@ const doctorJson = async (root, options = {}) => {
   assert.ok(!JSON.stringify(s).includes('shell:') && !JSON.stringify(s).includes('mcp:'), 'no invented permission format');
 
   assert.deepEqual(readJson(root, '.nativ/config.json'), { enforcement: 'warn' });
-  assert.equal(read(root, 'CLAUDE.md'), '# Claude Code directive\n\n@AGENTS.md\n', 'CLAUDE.md is a pointer at the canonical file');
+  assert.match(read(root, 'CLAUDE.md'), /^# Claude Code directive\n\n@AGENTS\.md\n/);
+  assert.equal(managedState(read(root, 'CLAUDE.md')), 'pristine', 'the pointer is nativ-stamped');
   assert.match(read(root, 'GEMINI.md'), /@AGENTS\.md/);
 
   for (const file of AGENT_FILES) {
@@ -191,7 +193,7 @@ const doctorJson = async (root, options = {}) => {
   const root = tempProject();
   const result = applySetup(root, { ...NATIV, dryRun: true });
   assert.equal(result.dryRun, true);
-  assert.equal(result.changes.filter((c) => c.action === 'created').length, 10);
+  assert.equal(result.changes.filter((c) => c.action === 'created').length, 11);
   for (const rel of ['.mcp.json', '.claude', 'AGENTS.md', 'CLAUDE.md', '.nativ']) assert.ok(!exists(root, rel), `${rel} must not exist after a dry run`);
 
   const shown = await quiet(() => runSetup(root, { command: 'nativ', dryRun: true }));
@@ -744,5 +746,46 @@ const doctorJson = async (root, options = {}) => {
   cleanup(root);
   console.log('✔ Test 21: doctor flags disabled hooks, bypass mode, secrets in agent-read files, edited or missing role guides and waiting lessons');
 }
+
+{
+  const root = tempProject();
+  applySetup(root, NATIV);
+  const ig = read(root, '.gitignore');
+  assert.ok(ig.includes('# >>> nativ (managed) >>>') && ig.includes('/.ai/') && ig.includes('/CLAUDE.md'));
+  assert.equal(actions(applySetup(root, NATIV))['.gitignore'], 'unchanged', 'second run changes nothing');
+  assert.equal(readJson(root, '.nativ/config.json').gitVisibility, undefined);
+
+  applySetup(root, { ...NATIV, gitVisibility: 'shared' });
+  const shared = read(root, '.gitignore');
+  assert.ok(shared.includes('/.nativ/*.local.json') && !shared.includes('/.ai/'), 'shared is the small block');
+  assert.equal(readJson(root, '.nativ/config.json').gitVisibility, 'shared');
+  assert.equal(actions(applySetup(root, NATIV))['.gitignore'], 'unchanged', 'config keeps the choice');
+
+  // Doctor: a missing block is a warning, --fix writes it
+  fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules\n');
+  const opts = { ...NATIV, json: true, runVersion: () => ({ ok: true, output: '1' }), providerDeps: offlineProviders };
+  const rep = JSON.parse((await quiet(() => runDoctor(root, opts))).text);
+  const gi = rep.checks.find((c) => c.id === 'gitignore');
+  assert.equal(gi.status, 'warn');
+  assert.equal(gi.fixable, true);
+  await quiet(() => runDoctor(root, { ...opts, fix: true }));
+  assert.ok(read(root, '.gitignore').startsWith('node_modules\n'));
+  assert.ok(read(root, '.gitignore').includes('/.nativ/*.local.json'));
+  cleanup(root);
+  console.log('✔ Test 22: gitignore block in setup and doctor');
+}
+
+{
+  const root = tempProject();
+  const git = (...a) => spawnSync('git', a, { cwd: root, encoding: 'utf8' });
+  git('init');
+  git('add', '-A');
+  const plan = planSetup(root, NATIV);
+  assert.match(plan.gitRmCommand ?? '', /^git rm --cached -r -- .*\.ai\//);
+  assert.ok(git('ls-files', '.ai/master_plan.json').stdout.trim(), 'nativ never untracks anything');
+  cleanup(root);
+  console.log('✔ Test 23: tracked nativ files give a hint only');
+}
+
 
 console.log('\n🎉 ALL SETUP & DOCTOR TESTS PASSED!');

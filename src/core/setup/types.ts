@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import type { EnforcementMode } from '../enforcement.js';
+import type { GitVisibility } from './gitignore-block.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,8 @@ export interface SetupOptions {
   enforcement?: EnforcementMode;
   /** Also overwrite agent files that were edited by hand or are not nativ's. */
   force?: boolean;
+  /** Whether nativ's files stay out of git (hidden, the default) or are shared with the team. */
+  gitVisibility?: GitVisibility;
   hasBinary?: (name: string) => boolean;
   templatesDir?: string;
 }
@@ -54,6 +57,8 @@ export interface SetupPlan {
   warnings: string[];
   /** Full new content per changed path, keyed by the same relative path. */
   writes: Map<string, string>;
+  /** `git rm --cached` command for nativ files git already tracks; never run by nativ. */
+  gitRmCommand?: string;
 }
 
 export interface SetupResult {
@@ -62,6 +67,7 @@ export interface SetupResult {
   invocation: CliInvocation;
   changes: AssetChange[];
   warnings: string[];
+  gitRmCommand?: string;
 }
 
 export interface TemplateFilePlan {

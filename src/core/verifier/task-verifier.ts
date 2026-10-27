@@ -2,11 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { MasterPlan, MasterPlanTask, MasterPlanMilestone } from '../../scanner/types.js';
 import { checkCodeShape, formatCodeShapeReport } from '../code-shape.js';
-import { executeVerification } from './executor.js';
-import { runVerifyPhases } from './phases.js';
+import { resolveActiveProfileSettings } from '../profiles.js';
+import { resolveMainRoot } from '../root-resolver.js';
+import {
+  NO_ISOLATION, needsRun, openIsolation, runPhasesIn, runInPlan, diagnose,
+} from './isolation.js';
+import type { RunOptions } from './isolation.js';
 import type {
   BatchVerificationResult,
-  PhasesOutcome,
   TaskVerificationResult,
   VerificationResult,
 } from './types.js';
@@ -36,39 +39,52 @@ export function applyCodeShape(
 ): VerificationResult {
   if (result.skipped || !result.success) return result;
   const report = checkCodeShape(targetDir, task.targetFiles || []);
-  if (report.mode === 'off') return result;
+  if (report.issues.length === 0) return result;
   result.codeShape = report;
   const summary = formatCodeShapeReport(report);
   if (summary) console.error(summary);
-  if (report.mode === 'block' && report.issues.length > 0) {
+  const blocking = report.issues.filter((i) =>
+    (i.category === 'config' ? report.configMode : report.mode) === 'block');
+  if (blocking.length > 0) {
+    const names = [...new Set(blocking.filter((i) => i.category === 'config')
+      .map((i) => i.message.split(' ')[0]))];
+    const config = names.length > 0 ? `; unset-variable fallbacks: ${names.join(', ')}` : '';
     result.success = false;
     result.exitCode = 1;
-    result.error = `Code shape check failed: ${report.issues.length} issue(s) (codeStyle.mode is "block")`;
+    result.error = `Code shape check failed: ${blocking.length} issue(s) set to block${config}`;
   }
   return result;
 }
 
+
 /**
  * The one verification every path shares: the configured phases in order, stopping at the
- * first failure, then the task's own command, then the code-shape check.
+ * first failure, then the task's own command (both in a clean copy when isolation is on),
+ * then the code-shape check on the real tree.
  */
 export async function runTaskVerification(
   task: MasterPlanTask,
-  options: { cwd: string; configDir?: string; timeout?: number; phases?: PhasesOutcome }
+  options: RunOptions,
 ): Promise<VerificationResult> {
   const configDir = options.configDir ?? options.cwd;
-  const outcome = options.phases ?? (await runVerifyPhases(options.cwd, configDir, options.timeout));
-  // In a batch the shared phase time is counted once, by the batch, not again for every task.
-  if (outcome.failure) {
-    return { ...outcome.failure, phases: outcome.reports, ...(options.phases ? { durationMs: 0 } : {}) };
+  const settings = resolveActiveProfileSettings(resolveMainRoot(configDir));
+  const wanted = options.isolation ?? settings.verifyIsolation;
+  const owned = !options.plan;
+  const plan = options.plan
+    ?? (needsRun([task.verificationCommand], configDir, !!options.phases)
+      ? await openIsolation(options.cwd, configDir, wanted)
+      : NO_ISOLATION);
+  try {
+    let result = await runInPlan(task, options, plan);
+    result.isolation = plan.mode;
+    if (plan.warnings.length) result.warnings = [...plan.warnings];
+    if (plan.mode === 'clean' && !result.success) {
+      result = await diagnose(task, options, result, settings.verifyIsolationFailure);
+    }
+    return applyCodeShape(result, options.cwd, task);
+  } finally {
+    if (owned) await plan.dispose?.();
   }
-  const raw = await executeVerification(task.verificationCommand, options.cwd, options.timeout);
-  if (outcome.reports.length) {
-    raw.phases = outcome.reports;
-    raw.durationMs += options.phases ? 0 : outcome.reports.reduce((sum, r) => sum + r.durationMs, 0);
-    raw.skipped = false;
-  }
-  return applyCodeShape(raw, options.cwd, task);
 }
 
 /**
@@ -143,12 +159,18 @@ export async function verifyTask(
   };
 }
 
+function matchesMilestone(m: MasterPlanMilestone, wanted: string): boolean {
+  return m.id === wanted || m.name.toLowerCase() === wanted.toLowerCase();
+}
+
 /**
  * Verify a batch of tasks (by milestone, all completed tasks, or the active in-progress task).
  */
 export async function verifyBatch(
   targetDirArg?: string,
-  options: { taskId?: string; milestoneId?: string; all?: boolean; timeout?: number } = {}
+  options: {
+    taskId?: string; milestoneId?: string; all?: boolean; timeout?: number; isolation?: 'none' | 'clean';
+  } = {}
 ): Promise<BatchVerificationResult> {
   const targetDir = path.resolve(targetDirArg || process.cwd());
   const { plan, error } = loadMasterPlan(targetDir);
@@ -189,7 +211,7 @@ export async function verifyBatch(
     for (const t of m.tasks) {
       if (options.taskId && t.id === options.taskId) {
         candidates.push({ task: t, milestone: m });
-      } else if (options.milestoneId && (m.id === options.milestoneId || m.name.toLowerCase() === options.milestoneId.toLowerCase())) {
+      } else if (options.milestoneId && matchesMilestone(m, options.milestoneId)) {
         candidates.push({ task: t, milestone: m });
       } else if (options.all) {
         // All tasks with verification commands (prefer completed or in_progress, but include all)
@@ -228,29 +250,36 @@ export async function verifyBatch(
   let skipped = 0;
   let totalDuration = 0;
 
-  // The phases check the whole project, so one run serves every task in the batch.
-  const phases = candidates.length ? await runVerifyPhases(targetDir, targetDir, options.timeout) : { reports: [] };
-  totalDuration += phases.reports.reduce((sum, r) => sum + r.durationMs, 0);
-  for (const { task, milestone } of candidates) {
-    const vResult = await runTaskVerification(task, { cwd: targetDir, timeout: options.timeout, phases });
-    totalDuration += vResult.durationMs;
-
-    if (vResult.skipped) {
-      skipped++;
-    } else if (vResult.success) {
-      passed++;
-    } else {
-      failed++;
+  // The phases check the whole project, so one run (and one clean tree) serves every task.
+  const wanted = options.isolation
+    ?? resolveActiveProfileSettings(resolveMainRoot(targetDir)).verifyIsolation;
+  const commands = candidates.map((c) => c.task.verificationCommand);
+  const isolation = candidates.length && needsRun(commands, targetDir, false)
+    ? await openIsolation(targetDir, targetDir, wanted)
+    : NO_ISOLATION;
+  try {
+    const phases = candidates.length
+      ? await runPhasesIn(isolation.dir ?? targetDir, targetDir, options.timeout, isolation.env)
+      : { reports: [] };
+    totalDuration += phases.reports.reduce((sum, r) => sum + r.durationMs, 0);
+    for (const { task, milestone } of candidates) {
+      const runOpts = { cwd: targetDir, timeout: options.timeout, phases, plan: isolation, isolation: wanted };
+      const vResult = await runTaskVerification(task, runOpts);
+      totalDuration += vResult.durationMs;
+      if (vResult.skipped) skipped++;
+      else if (vResult.success) passed++;
+      else failed++;
+      results.push({
+        taskId: task.id,
+        title: task.title,
+        milestoneId: milestone.id,
+        milestoneName: milestone.name,
+        status: task.status,
+        result: vResult,
+      });
     }
-
-    results.push({
-      taskId: task.id,
-      title: task.title,
-      milestoneId: milestone.id,
-      milestoneName: milestone.name,
-      status: task.status,
-      result: vResult,
-    });
+  } finally {
+    await isolation.dispose?.();
   }
 
   return {

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseJsonLoose } from './enforcement.js';
 import { resolveMainRoot } from './root-resolver.js';
+import { scanEnvReads } from './env-reads.js';
 
 /**
  * Code-shape check: flags over-long lines and long comment blocks in a task's target files.
@@ -14,21 +15,25 @@ export interface CodeShapeSettings {
   mode: CodeShapeMode;
   maxLineLength: number;
   maxCommentLines: number;
+  configFallback: CodeShapeMode;
 }
 
 export interface CodeShapeIssue {
   file: string;
   line: number;
-  kind: 'long-line' | 'long-comment';
+  kind: 'long-line' | 'long-comment' | 'config-fallback';
+  category: 'style' | 'config';
   message: string;
 }
 
 export interface CodeShapeReport {
   mode: CodeShapeMode;
+  configMode: CodeShapeMode;
   issues: CodeShapeIssue[];
 }
 
-const DEFAULTS: CodeShapeSettings = { mode: 'warn', maxLineLength: 120, maxCommentLines: 2 };
+const DEFAULTS: CodeShapeSettings = { mode: 'warn', maxLineLength: 120, maxCommentLines: 2,
+  configFallback: 'warn' };
 const SOURCE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.java', '.kt', '.dart',
   '.c', '.cc', '.cpp', '.h', '.cs', '.rb', '.php', '.swift', '.vue', '.svelte', '.css', '.scss',
@@ -43,6 +48,9 @@ export function loadCodeShapeSettings(targetDir: string): CodeShapeSettings {
     const style = parseJsonLoose<{ codeStyle?: any }>(raw)?.codeStyle;
     if (!style || typeof style !== 'object') return settings;
     if (['warn', 'block', 'off'].includes(style.mode)) settings.mode = style.mode;
+    if (['warn', 'block', 'off'].includes(style.configFallback)) {
+      settings.configFallback = style.configFallback;
+    }
     if (Number.isInteger(style.maxLineLength) && style.maxLineLength > 0) {
       settings.maxLineLength = style.maxLineLength;
     }
@@ -102,7 +110,7 @@ export function checkFileShape(file: string, text: string, s: CodeShapeSettings)
   lines.forEach((line, i) => {
     if (line.length > s.maxLineLength) {
       issues.push({
-        file, line: i + 1, kind: 'long-line',
+        file, line: i + 1, kind: 'long-line', category: 'style',
         message: `line is ${line.length} characters (max ${s.maxLineLength})`,
       });
     }
@@ -110,7 +118,7 @@ export function checkFileShape(file: string, text: string, s: CodeShapeSettings)
   for (const b of findCommentBlocks(lines)) {
     if (b.length > s.maxCommentLines && !b.exempt) {
       issues.push({
-        file, line: b.start, kind: 'long-comment',
+        file, line: b.start, kind: 'long-comment', category: 'style',
         message: `comment block is ${b.length} lines (max ${s.maxCommentLines})`,
       });
     }
@@ -118,16 +126,30 @@ export function checkFileShape(file: string, text: string, s: CodeShapeSettings)
   return issues;
 }
 
+/** Env reads that silently fall back to an empty value; reported as config findings. */
+export function checkConfigFallbacks(file: string, text: string): CodeShapeIssue[] {
+  return scanEnvReads(text, file).filter((r) => r.fallback).map((r) => ({
+    file, line: r.line, kind: 'config-fallback' as const, category: 'config' as const,
+    message: `${r.name} falls back to an empty value when unset; fail loudly instead`,
+  }));
+}
+
 export function checkCodeShape(targetDir: string, targetFiles: string[] = []): CodeShapeReport {
   const settings = loadCodeShapeSettings(targetDir);
-  const report: CodeShapeReport = { mode: settings.mode, issues: [] };
-  if (settings.mode === 'off') return report;
+  const report: CodeShapeReport = {
+    mode: settings.mode, configMode: settings.configFallback, issues: [],
+  };
+  const style = settings.mode !== 'off';
+  const config = settings.configFallback !== 'off';
+  if (!style && !config) return report;
   for (const file of targetFiles) {
     if (!isCheckable(file)) continue;
     const full = path.resolve(targetDir, file);
     try {
       if (!fs.statSync(full).isFile()) continue;
-      report.issues.push(...checkFileShape(file, fs.readFileSync(full, 'utf8'), settings));
+      const text = fs.readFileSync(full, 'utf8');
+      if (style) report.issues.push(...checkFileShape(file, text, settings));
+      if (config) report.issues.push(...checkConfigFallbacks(file, text));
     } catch {
       // File missing or unreadable: skip.
     }
@@ -135,14 +157,26 @@ export function checkCodeShape(targetDir: string, targetFiles: string[] = []): C
   return report;
 }
 
-/** Short plain-language summary; empty string when there is nothing to report. */
-export function formatCodeShapeReport(report: CodeShapeReport): string {
-  if (report.mode === 'off' || report.issues.length === 0) return '';
-  const total = report.issues.length;
-  const head = report.mode === 'block'
-    ? `Code shape: ${total} issue(s) must be fixed before this task can pass.`
-    : `Code shape: ${total} style warning(s). Verification is not affected.`;
-  const shown = report.issues.slice(0, MAX_SHOWN).map((i) => `  ${i.file}:${i.line} ${i.message}`);
-  const more = total > MAX_SHOWN ? [`  ...and ${total - MAX_SHOWN} more`] : [];
+function formatBlock(head: string, issues: CodeShapeIssue[]): string {
+  const shown = issues.slice(0, MAX_SHOWN).map((i) => `  ${i.file}:${i.line} ${i.message}`);
+  const more = issues.length > MAX_SHOWN ? [`  ...and ${issues.length - MAX_SHOWN} more`] : [];
   return [head, ...shown, ...more].join('\n');
+}
+
+/** Short plain-language summary, config findings first; empty string when nothing to report. */
+export function formatCodeShapeReport(report: CodeShapeReport): string {
+  const config = report.issues.filter((i) => i.category === 'config');
+  const style = report.issues.filter((i) => i.category === 'style');
+  const blocks: string[] = [];
+  if (config.length > 0) {
+    blocks.push(formatBlock(report.configMode === 'block'
+      ? `Config: ${config.length} silent fallback(s) must be fixed before this task can pass.`
+      : `Config: ${config.length} silent fallback warning(s). Verification is not affected.`, config));
+  }
+  if (style.length > 0) {
+    blocks.push(formatBlock(report.mode === 'block'
+      ? `Code shape: ${style.length} issue(s) must be fixed before this task can pass.`
+      : `Code shape: ${style.length} style warning(s). Verification is not affected.`, style));
+  }
+  return blocks.join('\n');
 }

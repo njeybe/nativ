@@ -107,9 +107,12 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         specRefs: z.array(z.string()).optional().describe('Spec anchors, e.g. ui_specs.md#appointment-list'),
         complexity: z.string().optional().describe('simple, standard or complex'),
         acceptanceCriteria: z.array(z.string()).optional().describe('Plain-language "done when" lines'),
+        verificationKind: z.string().optional().describe('unit, integration, static-config, docs, probe or manual'),
+        notes: z.string().optional().describe('Task notes; required for a manual check'),
+        newMilestone: z.string().optional().describe('Create the next milestone with this name and add the task to it'),
       },
     },
-    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria }) =>
+    ({ title, description, assignedSubagent, milestone, verificationCommand, targetFiles, dependencies, fastPath, specRefs, complexity, acceptanceCriteria, verificationKind, notes, newMilestone }) =>
       captureOutput(() =>
         runTaskAdd(title, targetDir, {
           description,
@@ -121,7 +124,10 @@ export function createMcpServer(targetDirArg?: string): McpServer {
           fastPath,
           specRefs,
           complexity,
+          kind: verificationKind,
+          notes,
           accept: acceptanceCriteria,
+          newMilestone,
           json: true,
         }),
       ),
@@ -166,9 +172,11 @@ export function createMcpServer(targetDirArg?: string): McpServer {
         taskId: z.string().optional().describe('Task ID to verify. Defaults to active in_progress task.'),
         milestone: z.string().optional().describe('Filter by milestone ID or name'),
         all: z.boolean().optional().describe('Run verification commands for all completed tasks to detect regressions'),
+        isolation: z.enum(['none', 'clean']).optional().describe('In place or clean copy; default is the profile'),
       },
     },
-    ({ taskId, milestone, all }) => captureOutput(() => runVerify(taskId, targetDir, { milestone, all, json: true })),
+    ({ taskId, milestone, all, isolation }) =>
+      captureOutput(() => runVerify(taskId, targetDir, { milestone, all, isolation, json: true })),
   );
 
   registerNativTool(

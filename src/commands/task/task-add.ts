@@ -5,9 +5,12 @@ import {
   MasterPlanMilestone,
   MasterPlanTask,
   TaskComplexity,
+  VerificationKind,
   SUBAGENT_TYPES,
   validateMasterPlanTask,
 } from '../../scanner/types.js';
+import { configuredInvocation } from '../../core/setup/setup-planner.js';
+import { cliString, resolveCliInvocation } from '../../core/setup/types.js';
 import { withPlanLock } from '../../core/lock-manager.js';
 import {
   getPlanPath,
@@ -60,6 +63,15 @@ function failTaskAdd(code: string, message: string, json?: boolean): null {
   return null;
 }
 
+/** Default check for a docs task: `nativ check docs` on its markdown files, or '' without any. */
+function defaultDocsCheck(targetFiles: string[]): string {
+  const docs = targetFiles.filter((f) => /\.md$/i.test(f));
+  if (!docs.length) return '';
+  const root = process.cwd();
+  const cli = cliString(configuredInvocation(root) ?? resolveCliInvocation({}));
+  return `${cli} check docs ${docs.join(' ')}`;
+}
+
 /** Resolves a milestone by exact ID, exact name, or a unique partial name (all case-insensitive). */
 function findMilestone(plan: MasterPlan, query: string): MasterPlanMilestone | MasterPlanMilestone[] | null {
   const q = query.trim().toLowerCase();
@@ -107,7 +119,29 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
     let milestone: MasterPlanMilestone | undefined;
     let createdMilestone = false;
 
-    if (options.milestone) {
+    const newName = options.newMilestone?.trim();
+    if (options.newMilestone !== undefined && !newName) {
+      ctx.abort();
+      return failTaskAdd('INVALID_MILESTONE_NAME', 'A new milestone needs a name', options.json);
+    }
+    if (newName && (options.milestone || fastPath)) {
+      ctx.abort();
+      return failTaskAdd('CONFLICTING_OPTIONS', '--new-milestone cannot be used with --milestone or --fast-path', options.json);
+    }
+    const stillOpen = plan.milestones.filter((m) => !m.fastPath && m.status !== 'completed');
+    if (newName && stillOpen.length && !options.force) {
+      ctx.abort();
+      const ids = stillOpen.map((m) => m.id).join(', ');
+      return failTaskAdd('MILESTONE_STILL_OPEN', `Milestone ${ids} is not completed yet. Finish it first, or pass --force`, options.json);
+    }
+
+    if (newName) {
+      milestone = { id: generateNextMilestoneId(plan), name: newName, status: 'in_progress', tasks: [] };
+      plan.milestones.push(milestone);
+      plan.activeMilestoneId = milestone.id;
+      plan.overallStatus = 'in_progress';
+      createdMilestone = true;
+    } else if (options.milestone) {
       const found = findMilestone(plan, options.milestone);
       if (Array.isArray(found)) {
         ctx.abort();
@@ -136,10 +170,19 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
 
     const specRefs = [...new Set(splitList(options.specRefs))];
     const acceptanceCriteria = (Array.isArray(options.accept) ? options.accept : options.accept ? [options.accept] : [])
-      .flatMap((item) => item.split('|'))
       .map((item) => item.trim())
       .filter(Boolean);
     const complexity = options.complexity?.trim().toLowerCase();
+
+    const kind = options.kind?.trim().toLowerCase();
+    const notes = (options.notes ?? '').trim();
+    if (kind === 'manual' && !notes) {
+      ctx.abort();
+      return failTaskAdd('MANUAL_NEEDS_NOTES', 'A manual check needs --notes saying what the person must confirm', options.json);
+    }
+    const files = splitList(options.files);
+    let verify = (options.verify ?? '').trim();
+    if (kind === 'docs' && !verify) verify = defaultDocsCheck(files);
 
     const task: MasterPlanTask = {
       id: generateNextTaskId(plan),
@@ -147,13 +190,14 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       description: (options.description ?? '').trim(),
       assignedSubagent: agent,
       dependencies: deps,
-      targetFiles: splitList(options.files),
+      targetFiles: files,
       status: 'pending',
-      verificationCommand: (options.verify ?? '').trim(),
-      notes: (options.notes ?? '').trim(),
+      verificationCommand: verify,
+      notes,
       ...(fastPath ? { fastPath: true } : {}),
       ...(specRefs.length ? { specRefs } : {}),
       ...(complexity ? { complexity: complexity as TaskComplexity } : {}),
+      ...(kind ? { verificationKind: kind as VerificationKind } : {}),
       ...(acceptanceCriteria.length ? { acceptanceCriteria } : {}),
     };
 
@@ -177,7 +221,7 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
 
     const track = fastPath ? pc.magenta(' [fast path]') : '';
     console.log(pc.green(`\n✔ Task [${pc.bold(task.id)}] added to [${milestone.id}] ${milestone.name}`) + track);
-    if (createdMilestone) console.log(pc.cyan(`  Created fast-path milestone [${milestone.id}]`));
+    if (createdMilestone) console.log(pc.cyan(`  Created ${fastPath ? 'fast-path ' : ''}milestone [${milestone.id}]`));
     if (reopenedMilestone) console.log(pc.yellow(`  Reopened completed milestone [${milestone.id}]`));
     console.log(pc.dim('  Title:    ') + task.title);
     console.log(pc.dim('  Agent:    ') + pc.magenta(`[${task.assignedSubagent}]`) + pc.dim(` -> ${getRoleGuide(task.assignedSubagent)}`));

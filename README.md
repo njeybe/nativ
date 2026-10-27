@@ -193,6 +193,7 @@ nativ init [targetDir] [-f, --force]
 | :--- | :--- |
 | `-f, --force` | Overwrite existing specification and directive files |
 | `--design <taste-v1|taste-v2>` | Set the design profile in `.ai/ui_specs.md` and install the taste-skill bundle |
+| `--git-visibility <mode>` | `hidden` (default) adds a managed `.gitignore` block listing only nativ's generated files; `shared` ignores only secret and machine files |
 
 #### `nativ design check`
 
@@ -259,6 +260,8 @@ nativ doctor [targetDir] [options]
 | `--command <cli>` | How Claude Code should start nativ (see `setup`) |
 | `--no-deep` | Skip asking Claude Code (`claude mcp list`) whether the server connects |
 | `--json` | Output the report as JSON |
+
+It also warns when the managed `.gitignore` block is missing (`--fix` adds it) and prints the `git rm --cached` command for nativ files already committed. It never runs that command.
 
 Run it after updating Claude Code or nativ.
 
@@ -365,8 +368,11 @@ nativ task add <title> [targetDir] [options]
 | `--deps <ids>` | Comma-separated dependency task IDs |
 | `--spec-refs <refs>` | Contract anchors, e.g. `ui_specs.md#appointment-list` or `api_contracts.json#GET /appointments` |
 | `--complexity <level>` | `simple`, `standard` or `complex` (routes the worker's model) |
-| `--accept <text>` | "Done when" line; repeatable or `\|`-separated |
+| `--accept <text>` | "Done when" line; repeatable, each value kept whole |
 | `--fast-path` | Route to the fast-path milestone for quick fixes |
+| `--kind <kind>` | Verification kind: `unit`, `integration`, `static-config`, `docs`, `probe` or `manual`. `docs` defaults the check to `nativ check docs` |
+| `--notes <text>` | Task notes; required with `--kind manual` |
+| `--new-milestone <name>` | Create the next milestone with this name and add the task to it. Refused while another planned milestone is open, unless `--force` |
 | `--json` | Output the created task as JSON |
 
 ```bash
@@ -404,6 +410,8 @@ nativ task complete <taskId> [targetDir] [options]
 | :--- | :--- |
 | `-n, --notes <notes>` | Completion notes |
 | `--timeout <ms>` | Verification timeout (default 120000) |
+| `--isolation <mode>` | Run the check in place (`none`) or in a clean copy of the repo (`clean`). Accepts `none` or `clean`. See [Verification](#verification) |
+| `--clean` | Short for `--isolation clean` |
 | `--no-verify` | Skip verification. *You only*: needs an interactive terminal, is denied to agents, and the MCP tool refuses it |
 
 #### `nativ task block`
@@ -475,6 +483,8 @@ nativ verify --all --json
 | `-a, --all` | Every completed task |
 | `-m, --milestone <id>` | Every task in a milestone |
 | `--timeout <ms>` | Per command (default 120000) |
+| `--isolation <mode>` | In place, or in a clean copy with only the files git ships and a minimal environment |
+| `--clean` | Short for `--isolation clean` |
 | `--json` | Output as JSON |
 
 **What runs, in order** (the same for `verify`, the `task complete` gatekeeper and Studio dispatch):
@@ -491,6 +501,16 @@ nativ verify --all --json
 ```
 
 With no phases configured, verification is just the task's command and the style check. The settings always come from the main checkout, never a task worktree's copy. If `.nativ/config.json` cannot be read, or a phase has no `name` or `run`, verification fails with a clear message instead of skipping the checks.
+
+#### `nativ check docs`
+
+Checks markdown files for drift: backticked file paths, `<PLACEHOLDER>` tokens against the file the paragraph names, setting names used in assignments or as variable references, and nativ subcommands and flags.
+
+```bash
+nativ check docs README.md CHANGELOG.md [--json]
+```
+
+Skip a line with `<!-- nativ-check-ignore -->`, or wrap a block in `<!-- nativ-check-ignore-start -->` and `<!-- nativ-check-ignore-end -->`.
 
 [Back to contents](#contents)
 
@@ -722,6 +742,11 @@ Written by `setup`; every key is optional.
 | `codeStyle.mode` | `warn` | `warn`, `block` or `off` for the line-length and comment check |
 | `codeStyle.maxLineLength` | `120` | Longest allowed line |
 | `codeStyle.maxCommentLines` | `2` | Longest allowed comment block |
+| `codeStyle.configFallback` | `warn` | `off`, `warn` or `block` for reads of settings that silently fall back to empty. Opt out per line with `nativ-allow-fallback` |
+| `verifyIsolation` | `none` (`clean` in solo and enterprise) | Run checks in a clean copy of the repo. See [`nativ verify`](#verification) |
+| `verifyIsolationFailure` | `warn` | `warn` or `block` when a check fails in the clean copy but passes in place |
+| `verifyEnv` | none | Extra environment variable names a check may read |
+| `verifyLinks` | `node_modules`, `.venv`, `venv` | Files linked into the clean copy, for example dependency folders |
 | `providers` | see [Providers](#providers) | Provider order per role: `architect`, `pm`, `worker`, `verifier`, `triage` |
 | `models` | provider default | Model per provider |
 | `notify` | off | `webhook`, `command` and `events` for human notifications. See [`nativ notify test`](#nativ-notify-test) |

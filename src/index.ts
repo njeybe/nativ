@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { runInit } from './commands/init.js';
 import { runStatus } from './commands/status.js';
 import { runValidate } from './commands/validate.js';
@@ -35,7 +35,15 @@ import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
+import { runCheckDocs } from './commands/check.js';
 import { packageVersion } from './core/version.js';
+
+function parseGitVisibility(value: string): 'hidden' | 'shared' {
+  if (value !== 'hidden' && value !== 'shared') {
+    throw new InvalidArgumentError('Use hidden or shared.');
+  }
+  return value;
+}
 
 export function createProgram(): Command {
   const program = new Command();
@@ -50,6 +58,7 @@ export function createProgram(): Command {
     .description('Scaffold the workflow (.ai/, AGENTS.md, directives) and the Claude Code configuration in the target directory')
     .option('-f, --force', 'Overwrite existing specification and directive files')
     .option('--design <profile>', 'Design profile: nativ, taste-v1 or taste-v2')
+    .option('--git-visibility <mode>', 'Git visibility of generated files: hidden (default) or shared', parseGitVisibility)
     .action(async (targetDir, options) => {
       await runInit(targetDir, options);
     });
@@ -60,10 +69,11 @@ export function createProgram(): Command {
     .option('--command <cli>', 'How Claude Code should start nativ, e.g. "npx -y @njeybe/nativ" (default: nativ when installed globally)')
     .option('--enforcement <mode>', 'Role enforcement mode: warn (default), block or off')
     .option('--dry-run', 'Show what would change without writing anything')
+    .option('--git-visibility <mode>', 'Git visibility of generated files: hidden (default) or shared', parseGitVisibility)
     .option('-f, --force', 'Also overwrite agent and directive files that were edited by hand')
     .option('--json', 'Output the result as JSON')
     .action(async (targetDir, options) => {
-      await runSetup(targetDir, { command: options.command, enforcement: options.enforcement, dryRun: options.dryRun, force: options.force, json: options.json });
+      await runSetup(targetDir, { command: options.command, enforcement: options.enforcement, dryRun: options.dryRun, force: options.force, gitVisibility: options.gitVisibility, json: options.json });
     });
 
   program
@@ -81,8 +91,9 @@ export function createProgram(): Command {
     .command('update [targetDir]')
     .description('Refresh directives, role guides and the Claude Code configuration to the latest templates. Files you edited are kept; contracts and the plan are never touched')
     .option('-f, --force', 'Also replace directive and role-guide files that were edited by hand')
+    .option('--git-visibility <mode>', 'Git visibility of generated files: hidden (default) or shared', parseGitVisibility)
     .action(async (targetDir, options) => {
-      await runUpdate(targetDir, { force: options.force });
+      await runUpdate(targetDir, { force: options.force, gitVisibility: options.gitVisibility });
     });
 
   program
@@ -121,6 +132,8 @@ export function createProgram(): Command {
     .option('-m, --milestone <id>', 'Run verification commands for all tasks in a specific milestone')
     .option('--json', 'Output verification telemetry as JSON')
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
+    .option('--isolation <mode>', 'Run checks in place (none) or in a clean copy (clean)')
+    .option('--clean', 'Short for --isolation clean')
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
     });
@@ -173,11 +186,15 @@ export function createProgram(): Command {
     .option('--deps <ids>', 'Comma-separated dependency task IDs')
     .option('--spec-refs <refs>', 'Comma-separated spec anchors, e.g. ui_specs.md#appointment-list')
     .option('--complexity <level>', 'Task complexity: simple, standard or complex')
+    .option('--kind <kind>', 'Verification kind: unit, integration, static-config, docs, probe or manual')
+    .option('--notes <text>', 'Task notes (required with --kind manual)')
     .option(
       '--accept <text>',
-      'Acceptance ("done when") line; repeatable or "|"-separated',
+      'Acceptance ("done when") line; repeatable, each value kept whole',
       (value: string, prev: string[] = []) => [...prev, value],
     )
+    .option('--new-milestone <name>', 'Create the next milestone with this name and add the task to it')
+    .option('--force', 'With --new-milestone, allow it while a planned milestone is still open')
     .option('--json', 'Output the created task as JSON')
     .action(async (title, targetDir, options) => {
       await runTaskAdd(title, targetDir, options);
@@ -206,8 +223,11 @@ export function createProgram(): Command {
     .option('-n, --notes <notes>', 'Completion notes or summary')
     .option('--no-verify', 'Skip automated verification command execution')
     .option('--timeout <ms>', 'Verification execution timeout in milliseconds', parseInt)
+    .option('--isolation <mode>', 'Run the check in place (none) or in a clean copy (clean)')
+    .option('--clean', 'Short for --isolation clean')
     .action(async (taskId, targetDir, options) => {
       await runTaskComplete(taskId, targetDir, {
+        isolation: options.clean ? 'clean' : options.isolation,
         notes: options.notes,
         skipVerify: options.verify === false,
         timeout: options.timeout,
@@ -221,6 +241,8 @@ export function createProgram(): Command {
     .option('-m, --milestone <id>', 'Run verification commands for all tasks in a specific milestone')
     .option('--json', 'Output verification telemetry as JSON')
     .option('--timeout <ms>', 'Execution timeout in milliseconds per command (default 120000)', parseInt)
+    .option('--isolation <mode>', 'Run checks in place (none) or in a clean copy (clean)')
+    .option('--clean', 'Short for --isolation clean')
     .action(async (taskId, targetDir, options) => {
       await runVerify(taskId, targetDir, options);
     });
@@ -284,6 +306,16 @@ export function createProgram(): Command {
     .option('--revoke', 'Re-lock the task to its target files')
     .action(async (taskId, targetDir, options) => {
       await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
+    });
+
+  const check = program.command('check').description('Checks on project files');
+
+  check
+    .command('docs <files...>')
+    .description('Check backticked paths, placeholders, settings and nativ flags in markdown files')
+    .option('--json', 'Output findings as JSON')
+    .action(async (files, options) => {
+      await runCheckDocs(files, options);
     });
 
   const design = program.command('design').description('Design profile tools');

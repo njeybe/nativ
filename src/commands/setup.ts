@@ -8,6 +8,7 @@ export interface SetupCommandOptions {
   enforcement?: string;
   dryRun?: boolean;
   force?: boolean;
+  gitVisibility?: 'hidden' | 'shared';
   json?: boolean;
   /** Suppresses the report; `nativ init` prints its own. */
   quiet?: boolean;
@@ -47,6 +48,7 @@ export async function runSetup(targetDirArg?: string, options: SetupCommandOptio
     command: options.command,
     enforcement: options.enforcement as EnforcementMode | undefined,
     force: options.force,
+    gitVisibility: options.gitVisibility,
     dryRun: options.dryRun,
   };
   const result = applySetup(targetDir, setupOptions);

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runInit } from '../dist/commands/init.js';
+import { validateMasterPlanTask } from '../dist/scanner/types.js';
 
 console.log('--- Starting nativ validate Tests ---');
 
@@ -66,6 +67,21 @@ try {
     fs.rmSync(path.join(dir, '.ai', 'api_contracts.json'));
     assert.match(validate(dir).out, /Missing: \.ai\/api_contracts\.json/);
     console.log('✔ Test 4: corrupted and missing contracts still fail');
+  }
+
+  // Test 5: check commands may not set gate-override names
+  {
+    const task = (verificationCommand) => ({
+      id: 'task-x', title: 'Demo', description: 'Demo task', assignedSubagent: 'qa-tester',
+      status: 'pending', dependencies: [], targetFiles: ['tests/demo.mjs'], verificationCommand,
+    });
+    assert.deepEqual(validateMasterPlanTask(task('node tests/demo.mjs')), []);
+    for (const name of ['NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE']) {
+      const errors = validateMasterPlanTask(task(`${name}=1 node tests/demo.mjs`));
+      assert.equal(errors.length, 1, `one error for ${name}:\n${errors.join('\n')}`);
+      assert.match(errors[0], new RegExp(name));
+    }
+    console.log('✔ Test 5: check commands may not set gate-override names');
   }
 
   console.log('\n🎉 ALL nativ validate TESTS PASSED!');

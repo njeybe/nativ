@@ -10,10 +10,13 @@ export function isInteractive(): boolean {
 }
 
 export function isCiEnvironment(): boolean {
+  // Inside a verification sandbox, CI vars are set by nativ and must not open gates
+  const sandbox = process.env.NATIV_VERIFY_SANDBOX === '1';
   return Boolean(
-    process.env.CI === 'true' ||
-    process.env.GITHUB_ACTIONS === 'true' ||
-    process.env.GITLAB_CI === 'true' ||
+    (!sandbox &&
+      (process.env.CI === 'true' ||
+        process.env.GITHUB_ACTIONS === 'true' ||
+        process.env.GITLAB_CI === 'true')) ||
     process.env.NATIV_CI_OVERRIDE ||
     process.env.NATIV_HEADLESS_OVERRIDE === '1'
   );

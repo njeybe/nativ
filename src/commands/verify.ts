@@ -1,6 +1,9 @@
 import path from 'node:path';
 import pc from 'picocolors';
 import { verifyBatch, BatchVerificationResult } from '../core/verifier.js';
+import { loadPlan } from '../core/lock-manager.js';
+import { evaluateSkip } from '../core/verifier/skip-policy.js';
+import { resolveActiveProfileSettings } from '../core/profiles.js';
 import { digestFailure } from '../core/verifier/output-digest.js';
 
 /** Passing runs need no output; failing ones get a digest and the path to the full log. */
@@ -20,6 +23,16 @@ export interface VerifyOptions {
   milestone?: string;
   json?: boolean;
   timeout?: number;
+  isolation?: string;
+  clean?: boolean;
+}
+
+/** Reads --isolation / --clean; undefined means use the profile. */
+export function parseIsolation(o: { isolation?: string; clean?: boolean }): 'none' | 'clean' | undefined {
+  const v = o.clean ? 'clean' : o.isolation;
+  if (v === undefined) return undefined;
+  if (v !== 'none' && v !== 'clean') throw new Error(`--isolation must be none or clean, got "${v}"`);
+  return v;
 }
 
 export async function runVerify(
@@ -33,6 +46,7 @@ export async function runVerify(
     milestoneId: options.milestone,
     all: options.all,
     timeout: options.timeout,
+    isolation: parseIsolation(options),
   });
 
   if (options.json) {
@@ -51,29 +65,37 @@ export async function runVerify(
     return batch;
   }
 
+  const skipMode = resolveActiveProfileSettings(targetDir).skippedCheck;
+  const plan = loadPlan(path.join(targetDir, '.ai', 'master_plan.json'), { silent: true });
+  const planTasks = plan?.milestones.flatMap((m) => m.tasks) ?? [];
   for (const t of batch.tasks) {
     const elapsed = (t.result.durationMs / 1000).toFixed(2);
 
     if (t.result.skipped) {
       console.log(pc.dim(`  ○ [${t.taskId}] ${t.title} — no verification command (skipped)`));
+      const pt = planTasks.find((x) => x.id === t.taskId);
+      const skip = pt && evaluateSkip(pt, skipMode);
+      if (skip?.message) console.log(pc.yellow(`    ⚠ ${skip.message}`));
       continue;
     }
 
     if (t.result.success) {
       console.log(
         pc.green(`  ✔ [${pc.bold(t.taskId)}] ${t.title}`) +
-          pc.dim(` (${elapsed}s)`) +
+          pc.dim(` (${elapsed}s, isolation: ${t.result.isolation ?? 'none'})`) +
           pc.yellow(` \`${t.result.command}\``)
       );
+      for (const w of t.result.warnings ?? []) console.log(pc.yellow(`    ⚠ ${w}`));
       if (t.result.phases?.length) {
         console.log(pc.dim(`    Phases passed: ${t.result.phases.map((p) => p.name).join(', ')}`));
       }
     } else {
       console.log(
         pc.red(`  ✖ [${pc.bold(t.taskId)}] ${t.title}`) +
-          pc.dim(` (${elapsed}s, exit code: ${t.result.exitCode})`) +
+          pc.dim(` (${elapsed}s, exit ${t.result.exitCode}, isolation: ${t.result.isolation ?? 'none'})`) +
           pc.yellow(` \`${t.result.command}\``)
       );
+      for (const w of t.result.warnings ?? []) console.log(pc.yellow(`    ⚠ ${w}`));
       const failedPhase = t.result.phases?.find((p) => !p.success);
       if (failedPhase) console.log(pc.red(`    Failed in phase "${failedPhase.name}"`));
 
