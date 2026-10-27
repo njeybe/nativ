@@ -80,6 +80,19 @@ assert.ok((await sweepStaleCleanTrees(root)) >= 1);
 assert.ok(!fs.existsSync(b.dir));
 assert.equal(keep(), 'k');
 
+// A root given through an alias (junction or symlink) still matches its trees.
+const alias = root + '-alias';
+fs.symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+try {
+  const a = await createCleanTree(root);
+  fs.utimesSync(a.dir, old, old);
+  assert.ok((await sweepStaleCleanTrees(alias)) >= 1);
+  assert.ok(!fs.existsSync(a.dir));
+} finally {
+  fs.unlinkSync(alias);
+}
+assert.ok(fs.existsSync(path.join(root, 'tracked.txt')));
+
 // Not a git repository.
 const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-ct-plain-'));
 const np = await createCleanTree(plain);

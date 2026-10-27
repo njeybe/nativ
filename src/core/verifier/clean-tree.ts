@@ -112,10 +112,19 @@ function ownedBy(root: string, dir: string): boolean {
   try {
     const text = fs.readFileSync(path.join(dir, '.git'), 'utf8');
     const gitdir = text.replace(/^gitdir:\s*/, '').trim();
-    const main = path.resolve(root, '.git').toLowerCase();
-    return path.resolve(gitdir).toLowerCase().startsWith(main);
+    const main = realOf(path.resolve(root, '.git')).toLowerCase();
+    return realOf(path.resolve(gitdir)).toLowerCase().startsWith(main);
   } catch {
     return false;
+  }
+}
+
+// Real paths make Windows short (8.3) and aliased paths compare equal.
+function realOf(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return p;
   }
 }
 
