@@ -74,7 +74,7 @@ const frontmatter = (text) => Object.fromEntries((/^---\n([\s\S]*?)\n---/.exec(t
   const hooks = readJson(`${PLUGIN_DIR}/hooks/hooks.json`);
   assert.deepEqual(Object.keys(hooks), ['hooks'], 'a plugin hooks file wraps the events in a top-level hooks key');
   assert.deepEqual(hooks.hooks.PreToolUse, [{ matcher: desired.preToolUse.matcher, hooks: [{ type: 'command', command: 'nativ hook check', timeout: 10 }] }]);
-  assert.deepEqual(hooks.hooks.SessionStart, [{ matcher: desired.sessionStart.matcher, hooks: [{ type: 'command', command: 'nativ hook context', timeout: 10 }] }]);
+  assert.deepEqual(hooks.hooks.SessionStart, [{ matcher: desired.sessionStart.matcher, hooks: [{ type: 'command', command: 'nativ hook context --from-plugin', timeout: 10 }] }]);
   assert.ok(!JSON.stringify(hooks).includes('CLAUDE_PLUGIN_ROOT'), 'nothing in the plugin depends on files bundled inside it');
 
   const mcp = readJson(`${PLUGIN_DIR}/.mcp.json`);

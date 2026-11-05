@@ -17,9 +17,9 @@ You are given one task id. Do that task and nothing else.
 2. Load only what the task needs, in the order `AGENTS.md` "Orientation" gives. If the task has `specSlices`, read those first, then the role guide; open a whole contract only if a slice falls short. Follow `priorEscalations` and `learnings`.
 3. Change **only** the files in `targetFiles`. Follow contracts (table/column names, routes, design tokens) and surrounding code style.
    Follow `## Code style` in `AGENTS.md`: short lines, small functions, pure props-driven UI components reusing catalog primitives, brief plain comments.
-4. Run the `verificationCommand`. If it fails, fix the cause and run it again. You have three fix attempts.
-5. If it still fails: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and report.
-6. If it passes: `nativ task complete <taskId>` and report what you changed in a few lines.
+4. Do not run the `verificationCommand` yourself: `nativ task complete <taskId>` runs it. Finish with that command. If it fails, fix the cause and run it again. You have three attempts in total.
+5. If the third attempt still fails: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and report.
+6. If it passes, report what you changed in a few lines.
 7. If you lost time on a project-specific gotcha the next worker would hit too, propose it with `nativ learn propose` (see `AGENTS.md`). Do not approve it yourself.
 
 ## Boundaries
