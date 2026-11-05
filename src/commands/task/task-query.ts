@@ -154,6 +154,7 @@ function briefTask(t: MasterPlanTask, milestoneId: string, isAvailable: boolean)
     isAvailable,
     ...(t.dependencies?.length ? { dependencies: t.dependencies } : {}),
     ...(t.targetFiles?.length ? { targetFiles: t.targetFiles } : {}),
+    ...(t.fastPath ? { fastPath: true } : {}),
     ...(t.status === 'blocked' && t.notes ? { notes: t.notes } : {}),
   };
 }

@@ -20,7 +20,10 @@ function task(m, i, status) {
 }
 const milestones = Array.from({ length: 20 }, (_, m) => ({
   id: `m${m}`, name: `Milestone ${m}`, status: m < 19 ? 'completed' : 'in_progress',
-  tasks: Array.from({ length: 15 }, (_, i) => task(m, i, m < 19 ? 'completed' : 'pending')),
+  tasks: Array.from({ length: 15 }, (_, i) => {
+    const t = task(m, i, m < 19 ? 'completed' : 'pending');
+    return m === 19 && i === 0 ? { ...t, fastPath: true } : t;
+  }),
 }));
 fs.writeFileSync(path.join(dir, '.ai', 'master_plan.json'), JSON.stringify({
   projectName: 'size-fixture', overallStatus: 'in_progress', activeMilestoneId: 'm19', milestones,
@@ -41,6 +44,9 @@ try {
   const status = await capture(() => runStatus(dir, { json: true }));
   assert.ok(fullList.length > LIST_LIMIT * 3, 'fixture should be large');
   assert.ok(briefList.length < LIST_LIMIT, `task list ${briefList.length} over ${LIST_LIMIT}`);
+  const brief = JSON.parse(briefList);
+  assert.equal(brief.find((t) => t.id === 'task-19-0').fastPath, true);
+  assert.equal('fastPath' in brief.find((t) => t.id === 'task-19-1'), false);
   assert.ok(status.length < LIST_LIMIT, `status ${status.length} over ${LIST_LIMIT}`);
   assert.ok(fullStatus.length > status.length * 3);
   const parsed = JSON.parse(status);
