@@ -128,6 +128,7 @@ concrete result to the next.
 | 5. Check | let the worker complete the task | The gatekeeper runs your verify phases, then the task's command, then a code-style check. |
 | 6. Review | ask for a **verifier** pass | An independent read of the diff against the contracts. |
 | 7. Improve | approve lessons agents proposed | `nativ learn list --status proposed`, then `approve` or `reject`. |
+| 8. Compact | archive the finished milestone, then `/clear` | `nativ milestone archive` shrinks the plan to a one-line summary. The plan holds the state, so a fresh session loses nothing and costs fewer tokens. |
 
 ---
 
@@ -152,6 +153,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | [`hook status`](#nativ-hook) | Enforcement mode, role and active task scope | You, Agent |
 | [`task next`](#nativ-task-next) | The next executable task with its context | Agent |
 | [`task list`](#nativ-task-list) / `tasks` | List tasks with filters | You, Agent |
+| [`task show`](#nativ-task-show) | One task from the plan or its archive | You, Agent |
 | [`task add`](#nativ-task-add) | Add a task | Architect |
 | [`task start`](#nativ-task-start) | Mark a task in progress | Agent |
 | [`task reclaim`](#nativ-task-reclaim) | Free tasks left in progress by a stopped agent | You, Agent |
@@ -160,6 +162,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | [`task escalate`](#nativ-task-escalate) | Escalate a contract gap to the architect | Agent |
 | [`task propose-patch`](#nativ-task-propose-patch) | Propose a governed contract change | Agent |
 | [`task unlock`](#nativ-task-unlock) | Lift a task's file scope in an emergency | *You only* |
+| [`milestone archive` / `restore`](#nativ-milestone-archive--restore) | Move a finished milestone out of the plan, or bring it back | You, Agent (`restore` by CLI) |
 | [`verify`](#nativ-verify) | Run verification for a task, a milestone or all | You, Agent |
 | [`learn propose`](#nativ-learn-propose) | Propose a lesson for later workers | Agent |
 | [`learn list`](#nativ-learn-list) | List lessons | You, Agent |
@@ -290,8 +293,10 @@ nativ validate [targetDir]
 Progress per milestone; with `--telemetry`, durations, token and cost estimates, pass rates and role violations.
 
 ```bash
-nativ status [targetDir] [-t, --telemetry] [--json]
+nativ status [targetDir] [-t, --telemetry] [--json] [--full]
 ```
+
+`--json` returns full tasks only for the active milestone, one line for each other milestone and the telemetry summary. Add `--full` for every task and per-task telemetry. Archived milestones count toward the totals.
 
 #### `nativ hook`
 
@@ -348,7 +353,8 @@ nativ task list [targetDir] [options]      # also available as: nativ tasks
 | `-s, --status <status>` | `pending`, `in_progress`, `completed` or `blocked` |
 | `-m, --milestone <id>` | Milestone ID or name |
 | `--fast-path` | Only fast-path tasks |
-| `--json` | Output as JSON |
+| `--json` | Output a short summary per task as JSON |
+| `--full` | With `--json`, include every task field |
 
 #### `nativ task add`
 
@@ -407,6 +413,8 @@ nativ milestone restore <id>
 ```
 
 Archives finished milestones after the regression suite passes. Every task must be completed, and the working tree must be clean. The archive is written to `.ai/archive/<id>.json` and read back before the plan changes. The suite is the `regressionCommand` in `.nativ/config.json`; `--check` overrides and saves it. Default timeout is 10 minutes. Archived task ids still count for numbering and dependencies. `restore` is CLI only.
+
+A summaries file maps each milestone id to its one-line summary, and the suite runs once for the whole batch. `.ai/` is usually not in git, so keep archive files: they are the only full copy of those tasks.
 
 #### `nativ task reclaim`
 
@@ -488,7 +496,7 @@ nativ task unlock <taskId> --revoke
 
 #### `nativ verify`
 
-Re-run verification for one task, a milestone or every completed task. Also available as `nativ task verify`.
+Re-run verification for one task, a milestone or every completed task. Also available as `nativ task verify`. `--all` skips archived tasks, because their old checks may no longer apply; naming an archived task or milestone explains how to restore it.
 
 ```bash
 nativ verify task-01
@@ -765,6 +773,7 @@ Written by `setup`; every key is optional.
 | `verifyIsolationFailure` | `warn` | `warn` or `block` when a check fails in the clean copy but passes in place |
 | `verifyEnv` | none | Extra environment variable names a check may read |
 | `verifyLinks` | `node_modules`, `.venv`, `venv` | Files linked into the clean copy, for example dependency folders |
+| `regressionCommand` | none | The test suite `nativ milestone archive` runs before archiving; `--check` sets it |
 | `providers` | see [Providers](#providers) | Provider order per role: `architect`, `pm`, `worker`, `verifier`, `triage` |
 | `models` | provider default | Model per provider |
 | `notify` | off | `webhook`, `command` and `events` for human notifications. See [`nativ notify test`](#nativ-notify-test) |
@@ -864,6 +873,7 @@ A deterministic firewall between agents and the contracts:
 | `.ai/db_schema.json`, `.ai/api_contracts.json`, `.ai/ui_specs.md` | architect | The contracts |
 | `.ai/design/style-tile.html` | architect | The chosen visual direction |
 | `.ai/master_plan.json` | `nativ task` commands | Milestones and tasks |
+| `.ai/archive/<id>.json` | `nativ milestone archive` | Full copy of an archived milestone; the plan keeps a one-line summary |
 | `.ai/subagents/*.md` | init, update | One guide per worker role |
 | `.ai/escalation.json` | `task escalate`, triage | Escalations and how they were settled |
 | `.ai/learnings.json` | `nativ learn` | Proposed, approved and rejected lessons |
@@ -881,7 +891,8 @@ Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched fi
 
 | Tools | Purpose |
 | :--- | :--- |
-| `nativ_task_next`, `nativ_task_list`, `nativ_task_add` | Find and add work |
+| `nativ_task_next`, `nativ_task_list`, `nativ_task_show`, `nativ_task_add` | Find and add work (`task_show` also reads archived tasks) |
+| `nativ_milestone_archive` | Archive finished milestones after the regression suite passes. A slow suite can outlast a client's tool timeout; use the CLI for those |
 | `nativ_task_start`, `nativ_task_complete`, `nativ_task_block`, `nativ_task_reclaim` | Move a task through its lifecycle (complete always runs the gatekeeper; reclaim frees stale claims) |
 | `nativ_validate` | Check the `.ai/` contracts, plan and role guides; returns only problems and a verdict |
 | `nativ_triage` | Self-heal: evaluate pending escalations, apply sandbox-proven safe fixes, return decision cards for the rest |
@@ -896,7 +907,7 @@ Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched fi
 | :--- |
 | `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`, `nativ://telemetry` |
 
-There is deliberately no MCP tool to unlock a task, approve a lesson, write a contract, sync a database schema or run setup.
+There is deliberately no MCP tool to unlock a task, approve a lesson, write a contract, sync a database schema, restore an archived milestone or run setup.
 
 **Manual registration:**
 
@@ -983,6 +994,8 @@ npm install && npm run build
 npm test
 npm run sync-plugin      # after changing a template or the setup generator; a test fails if plugin/ is stale
 ```
+
+Some suites need a temp folder outside any git repository. If your home folder is a git repository and temp sits inside it, `learnings`, `verify-gatekeeper` and `clean-tree` fail; point `TEMP`, `TMP` and `TMPDIR` elsewhere when you run `npm test`.
 
 ---
 
