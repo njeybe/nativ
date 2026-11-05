@@ -70,7 +70,8 @@ export async function renderPlugin(root = repoRoot) {
     json({
       hooks: {
         PreToolUse: [{ matcher: desired.preToolUse.matcher, hooks: [{ type: 'command', command: desired.preToolUse.command, timeout: desired.preToolUse.timeout }] }],
-        SessionStart: [{ matcher: desired.sessionStart.matcher, hooks: [{ type: 'command', command: desired.sessionStart.command, timeout: desired.sessionStart.timeout }] }],
+        // The flag lets the plugin's copy stay silent when the project already has its own nativ hook.
+        SessionStart: [{ matcher: desired.sessionStart.matcher, hooks: [{ type: 'command', command: `${desired.sessionStart.command} --from-plugin`, timeout: desired.sessionStart.timeout }] }],
       },
     }),
   );

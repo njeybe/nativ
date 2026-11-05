@@ -57,6 +57,9 @@ export function packageVersion(): string {
   return cachedVersion;
 }
 
+const archivedCount = (ms: Array<{ archived?: { taskCount: number } }>) =>
+  ms.reduce((n, m) => n + (m.archived?.taskCount ?? 0), 0);
+
 /** GET /api/pipeline/status: contract matrix, milestone/task burndown and telemetry KPIs. */
 export function handlePipelineStatus(root: string) {
   const aiDir = path.join(root, AI_DIR);
@@ -67,7 +70,9 @@ export function handlePipelineStatus(root: string) {
   const milestones = planMilestones(readPlan(root));
   const tasks = milestones.flatMap((m) => m.tasks);
   const count = (items: Array<{ status: string }>, status: string) => items.filter((i) => i.status === status).length;
-  const completedTasks = count(tasks, 'completed');
+  // Archived tasks are gone from the plan but still count as done work.
+  const kept = archivedCount(milestones);
+  const completedTasks = count(tasks, 'completed') + kept;
   const { summary, tasks: trackedTasks } = loadTelemetry(path.join(aiDir, 'telemetry.json'));
   const actual = aggregateActualUsage(trackedTasks);
 
@@ -83,12 +88,12 @@ export function handlePipelineStatus(root: string) {
         pending: count(milestones, 'pending'),
       },
       tasks: {
-        total: tasks.length,
+        total: tasks.length + kept,
         completed: completedTasks,
         inProgress: count(tasks, 'in_progress'),
         pending: count(tasks, 'pending'),
         blocked: count(tasks, 'blocked'),
-        progressPercentage: percent(completedTasks, tasks.length),
+        progressPercentage: percent(completedTasks, tasks.length + kept),
       },
       telemetry: {
         totalTokens: finiteOr(summary?.estimatedTotalTokens, 0),
@@ -114,7 +119,10 @@ export function handlePipelineTasks(root: string) {
   const plan = readPlan(root);
   const milestones = planMilestones(plan);
   const completedIds = new Set(
-    milestones.flatMap((m) => m.tasks).filter((t) => t.status === 'completed').map((t) => t.id),
+    [
+      ...milestones.flatMap((m) => m.tasks).filter((t) => t.status === 'completed').map((t) => t.id),
+      ...milestones.flatMap((m) => m.archived?.taskIds ?? []),
+    ],
   );
   return {
     ok: true,
@@ -123,7 +131,9 @@ export function handlePipelineTasks(root: string) {
     activeMilestoneId: plan?.activeMilestoneId ?? null,
     milestones: milestones.map((m) => ({
       ...m,
-      progressPercentage: percent(m.tasks.filter((t) => t.status === 'completed').length, m.tasks.length),
+      progressPercentage: m.archived
+        ? 100
+        : percent(m.tasks.filter((t) => t.status === 'completed').length, m.tasks.length),
       tasks: m.tasks.map((t) => ({
         ...t,
         // Same readiness rule as `nativ task list --available`.

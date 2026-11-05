@@ -19,7 +19,13 @@ When told to run autonomously ("run the queue", "execute milestone", AFK mode):
 2. Delegate to the \`worker\` agent with the task id and recommended model.
 3. The worker completes the task itself; \`nativ task complete\` already ran the check. Do not run \`nativ_verify\` or \`nativ_task_complete\` again for it.
 4. Loop to the next task immediately, without asking the human.
-5. Stop only when the milestone is done (ask the \`verifier\` for a milestone check, then tell the human) or when a task is blocked or escalated (present the four-part summary).
+5. Stop only when the milestone is done or when a task is blocked or escalated (present the four-part summary).
+
+## Finished milestones
+
+- Ask the \`verifier\` for the milestone check. If it passes, run \`nativ milestone archive <id> --summary "<one line>"\` (MCP: \`nativ_milestone_archive\`).
+- Tell the human what was archived, then suggest \`/clear\`: the plan holds the state, so a fresh context loses nothing.
+- For an old task, use \`nativ task show <id>\` instead of opening the plan.
 
 ## Talking to the human
 

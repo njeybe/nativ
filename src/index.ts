@@ -14,6 +14,7 @@ import {
   runTaskProposePatch,
   runTaskUnlock,
 } from './commands/task.js';
+import { runTaskShow } from './commands/task/task-show.js';
 import { runHookCheck, runHookStatus } from './commands/hook.js';
 import { runSetup } from './commands/setup.js';
 import { runDoctor } from './commands/doctor.js';
@@ -36,6 +37,7 @@ import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
 import { runCheckDocs } from './commands/check.js';
+import { registerMilestoneCommands } from './commands/milestone.js';
 import { packageVersion } from './core/version.js';
 
 function parseGitVisibility(value: string): 'hidden' | 'shared' {
@@ -100,7 +102,8 @@ export function createProgram(): Command {
     .command('status [targetDir]')
     .description('Inspect current execution progress and telemetry from .ai/master_plan.json')
     .option('-t, --telemetry', 'Display token usage, duration, and cost estimation telemetry')
-    .option('--json', 'Output project status and telemetry as JSON')
+    .option('--json', 'Output project status and telemetry as JSON (compact)')
+    .option('--full', 'With --json, include every milestone task and per-task telemetry')
     .action(async (targetDir, options) => {
       await runStatus(targetDir, options);
     });
@@ -122,7 +125,7 @@ export function createProgram(): Command {
     .option('--json', 'Output filtered tasks as JSON (a summary per task)')
     .option('--full', 'With --json, include every task field')
     .action(async (targetDir, options) => {
-      await runTaskList(targetDir, options);
+      await runTaskList(targetDir, { ...options, brief: !options.full });
     });
 
   program
@@ -171,7 +174,7 @@ export function createProgram(): Command {
     .option('--json', 'Output filtered tasks as JSON (a summary per task)')
     .option('--full', 'With --json, include every task field')
     .action(async (targetDir, options) => {
-      await runTaskList(targetDir, options);
+      await runTaskList(targetDir, { ...options, brief: !options.full });
     });
 
   task
@@ -206,6 +209,14 @@ export function createProgram(): Command {
     .option('--json', 'Output task information as JSON')
     .action(async (targetDir, options) => {
       await runTaskNext(targetDir, options);
+    });
+
+  task
+    .command('show <taskId> [targetDir]')
+    .description('Show one task in full, from the plan or from its archive file')
+    .option('--json', 'Output the task as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskShow(taskId, targetDir, options);
     });
 
   task
@@ -307,6 +318,8 @@ export function createProgram(): Command {
     .action(async (taskId, targetDir, options) => {
       await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
     });
+
+  registerMilestoneCommands(program);
 
   const check = program.command('check').description('Checks on project files');
 

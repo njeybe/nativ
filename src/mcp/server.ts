@@ -21,6 +21,8 @@ import { runTriage } from '../commands/triage.js';
 import { runStatus } from '../commands/status.js';
 import { runDoctor } from '../commands/doctor.js';
 import { runValidate } from '../commands/validate.js';
+import { runMilestoneArchive } from '../commands/milestone.js';
+import { runTaskShow } from '../commands/task/task-show.js';
 import {
   runWorktreeCreate,
   runWorktreeList,
@@ -87,6 +89,34 @@ export function createMcpServer(targetDirArg?: string): McpServer {
     },
     ({ available, status, milestone, fastPath, full }) =>
       captureOutput(() => runTaskList(targetDir, { available, status, milestone, fastPath, json: true, brief: !full })),
+  );
+
+  registerNativTool(
+    'task_show',
+    {
+      description: 'Print one task by id, from the plan or from its milestone archive (JSON). Use it for old or archived tasks.',
+      inputSchema: {
+        taskId: z.string().min(1).describe('Task ID, e.g. task-12'),
+      },
+    },
+    ({ taskId }) => captureOutput(() => runTaskShow(taskId, targetDir, { json: true })),
+  );
+
+  registerNativTool(
+    'milestone_archive',
+    {
+      description:
+        'Archive finished milestones (comma-separated ids) after their regression suite passes. Needs a summary or summaries file.',
+      inputSchema: {
+        ids: z.string().min(1).describe('Milestone ID, or comma-separated IDs'),
+        summary: z.string().optional().describe('One-line summary (required for one milestone)'),
+        summaries: z.string().optional().describe('Path to a JSON file of milestone ID to summary'),
+        check: z.string().optional().describe('Regression command; saved as regressionCommand'),
+        timeout: z.number().int().optional().describe('Suite timeout in ms (default 10 minutes)'),
+      },
+    },
+    ({ ids, summary, summaries, check, timeout }) =>
+      captureOutput(() => runMilestoneArchive(ids, targetDir, { summary, summaries, check, timeout })),
   );
 
   registerNativTool(

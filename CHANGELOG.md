@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.9.1
+
+### Added
+
+- **Plan compaction.** `nativ milestone archive <ids> --summary "..."` moves a finished milestone into `.ai/archive/` once the regression suite passes, and `nativ milestone restore <id>` brings it back. `nativ task show <id>` reads one task, archived or not. MCP tools `nativ_milestone_archive` and `nativ_task_show` cover archive and show; restore stays CLI only.
+- **Archived milestones count everywhere.** `nativ status` and the Studio keep archived tasks in their totals, dependencies on archived tasks count as met, `nativ validate` fails when an archive file is missing or does not match, and `verify --all` skips archived tasks.
+- **`regressionCommand` setting.** The test suite `nativ milestone archive` runs, saved by `--check`.
+- **Project manager guide.** After the verifier passes a milestone: archive it, tell the human, suggest `/clear`.
+
+### Changed
+
+- **Smaller JSON by default.** `nativ status --json` returns full tasks only for the active milestone, and `nativ task list --json` (and `nativ tasks --json`) returns a short summary per task. Pass `--full` for the old output. Scripts that read these may need to change.
+
+### Fixed
+
+- **`--json` on `task list`.** The help promised a summary, but the CLI always printed every field. It now matches the MCP tool.
+- **Checks ran twice.** The worker guide told workers to run a task's check before `nativ task complete`, which runs it anyway.
+- **Startup instructions loaded twice.** With nativ installed as both a plugin and in the project, the plugin's hook now stays silent.
+- **Git Bash found by clean checks on Windows.** Clean check environments now pass `ProgramFiles` and `ProgramFiles(x86)` on Windows, so native runner checks find Git Bash without a `verifyEnv` workaround.
+
 ## 2.9.0
 
 ### Added

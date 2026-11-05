@@ -17,3 +17,18 @@ Thumbs.db
 /AGENTS.md
 /.claude/
 /.mcp.json
+
+# >>> nativ (managed) >>>
+/.ai/
+/.nativ/
+/.worktrees/
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/.claude/agents/architect.md
+/.claude/agents/worker.md
+/.claude/agents/verifier.md
+/.claude/agents/explorer.md
+/.mcp.json
+/.claude/settings.json
+# <<< nativ (managed) <<<

@@ -95,6 +95,9 @@ export const TASK_VERIFICATION_KINDS: readonly VerificationKind[] = [
   'unit', 'integration', 'static-config', 'docs', 'probe', 'manual',
 ];
 
+/** Names that lift the human gate; a check command must never set them. */
+export const CHECK_OVERRIDE_NAMES = /NATIV_(CI|HEADLESS)_OVERRIDE/;
+
 /** Lists every structural problem with a task; empty when the task is valid. */
 export function validateMasterPlanTask(task: unknown): string[] {
   if (!task || typeof task !== 'object' || Array.isArray(task)) return ['task must be an object'];
@@ -108,7 +111,7 @@ export function validateMasterPlanTask(task: unknown): string[] {
   }
   if (typeof t.description !== 'string') errors.push(`${label}: "description" must be a string`);
   if (typeof t.verificationCommand !== 'string') errors.push(`${label}: "verificationCommand" must be a string`);
-  if (typeof t.verificationCommand === 'string' && /NATIV_(CI|HEADLESS)_OVERRIDE/.test(t.verificationCommand)) {
+  if (typeof t.verificationCommand === 'string' && CHECK_OVERRIDE_NAMES.test(t.verificationCommand)) {
     errors.push(`${label}: "verificationCommand" must not set NATIV_CI_OVERRIDE or NATIV_HEADLESS_OVERRIDE`);
   }
   if (typeof t.assignedSubagent !== 'string' || !isSubagentType(t.assignedSubagent)) {
@@ -133,6 +136,17 @@ export function validateMasterPlanTask(task: unknown): string[] {
   return errors;
 }
 
+/** What the plan keeps about a milestone whose tasks moved to an archive file. */
+export interface MilestoneArchiveInfo {
+  summary: string;
+  commit: string | null;
+  check: string;
+  archivedAt: string;
+  taskCount: number;
+  taskIds: string[];
+  file: string;
+}
+
 export interface MasterPlanMilestone {
   id: string;
   name: string;
@@ -140,6 +154,8 @@ export interface MasterPlanMilestone {
   tasks: MasterPlanTask[];
   /** True for the milestone that collects fast-path tasks. */
   fastPath?: boolean;
+  /** Set when the tasks live in an archive file; `tasks` is then empty. */
+  archived?: MilestoneArchiveInfo;
 }
 
 export interface MasterPlan {

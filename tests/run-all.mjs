@@ -10,12 +10,12 @@ const NODE_SUITES = [
   'profiles', 'task-router', 'task-fields', 'design-templates', 'spec-slices', 'learnings', 'contract-generator',
   'verify-gatekeeper', 'mcp-server', 'data-studio', 'fragmented-env', 'env-example-detection', 'contract-governor',
   'worktree-lifecycle', 'agent-supervisor', 'native-tools', 'concurrency-locks', 'task-claims',
-  'telemetry-engine', 'benchmark-suite',
+  'telemetry-engine', 'read-output-size', 'benchmark-suite',
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
   'model-routing', 'notify', 'token-budget', 'v2-e2e',
   'taste-bundle', 'taste-digest', 'init-design', 'design-check',
   'gitignore-block', 'env-reads', 'verify-env', 'clean-tree', 'check-docs', 'portability-lint', 'm16-templates',
-  'm16-e2e',
+  'm16-e2e', 'single-startup-context', 'milestone-archive', 'archive-integration',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',

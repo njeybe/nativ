@@ -129,6 +129,16 @@ export async function verifyTask(
     }
   }
 
+  const archivedIn = plan.milestones.find((m) => m.archived?.taskIds.includes(taskId));
+  if (!foundTask && archivedIn) {
+    const error = archivedMessage(taskId, archivedIn.id);
+    return {
+      taskId, title: 'Archived', milestoneId: archivedIn.id, milestoneName: archivedIn.name,
+      status: 'archived',
+      result: { success: false, exitCode: 1, command: '', stdout: '', stderr: error, durationMs: 0, error },
+    };
+  }
+
   if (!foundTask || !foundMilestone) {
     return {
       taskId,
@@ -157,6 +167,11 @@ export async function verifyTask(
     status: foundTask.status,
     result,
   };
+}
+
+function archivedMessage(what: string, milestoneId: string): string {
+  return `${what} is archived (milestone ${milestoneId}). `
+    + `Run \`nativ milestone restore ${milestoneId}\` to bring its tasks back first.`;
 }
 
 function matchesMilestone(m: MasterPlanMilestone, wanted: string): boolean {
@@ -207,6 +222,14 @@ export async function verifyBatch(
   // Filter tasks to run
   const candidates: { task: MasterPlanTask; milestone: MasterPlanMilestone }[] = [];
 
+  const archivedWanted = options.milestoneId
+    ? plan.milestones.find((m) => m.archived && matchesMilestone(m, options.milestoneId!))
+    : undefined;
+  if (archivedWanted) {
+    return refusedBatch(plan.projectName, archivedWanted, archivedMessage(`Milestone ${archivedWanted.id}`, archivedWanted.id));
+  }
+
+  // verify --all leaves archived milestones out: their stubs hold no tasks.
   for (const m of plan.milestones) {
     for (const t of m.tasks) {
       if (options.taskId && t.id === options.taskId) {
@@ -291,4 +314,10 @@ export async function verifyBatch(
     durationMs: totalDuration,
     tasks: results,
   };
+}
+
+function refusedBatch(projectName: string, m: MasterPlanMilestone, error: string): BatchVerificationResult {
+  const result = { success: false, exitCode: 1, command: '', stdout: '', stderr: error, durationMs: 0, error };
+  const task = { taskId: m.id, title: 'Archived milestone', milestoneId: m.id, milestoneName: m.name, status: 'archived', result };
+  return { projectName, total: 1, passed: 0, failed: 1, skipped: 0, durationMs: 0, tasks: [task as TaskVerificationResult] };
 }

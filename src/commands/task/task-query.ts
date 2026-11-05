@@ -5,6 +5,7 @@ import { resolveSpecSlices } from '../../core/spec-slices.js';
 import { resolveWorkerModel } from '../../core/model-routing.js';
 import { learningsForTask, type Learning } from '../../core/learnings.js';
 import { taskEscalationHistory } from '../../governor/index.js';
+import { archivedTaskIds } from '../../core/milestone-archive.js';
 import type { MasterPlanTask } from '../../scanner/types.js';
 import { getPlanPath, getRoleGuide, getRecommendedContractSlice } from './task-common.js';
 
@@ -27,7 +28,7 @@ export async function runTaskList(
     return;
   }
 
-  const completedTaskIds = new Set<string>();
+  const completedTaskIds = new Set<string>(archivedTaskIds(plan));
   for (const m of plan.milestones) {
     for (const t of m.tasks) {
       if (t.status === 'completed') {
@@ -153,6 +154,7 @@ function briefTask(t: MasterPlanTask, milestoneId: string, isAvailable: boolean)
     isAvailable,
     ...(t.dependencies?.length ? { dependencies: t.dependencies } : {}),
     ...(t.targetFiles?.length ? { targetFiles: t.targetFiles } : {}),
+    ...(t.fastPath ? { fastPath: true } : {}),
     ...(t.status === 'blocked' && t.notes ? { notes: t.notes } : {}),
   };
 }
@@ -170,7 +172,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
     return;
   }
 
-  const completedTaskIds = new Set<string>();
+  const completedTaskIds = new Set<string>(archivedTaskIds(plan));
   for (const m of plan.milestones) {
     for (const t of m.tasks) {
       if (t.status === 'completed') {

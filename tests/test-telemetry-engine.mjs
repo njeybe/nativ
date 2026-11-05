@@ -193,7 +193,7 @@ async function runTests() {
         jsonOutput += msg + '\n';
       };
       try {
-        await runStatus(dir, { json: true });
+        await runStatus(dir, { json: true, full: true });
       } finally {
         console.log = originalLog;
       }

@@ -1,6 +1,9 @@
 // Builds the minimal environment a verification command runs with.
 const BASE = ['PATH', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'TMPDIR', 'TEMP', 'TMP'];
-const WINDOWS = ['SystemRoot', 'windir', 'ComSpec', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA'];
+const WINDOWS = [
+  'SystemRoot', 'windir', 'ComSpec', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA',
+  'ProgramFiles', 'ProgramFiles(x86)',
+];
 const TOOLS = ['VIRTUAL_ENV', 'GOPATH', 'GOROOT', 'GOCACHE', 'GOMODCACHE'];
 
 /** Allowlisted variables from the parent env, plus the extra names, plus the sandbox markers. */

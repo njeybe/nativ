@@ -14,7 +14,7 @@ if (group === 'hook' && (subcommand === 'check' || subcommand === 'context')) {
       await runHookCheck(targetDir);
     } else {
       const { runSessionContext } = await import('../dist/core/setup-assets.js');
-      runSessionContext(targetDir);
+      runSessionContext(targetDir, undefined, { fromPlugin: rest.includes('--from-plugin') });
     }
   } catch (err) {
     // A hook must never fail the tool call it guards.

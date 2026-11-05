@@ -97,8 +97,10 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
   }
 
   function finishMilestone(m) {
-    m.total = m.tasks.length;
-    m.done = m.tasks.filter(function (t) { return t.status === 'completed'; }).length;
+    // An archived milestone keeps its task count, so overall progress does not drop.
+    var kept = m.archived ? (m.archived.taskCount || 0) : 0;
+    m.total = m.tasks.length + kept;
+    m.done = m.tasks.filter(function (t) { return t.status === 'completed'; }).length + kept;
     var ends = m.tasks.map(function (t) { return t.endT || 0; });
     m.lastEndT = Math.max.apply(null, [0].concat(ends)) || null;
     m.workMs = m.tasks.reduce(function (sum, t) { return sum + (t.durationMs || 0); }, 0);
@@ -106,9 +108,10 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     m.costUsd = costs.length ? costs.reduce(function (sum, t) { return sum + t.costUsd; }, 0) : null;
   }
 
-  function linkTasks(tasks, byId) {
+  function linkTasks(tasks, byId, archivedIds) {
     tasks.forEach(function (t) {
       t.deps.forEach(function (d) {
+        if (archivedIds[d]) return;
         var parent = byId[d];
         if (parent && parent.children.indexOf(t.id) === -1) parent.children.push(t.id);
         if (!parent || parent.status !== 'completed') t.waitingOn.push(d);
@@ -138,7 +141,8 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     var st = api.status && api.status.telemetry;
     var pick = function (a, b) { return a != null && isFinite(a) ? a : (b != null && isFinite(b) ? b : null); };
     var contracts = api.status && api.status.contracts;
-    var done = tasks.filter(function (t) { return t.status === 'completed'; }).length;
+    var kept = milestones.reduce(function (n, m) { return n + (m.archived ? m.archived.taskCount || 0 : 0); }, 0);
+    var done = tasks.filter(function (t) { return t.status === 'completed'; }).length + kept;
     return {
       spendUsd: pick(act && act.spendUsd, st && st.actualSpendUsd),
       cacheHitRate: pick(act && act.cacheHitRate, st && st.cacheHitRate),
@@ -147,9 +151,9 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       contractsTotal: 5,
       milestonesTotal: milestones.length,
       milestonesDone: milestones.filter(function (m) { return m.total > 0 && m.done === m.total; }).length,
-      tasksTotal: tasks.length,
+      tasksTotal: tasks.length + kept,
       tasksDone: done,
-      tasksLeft: tasks.length - done
+      tasksLeft: tasks.length + kept - done
     };
   }
 
@@ -157,7 +161,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
   function buildModel(api) {
     api = api || {};
     var index = indexApi(api);
-    var tasks = [], byId = {};
+    var tasks = [], byId = {}, archivedIds = {};
     var milestones = (api.milestones || []).map(function (m, i) {
       var list = (m.tasks || []).map(function (t) {
         var task = buildTask(t, m.id, index);
@@ -165,9 +169,12 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
         tasks.push(task);
         return task;
       });
-      return { id: m.id, name: m.name || m.id, short: shortName(m.name || m.id), status: m.status, idx: i, tasks: list };
+      var archived = m.archived || null;
+      if (archived) (archived.taskIds || []).forEach(function (id) { archivedIds[id] = true; });
+      return { id: m.id, name: m.name || m.id, short: shortName(m.name || m.id), status: m.status, idx: i,
+        tasks: list, archived: archived };
     });
-    linkTasks(tasks, byId);
+    linkTasks(tasks, byId, archivedIds);
     milestones.forEach(finishMilestone);
     var active = null;
     milestones.some(function (m) {

@@ -1,5 +1,7 @@
 import path from 'node:path';
+import { withArchivedAsDone } from '../../core/milestone-archive.js';
 import pc from 'picocolors';
+import { archivedTaskMessage, findArchivedMilestoneId } from './task-show.js';
 import { parseIsolation } from '../verify.js';
 import { resolveActiveProfileSettings } from '../../core/profiles.js';
 import { resolveMainRoot } from '../../core/root-resolver.js';
@@ -50,12 +52,16 @@ export async function runTaskStart(taskId: string, targetDirArg?: string, option
 
     if (!foundTask) {
       ctx.abort();
-      console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+      const archivedIn = findArchivedMilestoneId(plan, taskId);
+      const why = archivedIn
+        ? archivedTaskMessage(taskId, archivedIn)
+        : `Task [${taskId}] not found in .ai/master_plan.json`;
+      console.error(pc.red(`\n✖ ${why}\n`));
       process.exitCode = 1;
       return;
     }
 
-    const refusal = options.force ? null : startRefusal(plan, foundTask, agent);
+    const refusal = options.force ? null : startRefusal(withArchivedAsDone(plan), foundTask, agent);
     if (refusal) {
       ctx.abort();
       console.error(pc.red(`\n✖ ${refusal}\n`));

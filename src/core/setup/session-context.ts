@@ -91,10 +91,40 @@ export function buildSessionContext(cwd: string, env: NodeJS.ProcessEnv = proces
   return lines.join('\n');
 }
 
-/** `nativ hook context`: prints the SessionStart hook output. Never throws and always prints valid JSON or nothing. */
-export function runSessionContext(targetDirArg?: string, write: (text: string) => void = (t) => process.stdout.write(t)): void {
+/** Marks the plugin's copy of the hook so it can stay silent when the project has its own. */
+export const FROM_PLUGIN_FLAG = '--from-plugin';
+
+export interface SessionContextOptions {
+  /** Set by the plugin's hook: stay silent when the project already runs the hook. */
+  fromPlugin?: boolean;
+}
+
+/** True when .claude/settings.json already runs `nativ hook context` without the plugin flag. */
+export function projectHasNativSessionHook(root: string): boolean {
+  let settings: { hooks?: { SessionStart?: Array<{ hooks?: Array<{ command?: unknown }> }> } };
   try {
-    const context = buildSessionContext(targetDirArg ? path.resolve(targetDirArg) : process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    settings = parseJsonLoose<typeof settings>(fs.readFileSync(path.join(root, '.claude', 'settings.json'), 'utf8'));
+  } catch {
+    return false;
+  }
+  const commands = (settings.hooks?.SessionStart ?? []).flatMap((group) => group.hooks ?? []);
+  return commands.some(({ command }) => {
+    if (typeof command !== 'string' || command.includes(FROM_PLUGIN_FLAG)) return false;
+    return /\bhook context\b/.test(command) && /nativ|cli\.js/.test(command);
+  });
+}
+
+/** `nativ hook context`: prints the SessionStart hook output. Never throws and always prints valid JSON or nothing. */
+export function runSessionContext(
+  targetDirArg?: string,
+  write: (text: string) => void = (t) => process.stdout.write(t),
+  options: SessionContextOptions = {},
+): void {
+  try {
+    const cwd = targetDirArg ? path.resolve(targetDirArg) : process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    // With both installs, the project hook prints the orientation and the plugin's copy stays quiet.
+    if (options.fromPlugin && projectHasNativSessionHook(resolveProjectRoot(cwd))) return;
+    const context = buildSessionContext(cwd);
     if (context) write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } }));
   } catch {
     // Orientation is a convenience; a failure must never disturb session start.
