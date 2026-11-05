@@ -390,6 +390,24 @@ nativ task start <taskId> [targetDir] [--agent <id>] [--force]
 
 Claims the task, marks it `in_progress` and records the baseline the test-integrity guard compares against. The task must be pending and its dependencies completed; a blocked task goes through `nativ triage` first, and only a person can override with `--force`. The claim records `claimedBy` (`--agent` or `$NATIV_AGENT_ID`) and `claimedAt`, so a parallel agent cannot take a task another agent holds. Running `task start` again on your own task refreshes the claim; a claim older than 4 hours counts as abandoned.
 
+#### `nativ task show`
+
+```bash
+nativ task show <taskId> [targetDir] [--json]
+```
+
+Prints one task from the plan, or from its milestone archive when the milestone is archived. Use it for an old task instead of opening the plan.
+
+#### `nativ milestone archive` / `restore`
+
+```bash
+nativ milestone archive <ids> --summary "Studio redesign: shell, routing, pages"
+nativ milestone archive m1,m2 --summaries summaries.json [--check "npm test"] [--timeout 600000]
+nativ milestone restore <id>
+```
+
+Archives finished milestones after the regression suite passes. Every task must be completed, and the working tree must be clean. The archive is written to `.ai/archive/<id>.json` and read back before the plan changes. The suite is the `regressionCommand` in `.nativ/config.json`; `--check` overrides and saves it. Default timeout is 10 minutes. Archived task ids still count for numbering and dependencies. `restore` is CLI only.
+
 #### `nativ task reclaim`
 
 ```bash

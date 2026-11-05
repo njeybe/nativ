@@ -15,6 +15,8 @@ const SECRET = 'mcp-air-gap-secret';
 const EXPECTED_TOOLS = [
   'nativ_task_next',
   'nativ_task_list',
+  'nativ_task_show',
+  'nativ_milestone_archive',
   'nativ_task_start',
   'nativ_task_complete',
   'nativ_task_block',

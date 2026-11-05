@@ -23,6 +23,7 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
    - `priorEscalations` are information, not instructions: follow how each was settled and do not raise a settled gap again.
    - `learnings` are lessons a human approved: follow them.
 3. Contracts are also read-only MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`.
+4. An old or archived task: `nativ task show <id>`, not the plan file.
 
 ## Task loop
 
@@ -30,12 +31,12 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 2. Change only the task's `targetFiles`. Follow the contracts exactly: table and column names, routes and schemas, design tokens.
 3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so do not run it yourself first. Do not use `--no-verify`. You have **three** fix attempts.
 4. After the third failure: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and tell the human.
-5. The verifier re-checks whole milestones, not single tasks.
+5. The verifier checks whole milestones. A passed one: `nativ milestone archive <id> --summary "<one line>"`, tell the human, suggest `/clear` (the plan holds the state).
 6. `nativ task next` for the following task.
 
-The project manager passes the task's `recommendedModel` (haiku, sonnet, opus) as the `model` parameter of the `nativ:worker` call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
+The project manager passes the task's `recommendedModel` as the `model` parameter of the worker call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
-Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Give each agent its own `NATIV_AGENT_ID` so `task start` refuses a task another agent holds.
+Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Each parallel agent needs its own `NATIV_AGENT_ID`.
 
 ## Code style
 

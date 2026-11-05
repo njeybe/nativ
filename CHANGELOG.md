@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Plan compaction.** `nativ milestone archive <ids> --summary "..."` moves a finished milestone into `.ai/archive/`, and `nativ milestone restore <id>` brings it back. `nativ task show <id>` reads one task, archived or not. MCP tools `nativ_milestone_archive` and `nativ_task_show` cover archive and show; restore stays CLI only.
+
+### Changed
+
+- **Smaller JSON by default.** `nativ status --json` returns full tasks only for the active milestone, and `nativ task list --json` (and `nativ tasks --json`) returns a short summary per task. Pass `--full` for the old output. Scripts that read these may need to change.
+
 ## 2.9.0
 
 ### Added
