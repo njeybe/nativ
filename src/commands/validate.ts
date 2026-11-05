@@ -36,7 +36,6 @@ export async function runValidate(targetDirArg?: string) {
     return content;
   }
 
-  // Directives tell agents how to work; they are guidance, not contracts, and GEMINI.md is only an optional adapter guide.
   function checkArchive(m: any): boolean {
     const rel = `.ai/archive/${m.id}.json`;
     let saved: any;
@@ -55,6 +54,7 @@ export async function runValidate(targetDirArg?: string) {
     return true;
   }
 
+  // Directives tell agents how to work; they are guidance, not contracts, and GEMINI.md is only an optional adapter guide.
   console.log(pc.bold('1. Directives:'));
   const directives = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].filter((f) => fs.existsSync(path.join(targetDir, f)));
   for (const file of directives) checkFile(file);

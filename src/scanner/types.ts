@@ -95,10 +95,10 @@ export const TASK_VERIFICATION_KINDS: readonly VerificationKind[] = [
   'unit', 'integration', 'static-config', 'docs', 'probe', 'manual',
 ];
 
-/** Lists every structural problem with a task; empty when the task is valid. */
 /** Names that lift the human gate; a check command must never set them. */
 export const CHECK_OVERRIDE_NAMES = /NATIV_(CI|HEADLESS)_OVERRIDE/;
 
+/** Lists every structural problem with a task; empty when the task is valid. */
 export function validateMasterPlanTask(task: unknown): string[] {
   if (!task || typeof task !== 'object' || Array.isArray(task)) return ['task must be an object'];
   const t = task as Record<string, unknown>;

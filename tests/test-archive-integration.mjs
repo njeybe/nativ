@@ -134,6 +134,14 @@ try {
   assert.equal(am.archived.summary, 'Did the first thing');
   assert.deepEqual(ma.byId['task-03'].waitingOn, [], 'archived dependency is not waited on');
   console.log('✔ Studio server and model totals match before and after archiving');
+  // Runner: a dependency on an archived task is met; an unfinished one is still refused.
+  const { AgentSupervisor } = await dist('runner/agent-supervisor.js');
+  const sup = new AgentSupervisor({ cwd: fixture(true) });
+  const check = (deps) => sup.assertDependenciesMet({ id: 'task-x', dependencies: deps });
+  assert.doesNotThrow(() => check(['task-01', 'task-02']), 'archived dependencies are met');
+  assert.throws(() => check(['task-03']), (err) => err.code === 'UNMET_DEPENDENCIES');
+  assert.throws(() => check(['task-01', 'task-03']), (err) => err.code === 'UNMET_DEPENDENCIES');
+  console.log('✔ runner accepts archived dependencies and still refuses unfinished ones');
 } finally {
   for (const d of made) fs.rmSync(d, { recursive: true, force: true });
 }

@@ -6,6 +6,7 @@ import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import { loadMasterPlan } from '../core/verifier.js';
 import { writeJsonAtomicSync } from '../core/lock-manager.js';
+import { withArchivedAsDone } from '../core/milestone-archive.js';
 import {
   cacheHitRate,
   computeActualCostUsd,
@@ -401,8 +402,11 @@ export class AgentSupervisor extends EventEmitter {
     const { plan } = loadMasterPlan(this.rootDir);
     if (!plan) return;
 
+    // Archived tasks are gone from live milestones; count them as completed.
     const byId = new Map<string, MasterPlanTask>();
-    for (const milestone of plan.milestones) for (const t of milestone.tasks) byId.set(t.id, t);
+    for (const milestone of withArchivedAsDone(plan).milestones) {
+      for (const t of milestone.tasks) byId.set(t.id, t);
+    }
 
     const unmet = task.dependencies.filter((id) => byId.get(id)?.status !== 'completed');
     if (unmet.length) {
