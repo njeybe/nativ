@@ -36,6 +36,7 @@ import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
 import { runCheckDocs } from './commands/check.js';
+import { registerMilestoneCommands } from './commands/milestone.js';
 import { packageVersion } from './core/version.js';
 
 function parseGitVisibility(value: string): 'hidden' | 'shared' {
@@ -308,6 +309,8 @@ export function createProgram(): Command {
     .action(async (taskId, targetDir, options) => {
       await runTaskUnlock(taskId, targetDir, { reason: options.reason, revoke: options.revoke });
     });
+
+  registerMilestoneCommands(program);
 
   const check = program.command('check').description('Checks on project files');
 

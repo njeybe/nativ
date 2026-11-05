@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { withArchivedAsDone } from '../../core/milestone-archive.js';
 import pc from 'picocolors';
 import { parseIsolation } from '../verify.js';
 import { resolveActiveProfileSettings } from '../../core/profiles.js';
@@ -55,7 +56,7 @@ export async function runTaskStart(taskId: string, targetDirArg?: string, option
       return;
     }
 
-    const refusal = options.force ? null : startRefusal(plan, foundTask, agent);
+    const refusal = options.force ? null : startRefusal(withArchivedAsDone(plan), foundTask, agent);
     if (refusal) {
       ctx.abort();
       console.error(pc.red(`\n✖ ${refusal}\n`));

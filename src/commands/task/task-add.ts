@@ -12,6 +12,7 @@ import {
 import { configuredInvocation } from '../../core/setup/setup-planner.js';
 import { cliString, resolveCliInvocation } from '../../core/setup/types.js';
 import { withPlanLock } from '../../core/lock-manager.js';
+import { archivedTaskIds } from '../../core/milestone-archive.js';
 import {
   getPlanPath,
   getRoleGuide,
@@ -41,7 +42,8 @@ function nextNumberedId(ids: string[], prefix: string, defaultWidth: number): st
 }
 
 export function generateNextTaskId(plan: MasterPlan): string {
-  return nextNumberedId(plan.milestones.flatMap((m) => m.tasks.map((t) => t.id)), 'task-', 2);
+  const live = plan.milestones.flatMap((m) => m.tasks.map((t) => t.id));
+  return nextNumberedId([...live, ...archivedTaskIds(plan)], 'task-', 2);
 }
 
 export function generateNextMilestoneId(plan: MasterPlan): string {
@@ -107,7 +109,10 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       return failTaskAdd('INVALID_AGENT', `Unknown sub-agent "${agent}". Expected one of: ${SUBAGENT_TYPES.join(', ')}`, options.json);
     }
 
-    const existingIds = new Set(plan.milestones.flatMap((m) => m.tasks.map((t) => t.id)));
+    const existingIds = new Set([
+      ...plan.milestones.flatMap((m) => m.tasks.map((t) => t.id)),
+      ...archivedTaskIds(plan),
+    ]);
     const deps = [...new Set(splitList(options.deps))];
     const unknownDeps = deps.filter((d) => !existingIds.has(d));
     if (unknownDeps.length) {
@@ -153,7 +158,7 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       }
       milestone = found;
     } else if (fastPath) {
-      milestone = plan.milestones.find((m) => m.fastPath === true);
+      milestone = plan.milestones.find((m) => m.fastPath === true && !m.archived);
       if (!milestone) {
         milestone = { id: generateNextMilestoneId(plan), name: FAST_PATH_MILESTONE_NAME, status: 'pending', fastPath: true, tasks: [] };
         plan.milestones.push(milestone);
@@ -166,6 +171,12 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
         ctx.abort();
         return failTaskAdd('NO_OPEN_MILESTONE', 'Every milestone is completed. Pass --milestone <id> to reopen one, or --fast-path', options.json);
       }
+    }
+
+    if (milestone.archived) {
+      ctx.abort();
+      const how = `Restore it first with: nativ milestone restore ${milestone.id}`;
+      return failTaskAdd('MILESTONE_ARCHIVED', `Milestone ${milestone.id} is archived. ${how}`, options.json);
     }
 
     const specRefs = [...new Set(splitList(options.specRefs))];
