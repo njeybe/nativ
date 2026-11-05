@@ -100,7 +100,8 @@ export function createProgram(): Command {
     .command('status [targetDir]')
     .description('Inspect current execution progress and telemetry from .ai/master_plan.json')
     .option('-t, --telemetry', 'Display token usage, duration, and cost estimation telemetry')
-    .option('--json', 'Output project status and telemetry as JSON')
+    .option('--json', 'Output project status and telemetry as JSON (compact)')
+    .option('--full', 'With --json, include every milestone task and per-task telemetry')
     .action(async (targetDir, options) => {
       await runStatus(targetDir, options);
     });
@@ -122,7 +123,7 @@ export function createProgram(): Command {
     .option('--json', 'Output filtered tasks as JSON (a summary per task)')
     .option('--full', 'With --json, include every task field')
     .action(async (targetDir, options) => {
-      await runTaskList(targetDir, options);
+      await runTaskList(targetDir, { ...options, brief: !options.full });
     });
 
   program
@@ -171,7 +172,7 @@ export function createProgram(): Command {
     .option('--json', 'Output filtered tasks as JSON (a summary per task)')
     .option('--full', 'With --json, include every task field')
     .action(async (targetDir, options) => {
-      await runTaskList(targetDir, options);
+      await runTaskList(targetDir, { ...options, brief: !options.full });
     });
 
   task

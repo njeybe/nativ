@@ -7,6 +7,7 @@ import { loadTelemetry, formatTelemetrySummary, recomputeTelemetrySummary } from
 export interface StatusOptions {
   telemetry?: boolean;
   json?: boolean;
+  full?: boolean;
 }
 
 export async function runStatus(targetDirArg?: string, options: StatusOptions = {}) {
@@ -27,20 +28,7 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     const telemetry = loadTelemetry(telemetryPath, plan.projectName);
 
     if (options.json) {
-      console.log(
-        JSON.stringify(
-          {
-            projectName: plan.projectName,
-            overallStatus: plan.overallStatus,
-            activeMilestoneId: plan.activeMilestoneId,
-            milestones: plan.milestones,
-            telemetry: telemetry.summary,
-            tasksTelemetry: telemetry.tasks,
-          },
-          null,
-          2
-        )
-      );
+      console.log(JSON.stringify(buildStatusJson(plan, telemetry, !!options.full), null, 2));
       return;
     }
 
@@ -90,4 +78,27 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     console.error(pc.red(`✖ Failed to read or parse .ai/master_plan.json: ${err.message}`));
     process.exitCode = 1;
   }
+}
+
+function buildStatusJson(plan: MasterPlan, telemetry: ReturnType<typeof loadTelemetry>, full: boolean) {
+  const base = {
+    projectName: plan.projectName,
+    overallStatus: plan.overallStatus,
+    activeMilestoneId: plan.activeMilestoneId,
+  };
+  if (full) {
+    return { ...base, milestones: plan.milestones, telemetry: telemetry.summary, tasksTelemetry: telemetry.tasks };
+  }
+  const milestones = plan.milestones.map((m) =>
+    m.id === plan.activeMilestoneId
+      ? m
+      : {
+          id: m.id,
+          name: m.name,
+          status: m.status,
+          taskCount: m.tasks.length,
+          completedCount: m.tasks.filter((t) => t.status === 'completed').length,
+        }
+  );
+  return { ...base, milestones, telemetry: telemetry.summary };
 }
