@@ -37,6 +37,24 @@ export async function runValidate(targetDirArg?: string) {
   }
 
   // Directives tell agents how to work; they are guidance, not contracts, and GEMINI.md is only an optional adapter guide.
+  function checkArchive(m: any): boolean {
+    const rel = `.ai/archive/${m.id}.json`;
+    let saved: any;
+    try {
+      saved = JSON.parse(fs.readFileSync(path.join(targetDir, rel), 'utf8'));
+    } catch (err: any) {
+      console.log(pc.red(`  ✖ Archive file of ${m.id} is missing or unreadable: ${rel} (${err.message})`));
+      return false;
+    }
+    const ids = Array.isArray(saved?.tasks) ? saved.tasks.map((t: any) => t.id) : null;
+    if (saved?.id !== m.id || JSON.stringify(ids) !== JSON.stringify(m.archived.taskIds)) {
+      console.log(pc.red(`  ✖ ${rel} does not match the archived stub of ${m.id}`));
+      return false;
+    }
+    console.log(pc.green(`  ✔ Archive matches: ${rel}`));
+    return true;
+  }
+
   console.log(pc.bold('1. Directives:'));
   const directives = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'].filter((f) => fs.existsSync(path.join(targetDir, f)));
   for (const file of directives) checkFile(file);
@@ -67,6 +85,12 @@ export async function runValidate(targetDirArg?: string) {
       }
     }
     for (const w of specWarnings) console.log(pc.yellow(`  ⚠ ${w}`));
+  }
+
+  if (plan && Array.isArray(plan.milestones)) {
+    for (const m of plan.milestones) {
+      if (m?.archived && !checkArchive(m)) hasErrors = true;
+    }
   }
 
   const escalationPath =path.join(targetDir, '.ai/escalation.json');

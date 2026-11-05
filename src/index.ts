@@ -14,6 +14,7 @@ import {
   runTaskProposePatch,
   runTaskUnlock,
 } from './commands/task.js';
+import { runTaskShow } from './commands/task/task-show.js';
 import { runHookCheck, runHookStatus } from './commands/hook.js';
 import { runSetup } from './commands/setup.js';
 import { runDoctor } from './commands/doctor.js';
@@ -208,6 +209,14 @@ export function createProgram(): Command {
     .option('--json', 'Output task information as JSON')
     .action(async (targetDir, options) => {
       await runTaskNext(targetDir, options);
+    });
+
+  task
+    .command('show <taskId> [targetDir]')
+    .description('Show one task in full, from the plan or from its archive file')
+    .option('--json', 'Output the task as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runTaskShow(taskId, targetDir, options);
     });
 
   task
