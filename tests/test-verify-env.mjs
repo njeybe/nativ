@@ -23,10 +23,29 @@ const q = (s) => JSON.stringify(s);
   assert.equal(buildVerifyEnv([], { NATIV_HEADLESS_OVERRIDE: '1' }).NATIV_HEADLESS_OVERRIDE, undefined);
 }
 
+// Windows folder variables are listed only on win32; NATIV_ and unlisted names never pass
+{
+  const src = {
+    ProgramFiles: 'C:/Program Files',
+    'ProgramFiles(x86)': 'C:/Program Files (x86)',
+    NATIV_SECRET_FLAG: '1',
+    UNLISTED_VAR: 'u',
+  };
+  const env = buildVerifyEnv([], src);
+  const win = process.platform === 'win32';
+  assert.equal(env.ProgramFiles, win ? 'C:/Program Files' : undefined);
+  assert.equal(env['ProgramFiles(x86)'], win ? 'C:/Program Files (x86)' : undefined);
+  assert.equal(env.NATIV_SECRET_FLAG, undefined);
+  assert.equal(env.UNLISTED_VAR, undefined);
+}
+
 // isCiEnvironment under the sandbox marker
 {
   const saved = { ...process.env };
-  const keys = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE'];
+  const keys = [
+    'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE',
+    'NATIV_VERIFY_SANDBOX',
+  ];
   for (const k of keys) delete process.env[k];
   process.env.CI = 'true';
   assert.equal(isCiEnvironment(), true);

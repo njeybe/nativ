@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **Git Bash found by clean checks on Windows.** Clean check environments now pass `ProgramFiles` and `ProgramFiles(x86)` on Windows, so native runner checks find Git Bash without a `verifyEnv` workaround.
 - **Smaller JSON by default.** `nativ status --json` returns full tasks only for the active milestone, and `nativ task list --json` (and `nativ tasks --json`) returns a short summary per task. Pass `--full` for the old output. Scripts that read these may need to change.
 
 ## 2.9.0
