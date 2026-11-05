@@ -261,6 +261,28 @@ const tests = {
     assert.equal(fs.existsSync(archiveDir(dir)), false);
   },
 
+  async 'a cleanup failure keeps the plan-unchanged refusal and tries every file'() {
+    const dir = fixture();
+    const before = planText(dir);
+    const request = { ids: ['m1', 'm2'], summaries: { m1: 'x', m2: 'y' }, check: 'node pass.cjs' };
+    const attempted = [];
+    const remove = (f) => {
+      attempted.push(path.basename(f));
+      if (attempted.length === 1) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+      fs.rmSync(f, { force: true });
+    };
+    const work = core.archiveMilestones(dir, request, { save: () => false, remove });
+    await assert.rejects(work, (err) => {
+      assert.ok(err instanceof core.ArchiveRefusal, String(err));
+      assert.match(err.message, /plan is unchanged/);
+      assert.match(err.message, /Some archive files could not be removed: busy/);
+      assert.doesNotMatch(err.message, /\n\s+at /);
+      return true;
+    });
+    assert.deepEqual(attempted, ['m1.json', 'm2.json']);
+    assert.equal(planText(dir), before);
+  },
+
   'archived ids stay taken and still satisfy dependencies'() {
     const dir = fixture();
     assert.equal(archive(dir, 'm2', ...GOOD).code, 0);

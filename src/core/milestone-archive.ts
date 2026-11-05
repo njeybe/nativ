@@ -21,10 +21,11 @@ export const DEFAULT_SUITE_TIMEOUT_MS = 600_000;
 /** An expected "no": the message is written for the person running the command. */
 export class ArchiveRefusal extends Error {}
 
-/** Seams so tests can make the read-back or the plan save fail. */
+/** Seams so tests can make the read-back, the removal or the plan save fail. */
 export interface ArchiveDeps {
   readBack?: (file: string) => string;
   save?: (planPath: string, plan: MasterPlan) => boolean;
+  remove?: (file: string) => void;
 }
 
 export interface ArchiveRequest {
@@ -184,14 +185,30 @@ function writeConfirmed(
   }
 }
 
-function removeArchives(files: string[]): void {
-  for (const file of files) fs.rmSync(file, { force: true });
-  if (!files.length) return;
-  try {
-    fs.rmdirSync(path.dirname(files[0]));
-  } catch {
-    // Other archives are still in the folder.
+/** A file that is not there (or whose folder is a plain file) is already removed. */
+const isAbsent = (err: any) => err?.code === 'ENOENT' || err?.code === 'ENOTDIR';
+
+/** Tries every file; rethrows the first real error only after all were attempted. */
+function removeArchives(
+  files: string[],
+  remove: (file: string) => void = (f) => fs.rmSync(f, { force: true }),
+): void {
+  let failure: unknown = null;
+  for (const file of files) {
+    try {
+      remove(file);
+    } catch (err: any) {
+      if (!isAbsent(err) && failure === null) failure = err;
+    }
   }
+  if (files.length) {
+    try {
+      fs.rmdirSync(path.dirname(files[0]));
+    } catch {
+      // Other archives are still in the folder.
+    }
+  }
+  if (failure !== null) throw failure;
 }
 
 function toStub(
@@ -246,9 +263,15 @@ function commitArchive(
       throw new Error('the plan could not be saved');
     }
   } catch (err: any) {
-    removeArchives(written);
-    if (err instanceof ArchiveRefusal) throw err;
-    throw new ArchiveRefusal(`Nothing was archived, the plan is unchanged: ${err?.message}.`);
+    let message = err instanceof ArchiveRefusal
+      ? err.message
+      : `Nothing was archived, the plan is unchanged: ${err?.message}.`;
+    try {
+      removeArchives(written, deps.remove);
+    } catch (cleanup: any) {
+      message += ` Some archive files could not be removed: ${cleanup?.message}.`;
+    }
+    throw new ArchiveRefusal(message);
   }
   return { archived, activeMilestoneId: plan.activeMilestoneId, commit, warnings: [] };
 }
