@@ -34,11 +34,18 @@ import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
 import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
+import { runRunsList, runRunsShow } from './commands/runs.js';
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
 import { runCheckDocs } from './commands/check.js';
 import { registerMilestoneCommands } from './commands/milestone.js';
 import { packageVersion } from './core/version.js';
+
+function parsePositiveInt(value: string): number {
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 1) throw new InvalidArgumentError('Use a whole number of 1 or more.');
+  return count;
+}
 
 function parseGitVisibility(value: string): 'hidden' | 'shared' {
   if (value !== 'hidden' && value !== 'shared') {
@@ -385,6 +392,30 @@ export function createProgram(): Command {
     .option('--json', 'Output as JSON')
     .action(async (targetDir, options) => {
       await runLearnList(targetDir, options);
+    });
+
+  const runs = program
+    .command('runs')
+    .description('Recorded agent runs: list them and replay one step by step');
+
+  runs
+    .command('list [targetDir]')
+    .description('List recorded runs, newest first')
+    .option('-t, --task <taskId>', 'Only runs of this task')
+    .option('-n, --limit <count>', 'How many runs to show (default 20)', parsePositiveInt)
+    .option('--json', 'Output as JSON')
+    .action((targetDir, options) => {
+      runRunsList(targetDir, options);
+    });
+
+  runs
+    .command('show <run> [targetDir]')
+    .alias('replay')
+    .description('Replay one run: what the agent said, which tools it called and what came back (a task id shows its latest run)')
+    .option('--full', 'Show complete tool output and inputs instead of the first lines')
+    .option('--json', 'Output the recorded events as JSON')
+    .action((run, targetDir, options) => {
+      runRunsShow(run, targetDir, options);
     });
 
   const hook = program

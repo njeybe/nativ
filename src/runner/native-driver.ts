@@ -15,6 +15,7 @@ import {
   type RunnerRecord,
 } from './types.js';
 import { killProcessTree } from './process-utils.js';
+import { blockParts } from './transcript.js';
 import {
   NATIVE_TOOLS,
   ToolInputError,
@@ -66,9 +67,9 @@ export async function runNativeLoop(
   const native = run.native!;
   const { thinking } = native;
   const fallback = supportsServerFallback(native.model);
-  const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
-    { role: 'user', content: buildNativeTaskPrompt(run.task, readRoleGuide(ctx.rootDir, run.task), useWorktree, ctx.rootDir) },
-  ];
+  const prompt = buildNativeTaskPrompt(run.task, readRoleGuide(ctx.rootDir, run.task), useWorktree, ctx.rootDir);
+  const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: 'user', content: prompt }];
+  run.transcript?.write('prompt', { text: prompt });
 
   for (let turn = 1; ; turn++) {
     if (run.settled) return;
@@ -76,6 +77,7 @@ export async function runNativeLoop(
       throw new Error(`Native engine stopped after the ${ctx.nativeMaxTurns}-turn budget without finishing`);
     }
 
+    const turnStartedAt = Date.now();
     const stream = native.client.beta.messages.stream(
       {
         model: native.model,
@@ -114,7 +116,8 @@ export async function runNativeLoop(
     const message = await stream.finalMessage();
     if (streaming) ctx.appendLog(run, 'stdout', '\n');
     if (run.settled) return;
-    recordTurnUsage(ctx, run, message);
+    const delta = recordTurnUsage(ctx, run, message);
+    recordTurnTranscript(run, message, delta, turn, Date.now() - turnStartedAt);
 
     if (message.stop_reason === 'refusal') {
       const category = message.stop_details?.category;
@@ -137,17 +140,53 @@ export async function runNativeLoop(
     const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = [];
     for (const block of toolUses) {
       if (run.settled) return;
-      results.push(await executeNativeTool(ctx, run, block));
+      const toolStartedAt = Date.now();
+      const result = await executeNativeTool(ctx, run, block);
+      results.push(result);
+      run.transcript?.write('tool_result', {
+        id: block.id,
+        name: block.name,
+        isError: result.is_error === true,
+        output: typeof result.content === 'string' ? result.content : '',
+        latencyMs: Date.now() - toolStartedAt,
+      });
     }
     messages.push({ role: 'user', content: results });
   }
+}
+
+/** What the model said and called this turn, then what the call cost and how long it took. */
+function recordTurnTranscript(
+  run: ActiveRun,
+  message: Anthropic.Beta.Messages.BetaMessage,
+  delta: ActualTokenUsage,
+  turn: number,
+  latencyMs: number
+): void {
+  run.transcript?.writeParts([
+    ...blockParts(message.content),
+    ['usage', {
+      scope: 'turn',
+      turn,
+      model: delta.model,
+      stopReason: message.stop_reason,
+      stopCategory: message.stop_details?.category,
+      latencyMs,
+      inputTokens: delta.inputTokens,
+      outputTokens: delta.outputTokens,
+      cacheCreationTokens: delta.cacheCreationTokens,
+      cacheReadTokens: delta.cacheReadTokens,
+      thinkingTokens: delta.thinkingTokens,
+      costUsd: delta.costUsd,
+    }],
+  ]);
 }
 
 function recordTurnUsage(
   ctx: NativeDriverContext,
   run: ActiveRun,
   message: Anthropic.Beta.Messages.BetaMessage
-): void {
+): ActualTokenUsage {
   const { record } = run;
   const usage = message.usage;
   const model = message.model || run.native!.model;
@@ -174,6 +213,7 @@ function recordTurnUsage(
       ` · cache read ${delta.cacheReadTokens} / write ${delta.cacheCreationTokens} · $${delta.costUsd.toFixed(4)}\n`,
   );
   ctx.onTurnUsage(record, delta, model);
+  return delta;
 }
 
 async function executeNativeTool(

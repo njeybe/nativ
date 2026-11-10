@@ -6,7 +6,8 @@ import {
   ProviderError,
   stripJsonFence,
   createClaudeCliProvider,
-  createClaudeApiProvider,
+  createProviders,
+  resolveAnthropicApiKey,
   createGeminiProvider,
   parseLimitRetryAfter,
   resolveProviderChain,
@@ -131,47 +132,16 @@ const NOW_MS = 1_760_000_000_000;
   console.log('✔ Test 4: claude-cli refuses to nest and reports availability from the binary');
 }
 
-// Test 5: claude-api through a fake SDK client
+// Test 5: the claude-api provider is gone; an Anthropic key adds no provider but is still found for redaction
 {
   const root = tempRoot();
-  const seen = [];
-  const client = (behavior) => () => ({
-    messages: {
-      create: async (body, options) => {
-        seen.push({ body, options });
-        return behavior();
-      },
-    },
-  });
-
-  const ok = createClaudeApiProvider({ anthropicClient: client(() => ({ content: [{ type: 'text', text: '```json\n{"a":1}\n```' }] })), env: {} });
-  assert.equal(ok.hasCredentials(root), true);
-  assert.equal(await ok.complete({ system: 'sys', prompt: 'hi', json: true }, root), '{"a":1}');
-  assert.equal(seen[0].body.model, 'claude-haiku-4-5-20251001');
-  assert.equal(seen[0].body.system, 'sys');
-  assert.deepEqual(seen[0].body.messages, [{ role: 'user', content: 'hi' }]);
-  assert.ok(seen[0].options.timeout > 0);
-
-  const limited = createClaudeApiProvider({
-    anthropicClient: client(() => {
-      throw Object.assign(new Error('rate limited'), { status: 429, headers: { 'retry-after': '30' } });
-    }),
-  });
-  await assert.rejects(limited.complete({ prompt: 'x' }, root), (err) => err.code === 'RATE_LIMITED' && err.retryAfterMs === 30_000);
-  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('nope'), { status: 401 }); }) }).complete({ prompt: 'x' }, root), 'NO_CREDENTIALS');
-  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' }); }) }).complete({ prompt: 'x' }, root), 'TIMEOUT');
-  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => ({ content: [] })) }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
-  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('overloaded'), { status: 500 }); }) }).complete({ prompt: 'x' }, root), 'TRANSIENT');
-  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('Connection error.'), { name: 'APIConnectionError' }); }) }).complete({ prompt: 'x' }, root), 'TRANSIENT');
-  await REJECTS(createClaudeApiProvider({ anthropicClient: client(() => { throw Object.assign(new Error('bad request'), { status: 400 }); }) }).complete({ prompt: 'x' }, root), 'BAD_RESPONSE');
-
-  // Without an injected client the key comes from .env / env, and its absence is NO_CREDENTIALS
-  assert.equal(createClaudeApiProvider({ env: {} }).hasCredentials(root), false);
-  await REJECTS(createClaudeApiProvider({ env: {} }).complete({ prompt: 'x' }, root), 'NO_CREDENTIALS');
-  fs.writeFileSync(path.join(root, '.env'), 'ANTHROPIC_API_KEY="sk-ant-test-key-1234567890"\n', 'utf8');
-  assert.equal(createClaudeApiProvider({ env: {} }).hasCredentials(root), true, 'key read from .env');
+  assert.deepEqual(Object.keys(createProviders({})).sort(), ['claude-cli', 'gemini'], 'only the Claude login and Gemini remain');
+  assert.equal(resolveAnthropicApiKey(root, {}), null, 'no key, no value');
+  assert.equal(resolveAnthropicApiKey(root, { ANTHROPIC_API_KEY: '  sk-ant-env-1234567890 ' }), 'sk-ant-env-1234567890', 'key read from the environment, trimmed');
+  fs.writeFileSync(path.join(root, '.env'), 'ANTHROPIC_API_KEY="sk-ant-file-1234567890"\n', 'utf8');
+  assert.equal(resolveAnthropicApiKey(root, {}), 'sk-ant-file-1234567890', 'key read from .env');
   fs.rmSync(root, { recursive: true, force: true });
-  console.log('✔ Test 5: claude-api builds the request, maps errors, and finds its key');
+  console.log('✔ Test 5: no claude-api provider; the Anthropic key is still resolved so it can be redacted');
 }
 
 // Test 6: gemini keeps the header-only key and typed errors
@@ -229,18 +199,19 @@ const registryDeps = (over = {}) => ({
   assert.deepEqual(only.map((p) => p.id), ['claude-cli'], 'with just a Claude login, only claude-cli is available');
 
   fs.writeFileSync(path.join(root, '.env'), 'ANTHROPIC_API_KEY="sk-ant-x-1234567890"\nGEMINI_API_KEY="g-key-1234"\n', 'utf8');
-  assert.deepEqual(resolveProviderChain('triage', root, { deps: registryDeps() }).map((p) => p.id), ['claude-cli', 'claude-api', 'gemini'], 'default order is Claude first');
+  assert.deepEqual(resolveProviderChain('triage', root, { deps: registryDeps() }).map((p) => p.id), ['claude-cli', 'gemini'], 'default order is Claude first, and an Anthropic key adds no provider');
   assert.equal(resolveProvider('architect', root, { deps: registryDeps() }).id, 'claude-cli');
   assert.deepEqual(resolveProviderChain('triage', root, { provider: 'gemini', deps: registryDeps() }).map((p) => p.id), ['gemini'], 'explicit choice wins');
 
   fs.mkdirSync(path.join(root, '.nativ'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.nativ', 'config.json'), JSON.stringify({ providers: { triage: ['gemini', 'claude-cli'], worker: 'claude-api', pm: ['nope'] } }), 'utf8');
+  fs.writeFileSync(path.join(root, '.nativ', 'config.json'), JSON.stringify({ providers: { triage: ['gemini', 'claude-cli'], worker: 'gemini', verifier: 'claude-api', pm: ['nope'] } }), 'utf8');
   assert.deepEqual(resolveProviderChain('triage', root, { deps: registryDeps() }).map((p) => p.id), ['gemini', 'claude-cli'], 'per-role config order');
-  assert.deepEqual(resolveProviderChain('worker', root, { deps: registryDeps() }).map((p) => p.id), ['claude-api']);
-  assert.deepEqual(resolveProviderChain('pm', root, { deps: registryDeps() }).map((p) => p.id), ['claude-cli', 'claude-api', 'gemini'], 'unknown ids fall back to the default chain');
+  assert.deepEqual(resolveProviderChain('worker', root, { deps: registryDeps() }).map((p) => p.id), ['gemini']);
+  assert.deepEqual(resolveProviderChain('pm', root, { deps: registryDeps() }).map((p) => p.id), ['claude-cli', 'gemini'], 'unknown ids fall back to the default chain');
+  assert.deepEqual(resolveProviderChain('verifier', root, { deps: registryDeps() }).map((p) => p.id), ['claude-cli', 'gemini'], 'a config that still names the removed claude-api falls back to the default chain');
 
   fs.writeFileSync(path.join(root, '.nativ', 'config.json'), '{not json', 'utf8');
-  assert.equal(resolveProviderChain('triage', root, { deps: registryDeps() }).length, 3, 'a corrupt config never breaks resolution');
+  assert.equal(resolveProviderChain('triage', root, { deps: registryDeps() }).length, 2, 'a corrupt config never breaks resolution');
 
   assert.equal(resolveProvider('triage', tempRoot(), { deps: registryDeps({ hasBinary: () => false }) }), null, 'nothing available resolves to null');
   fs.rmSync(root, { recursive: true, force: true });

@@ -5,7 +5,7 @@
  * file in this directory and one entry in registry.ts; nothing outside src/providers/ changes.
  */
 
-export type ProviderId = 'claude-cli' | 'claude-api' | 'gemini';
+export type ProviderId = 'claude-cli' | 'gemini';
 
 /** Roles a provider can be assigned to in `.nativ/config.json`. */
 export type ProviderRole = 'architect' | 'pm' | 'worker' | 'verifier' | 'triage';
@@ -66,21 +66,10 @@ export interface ProviderDeps {
   spawn?: (command: string, args: string[], request: SpawnRequest) => Promise<SpawnResult>;
   hasBinary?: (name: string) => boolean;
   fetch?: typeof fetch;
-  /** Minimal shape of the Anthropic SDK client used by claude-api. */
-  anthropicClient?: () => AnthropicLike;
   env?: NodeJS.ProcessEnv;
   now?: () => number;
   /** Waits between retries; injectable so tests do not sleep. */
   sleep?: (ms: number) => Promise<void>;
-}
-
-export interface AnthropicLike {
-  messages: {
-    create(
-      body: Record<string, unknown>,
-      options?: { timeout?: number },
-    ): Promise<{ content: Array<{ type: string; text?: string }> }>;
-  };
 }
 
 /** Strips a surrounding ```json fence, which models add even when told not to. */

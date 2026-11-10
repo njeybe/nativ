@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ActualTokenUsage } from '../core/telemetry.js';
 import type { MasterPlanTask } from '../scanner/types.js';
+import type { TranscriptWriter } from './transcript.js';
 
 /**
  * Lifecycle phases broadcast on the `runner_status` channel. These mirror the
@@ -179,6 +180,8 @@ export interface AgentSupervisorOptions {
    * Defaults to NATIV_BASH_PATH, then Git Bash on Windows, then /bin/bash.
    */
   nativeShell?: string | boolean;
+  /** Record each run under `.nativ/runs/transcripts/`. Defaults to the `transcripts` setting, which is on. */
+  transcripts?: boolean;
 }
 
 /** Structured failure carrying the `{ code, message }` shape used by the pipeline API. */
@@ -247,4 +250,6 @@ export interface ActiveRun {
   lineBuffer: string;
   /** Model reported by the stream's init event (cli runs without an explicit model). */
   streamModel: string | null;
+  /** Turn-by-turn recording of this run, or null when recording is off or could not start. */
+  transcript: TranscriptWriter | null;
 }
