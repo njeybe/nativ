@@ -89,7 +89,7 @@ assert.ok(!listGeneratedPaths(root).includes('/.mcp.json'));
 
 const shared = listGeneratedPaths(root, 'shared');
 assert.deepEqual(shared, ['/.nativ/*.local.json', '/.nativ/logs/', '/.nativ/*.log',
-  '/.nativ/notify-state.json', '/.worktrees/']);
+  '/.nativ/notify-state.json', '/.nativ/runs/', '/.worktrees/']);
 
 // tracked paths
 assert.deepEqual(trackedNativPaths(root, hidden), { tracked: [], command: '' });

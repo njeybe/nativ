@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 2.9.2
+
+### Added
+
+- **Run transcripts.** Every agent run dispatched from the Studio is recorded turn by turn in `.nativ/runs/transcripts/<runId>.jsonl`: assistant text, thinking, tool calls with their input, tool results with their latency, and token and cost totals per turn. The native and cli engines write the same format. Secrets are masked before they reach the file, long fields are clipped, a transcript is capped at 5 MB, and the newest 200 are kept. `"transcripts": false` in `.nativ/config.json` turns recording off.
+- **`nativ runs list` and `nativ runs show <run>`.** List recorded runs (filter with `--task`, `--limit`, `--json`) and replay one in readable form (`--full` for uncut output, `--json` for the raw events). `replay` is an alias of `show`, and a task id shows that task's latest run.
+
+### Changed
+
+- `.nativ/runs/` is now ignored when nativ files are shared in git (`--git-visibility shared`), so transcripts are not committed by accident.
+- The secret masking used for provider prompts moved to `src/core/redact.ts` and is shared with the transcript writer. Behavior is unchanged.
 
 ### Removed
 

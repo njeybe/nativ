@@ -354,6 +354,8 @@ const {
   supportsServerFallback,
   thinkingBudgetToEffort,
 } = await import(pathToFileURL(distFile).href);
+const { transcriptDir } = await import(pathToFileURL(path.join(path.dirname(distFile), 'transcript.js')).href);
+const { readTranscript } = await import(pathToFileURL(path.join(path.dirname(distFile), 'transcript-view.js')).href);
 
 const dir = createFixture();
 let supervisor = new AgentSupervisor({ cwd: dir, killGraceMs: 300, maxLogBufferBytes: 4096 });
@@ -809,6 +811,28 @@ try {
   assert.equal(nativeTel.actualUsage.turns, 3);
   closeTo(nativeTel.actualUsage.costUsd, 0.01595, 'telemetry actualUsage.costUsd');
   assert.equal(telemetry.summary.cacheReadTokens, 4000);
+
+  // The same run, recorded turn by turn: one transcript per run id, readable without any API key.
+  {
+    const tFiles = fs.readdirSync(transcriptDir(dir)).map((f) => path.join(transcriptDir(dir), f));
+    const nativeT = tFiles.map((f) => readTranscript(f).events).find((evs) => evs[0]?.taskId === 'task-native');
+    assert.ok(nativeT, 'the native run left a transcript');
+    const types = nativeT.map((e) => e.type);
+    assert.equal(types[0], 'run_start');
+    assert.equal(types[types.length - 1], 'run_end');
+    assert.equal(nativeT[0].engine, 'native');
+    assert.ok(types.includes('prompt'));
+    assert.ok(types.includes('thinking'), 'thinking blocks are recorded');
+    assert.equal(nativeT.filter((e) => e.type === 'usage' && e.scope === 'turn').length, 3, 'one usage event per model turn');
+    const calls = nativeT.filter((e) => e.type === 'tool_call');
+    const results = nativeT.filter((e) => e.type === 'tool_result');
+    assert.equal(calls.length, results.length, 'every tool call has a result');
+    assert.ok(results.some((e) => e.isError), 'rejected tools are recorded as errors');
+    assert.ok(results.every((e) => typeof e.latencyMs === 'number'), 'tool latency is recorded');
+    assert.equal(nativeT[nativeT.length - 1].status, 'completed');
+    const rawT = tFiles.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    assert.ok(!rawT.includes('leaked-credential'), 'secrets never reach a transcript');
+  }
   console.log('✔ Native loop ran tools in the worktree, blocked escapes and secrets, cached its prefix and grounded its spend.');
 
   // ── 15. Native abort and timeout interrupt the in-flight stream ───────────
@@ -1074,6 +1098,35 @@ try {
   );
   assert.equal(streamUsage.length, 1, 'cli runs report usage once, from the result event');
   streamSup.shutdown();
+  {
+    const f = fs.readdirSync(transcriptDir(dir)).map((n) => path.join(transcriptDir(dir), n))
+      .find((file) => readTranscript(file).events[0]?.taskId === 'task-stream');
+    assert.ok(f, 'the cli run left a transcript');
+    const evs = readTranscript(f).events;
+    assert.deepEqual(
+      evs.map((e) => e.type),
+      ['run_start', 'prompt', 'session', 'assistant_text', 'tool_call', 'tool_result', 'tool_call', 'tool_result', 'note', 'usage', 'run_end'],
+      'the stream became the shared event sequence',
+    );
+    assert.equal(evs[0].engine, 'cli');
+    assert.equal(evs.find((e) => e.type === 'tool_call').input.command, 'npm test');
+    assert.equal(evs.filter((e) => e.type === 'tool_result')[1].isError, true);
+    assert.equal(evs.find((e) => e.type === 'usage').costUsd, 0.1234);
+    assert.equal(evs[evs.length - 1].status, 'completed');
+  }
+
+  // transcripts: false in the project config turns recording off
+  {
+    fs.writeFileSync(path.join(dir, '.nativ', 'config.json'), JSON.stringify({ transcripts: false }));
+    const before = fs.readdirSync(transcriptDir(dir)).length;
+    const offSup = new AgentSupervisor({ cwd: dir });
+    const offDone = waitForStatus(offSup, 'task-stream', ['completed', 'failed']);
+    await offSup.dispatch({ taskId: 'task-stream', runnerCommand: `${mockCommand(dir, 'claude-stream.mjs')} --output-format stream-json`, useWorktree: false, timeoutSeconds: 30 });
+    assert.equal((await offDone).status, 'completed');
+    assert.equal(fs.readdirSync(transcriptDir(dir)).length, before, 'no transcript is written when transcripts is false');
+    offSup.shutdown();
+    fs.rmSync(path.join(dir, '.nativ', 'config.json'), { force: true });
+  }
   console.log('✔ stream-json events became readable log lines and grounded usage for the cli run.');
 
   // ── 24. Dispatched agents get an allowlist, never a permission bypass ─────
