@@ -114,7 +114,7 @@ export async function runTriage(
     }
 
     if (!options.json && !liaison.hasApiKey()) {
-      print(pc.dim('No AI provider is available (sign in to Claude Code, or set ANTHROPIC_API_KEY or GEMINI_API_KEY): using the offline rules engine.'));
+      print(pc.dim('No AI provider is available (sign in to Claude Code, or set GEMINI_API_KEY): using the offline rules engine.'));
     }
     if (!targets.length) {
       if (options.json) print(JSON.stringify({ ok: true, evaluations: [] }));
