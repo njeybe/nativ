@@ -16,6 +16,7 @@ export const SHARED_PATHS = [
   '/.nativ/logs/',
   '/.nativ/*.log',
   '/.nativ/notify-state.json',
+  '/.nativ/runs/',
   '/.worktrees/',
 ] as const;
 

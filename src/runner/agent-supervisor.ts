@@ -24,6 +24,7 @@ import {
 } from '../core/root-resolver.js';
 import type { MasterPlanTask } from '../scanner/types.js';
 import { resolveWorkerModel, toNativeModelId } from '../core/model-routing.js';
+import { resolveAnthropicApiKey, resolveGeminiApiKey } from '../providers/index.js';
 
 import {
   DEFAULT_IDLE_TIMEOUT_SECONDS,
@@ -76,6 +77,15 @@ import {
 } from './native-engine.js';
 import { runNativeLoop, readRoleGuide } from './native-driver.js';
 import { runTaskVerificationStep, mergeWorktreeStep, resetLogFile } from './run-lifecycle.js';
+import {
+  DEFAULT_MAX_TRANSCRIPTS,
+  TranscriptWriter,
+  pruneTranscripts,
+  streamLineParts,
+  transcriptDir,
+  transcriptFile,
+  transcriptsEnabled,
+} from './transcript.js';
 
 // Re-export domain modules for full backward compatibility
 export * from './types.js';
@@ -109,6 +119,7 @@ export class AgentSupervisor extends EventEmitter {
   private readonly nativeAllowedCommands: ReadonlySet<string>;
   private readonly anthropicClientFactory: () => Anthropic;
   private readonly toolShell: string | boolean;
+  private readonly transcriptsOption: boolean | undefined;
   private readonly active = new Map<string, ActiveRun>();
   private history: RunnerRecord[] = [];
   private closed = false;
@@ -136,6 +147,7 @@ export class AgentSupervisor extends EventEmitter {
     this.nativeAllowedCommands = new Set(options.nativeAllowedCommands ?? DEFAULT_NATIVE_ALLOWED_COMMANDS);
     this.anthropicClientFactory = options.anthropicClientFactory ?? (() => new Anthropic());
     this.toolShell = options.nativeShell ?? resolveToolShell();
+    this.transcriptsOption = options.transcripts;
     this.restoreHistory();
   }
 
@@ -253,9 +265,11 @@ export class AgentSupervisor extends EventEmitter {
       streamJson: !native && usesClaudeStreamJson(command),
       lineBuffer: '',
       streamModel: null,
+      transcript: null,
     };
     this.active.set(taskId, run);
     this.resetLogFile(record);
+    run.transcript = this.openTranscript(run);
     this.emitStatus(record);
 
     if (useWorktree) {
@@ -491,7 +505,9 @@ export class AgentSupervisor extends EventEmitter {
 
     // A runner that exits without reading its input must not crash us or fail the run.
     child.stdin?.on('error', () => {});
-    child.stdin?.end(buildRunnerPrompt(task), 'utf8');
+    const prompt = buildRunnerPrompt(task);
+    run.transcript?.write('prompt', { text: prompt });
+    child.stdin?.end(prompt, 'utf8');
 
     child.stdout?.on('data', (chunk: Buffer) => {
       if (run.streamJson) this.consumeStreamJson(run, chunk.toString());
@@ -616,6 +632,41 @@ export class AgentSupervisor extends EventEmitter {
     this.finalize(run, 'completed', {});
   }
 
+  // ─── Transcript ─────────────────────────────────────────────────────────────
+
+  /** Opens the run's recording, or returns null: a recording problem must never stop a run. */
+  private openTranscript(run: ActiveRun): TranscriptWriter | null {
+    if (!(this.transcriptsOption ?? transcriptsEnabled(this.rootDir))) return null;
+    const { record, task } = run;
+    try {
+      pruneTranscripts(transcriptDir(this.rootDir), DEFAULT_MAX_TRANSCRIPTS - 1);
+      const secrets = [resolveAnthropicApiKey(this.rootDir), resolveGeminiApiKey(this.rootDir)]
+        .filter((key): key is string => key !== null);
+      const writer = new TranscriptWriter(transcriptFile(this.rootDir, record.runId), { secrets });
+      writer.write('run_start', {
+        runId: record.runId,
+        taskId: record.taskId,
+        engine: record.engine,
+        model: record.model,
+        thinking: record.thinking,
+        command: record.command,
+        branch: record.branch,
+        timeoutSeconds: record.timeoutSeconds,
+        startedAt: record.startedAt,
+        task: {
+          title: task.title,
+          assignedSubagent: task.assignedSubagent,
+          complexity: task.complexity,
+          targetFiles: task.targetFiles,
+          verificationCommand: task.verificationCommand,
+        },
+      });
+      return writer;
+    } catch {
+      return null;
+    }
+  }
+
   // ─── Claude Code stream-json (cli engine) ──────────────────────────────────
 
   private consumeStreamJson(run: ActiveRun, chunk: string): void {
@@ -640,6 +691,7 @@ export class AgentSupervisor extends EventEmitter {
     if (parsed.model) run.streamModel = parsed.model;
     if (parsed.text) this.appendLog(run, 'stdout', parsed.text);
     if (parsed.result) this.recordStreamUsage(run, parsed.result);
+    run.transcript?.writeParts(streamLineParts(line));
   }
 
   /** Claude Code reports the run's total cost and tokens once, in its final result event. */
@@ -829,6 +881,17 @@ export class AgentSupervisor extends EventEmitter {
     record.durationMs = Date.parse(record.endedAt) - Date.parse(record.startedAt);
     if (patch.error !== undefined) record.error = patch.error;
     record.pid = null;
+    run.transcript?.write('run_end', {
+      status,
+      error: record.error,
+      exitCode: record.exitCode,
+      signal: record.signal,
+      timedOut: record.timedOut,
+      abortReason: record.abortReason,
+      durationMs: record.durationMs,
+      usage: record.usage,
+      verification: record.verification,
+    });
 
     this.active.delete(record.taskId);
     this.history = [{ ...record }, ...this.history.filter((r) => r.runId !== record.runId)].slice(0, this.maxHistory);

@@ -12,7 +12,7 @@ const NODE_SUITES = [
   'worktree-lifecycle', 'agent-supervisor', 'native-tools', 'concurrency-locks', 'task-claims',
   'telemetry-engine', 'read-output-size', 'benchmark-suite',
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
-  'model-routing', 'notify', 'token-budget', 'v2-e2e',
+  'model-routing', 'notify', 'token-budget', 'transcript', 'v2-e2e',
   'taste-bundle', 'taste-digest', 'init-design', 'design-check',
   'gitignore-block', 'env-reads', 'verify-env', 'clean-tree', 'check-docs', 'portability-lint', 'm16-templates',
   'm16-e2e', 'single-startup-context', 'milestone-archive', 'archive-integration',
