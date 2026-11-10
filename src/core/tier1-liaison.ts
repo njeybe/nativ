@@ -60,7 +60,7 @@ export interface TriageEvaluation {
   ok: true;
   escalationId: string;
   taskId: string;
-  /** Provider that answered (`claude-cli`, `claude-api`, `gemini`), or `deterministic` when none did. */
+  /** Provider that answered (`claude-cli`, `gemini`), or `deterministic` when none did. */
   provider: string;
   model: string;
   source: TriageSource;
@@ -283,7 +283,7 @@ export class Tier1Liaison {
     let provider = this.options.provider;
     if (!provider && model) {
       if (/^gemini/i.test(model)) provider = 'gemini';
-      else if (/^(claude|haiku|sonnet|opus)/i.test(model)) provider = ['claude-cli', 'claude-api'];
+      else if (/^(claude|haiku|sonnet|opus)/i.test(model)) provider = 'claude-cli';
     }
     if (!provider && apiKey) provider = 'gemini';
 

@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeJsonAtomicSync } from '../core/lock-manager.js';
-import { createClaudeApiProvider } from './claude-api.js';
 import { createClaudeCliProvider, DEFAULT_LIMIT_COOLDOWN_MS } from './claude-cli.js';
 import { createGeminiProvider } from './gemini.js';
 import {
@@ -13,8 +12,8 @@ import {
   type ProviderRole,
 } from './types.js';
 
-/** Subscription login first (no key needed), then API keys. Claude is the default for every role. */
-export const DEFAULT_CHAIN: readonly ProviderId[] = ['claude-cli', 'claude-api', 'gemini'];
+/** Subscription login first (no key needed), then a Gemini key. Claude is the default for every role. */
+export const DEFAULT_CHAIN: readonly ProviderId[] = ['claude-cli', 'gemini'];
 
 const CONFIG_FILE = path.join('.nativ', 'config.json');
 const STATE_FILE = path.join('.nativ', 'provider-state.json');
@@ -43,7 +42,6 @@ export interface ChainResult {
 export function createProviders(deps: ProviderDeps = {}): Record<ProviderId, Provider> {
   return {
     'claude-cli': createClaudeCliProvider(deps),
-    'claude-api': createClaudeApiProvider(deps),
     gemini: createGeminiProvider(deps),
   };
 }

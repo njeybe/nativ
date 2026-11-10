@@ -167,7 +167,7 @@ export function collectChecks(root: string, options: DoctorOptions = {}): Doctor
     else if (cooling) add(`provider:${id}`, 'info', `${id} is cooling down after a limit (${Math.ceil(cooling / 60_000)} min left)`);
   }
   if (usable.length) add('providers', 'ok', `Triage can use: ${usable.join(', ')}`);
-  else add('providers', 'warn', 'No AI provider is available for triage (sign in to Claude Code or set ANTHROPIC_API_KEY or GEMINI_API_KEY). The offline rules engine will be used.');
+  else add('providers', 'warn', 'No AI provider is available for triage (sign in to Claude Code or set GEMINI_API_KEY). The offline rules engine will be used.');
 
   return checks;
 }

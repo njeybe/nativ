@@ -785,7 +785,7 @@ Written by `setup`; every key is optional.
 | `NATIV_ROLE` | Session role; `NATIV_ROLE=architect` lets a whole session write `.ai/` |
 | `NATIV_AGENT_ID` | Who claims a task on `task start`, so parallel agents never take the same task |
 | `NATIV_NOTIFY_WEBHOOK`, `NATIV_NOTIFY_COMMAND` | Override the `notify` webhook or command from `.nativ/config.json` |
-| `ANTHROPIC_API_KEY` | The `claude-api` provider and the Studio native runner |
+| `ANTHROPIC_API_KEY` | The Studio native runner only. Triage never uses it |
 | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The `gemini` provider |
 | `NATIV_DEV_DATABASE_URL`, `DEV_DATABASE_URL`, `DATABASE_URL` | Dev database for `nativ db`, checked in that order, read from your `.env*` files. MongoDB (`MONGODB_URI`) and Firestore variants work too, and names declared in `.env.example` are checked first |
 | `NATIV_PROD_DATABASE_URL`, `PROD_DATABASE_URL`, `DATABASE_URL_PROD` | Prod database for `nativ db`, same rules |
@@ -929,12 +929,11 @@ claude mcp add nativ -- nativ mcp
 
 ## Providers
 
-nativ's own model calls (triage of escalations) go through one adapter, so no single vendor is on the critical path. Default order: `claude-cli`, `claude-api`, `gemini`, then a deterministic rules engine.
+nativ's own model calls (triage of escalations) go through one adapter, so no single vendor is on the critical path. Default order: `claude-cli`, `gemini`, then a deterministic rules engine.
 
 | Provider | Needs | Notes |
 | :--- | :--- | :--- |
 | `claude-cli` | Claude Code signed in | Uses your subscription login, no API key. Haiku by default, tools disabled, empty working directory |
-| `claude-api` | `ANTHROPIC_API_KEY` | Anthropic SDK |
 | `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The key goes in a header, never the URL |
 
 A provider that hits a usage limit is remembered in `.nativ/provider-state.json` and skipped until it resets. If none is available, triage still answers from the offline rules engine. Prompts pass through secret redaction before leaving the machine.
@@ -963,7 +962,7 @@ A provider that hits a usage limit is remembered in `.nativ/provider-state.json`
 | The generated config points at a path on your machine | Install globally, or `nativ setup --command "npx -y @njeybe/nativ"` |
 | A worker keeps editing outside its task | Switch to `"enforcement": "block"`; a genuine need is an escalation, or `nativ task unlock` |
 | `task complete` fails in a phase | The output names it; run that phase's command yourself to see the error |
-| Triage says no provider | Sign in to Claude Code, or set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`; the offline rules engine still answers |
+| Triage says no provider | Sign in to Claude Code, or set `GEMINI_API_KEY`; the offline rules engine still answers |
 
 [Back to contents](#contents)
 
@@ -978,7 +977,7 @@ nativ/
     index.ts               command registry
     commands/              init, setup, doctor, task, verify, learn, worktree, db, triage, ...
     core/                  enforcement, verifier, learnings, harness-integrity, setup-assets, telemetry, ...
-    providers/             claude-cli, claude-api, gemini, registry (fallback chain and cooldown)
+    providers/             claude-cli, gemini, registry (fallback chain and cooldown)
     governor/              contract evaluator, circuit breaker, rules, escalation store
     mcp/server.ts          MCP server
     db/                    masked env parser, introspection, schema diff

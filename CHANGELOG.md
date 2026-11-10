@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- **The `claude-api` provider.** Triage and the other provider roles no longer call the Anthropic API with `ANTHROPIC_API_KEY`. The default order is now `claude-cli`, then `gemini`, then the offline rules engine. A `.nativ/config.json` that still names `claude-api` keeps working: unknown provider ids are ignored and the role falls back to the default order. `ANTHROPIC_API_KEY` is still used by the Studio native runner, and it is still redacted from prompts that leave the machine.
+
 ## 2.9.1
 
 ### Added
