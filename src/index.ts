@@ -34,6 +34,7 @@ import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
 import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
+import { runStyleScan, runStyleShow } from './commands/style.js';
 import { runRunsList, runRunsShow } from './commands/runs.js';
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
@@ -392,6 +393,27 @@ export function createProgram(): Command {
     .option('--json', 'Output as JSON')
     .action(async (targetDir, options) => {
       await runLearnList(targetDir, options);
+    });
+
+  const style = program
+    .command('style')
+    .description('The learned code style of this project');
+
+  style
+    .command('scan [targetDir]')
+    .description('Measure the repository and write .ai/code_style.json')
+    .option('--dry-run', 'Print the result without writing')
+    .option('--json', 'Output as JSON')
+    .action(async (targetDir, options) => {
+      await runStyleScan(targetDir, options);
+    });
+
+  style
+    .command('show [targetDir]')
+    .description('Print the project style rules')
+    .option('--json', 'Output as JSON')
+    .action(async (targetDir, options) => {
+      await runStyleShow(targetDir, options);
     });
 
   const runs = program
