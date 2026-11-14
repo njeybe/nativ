@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import { MasterPlan } from '../scanner/types.js';
+import { loadCodeStyle, styleStaleness } from '../core/style/style-store.js';
 import { loadTelemetry, formatTelemetrySummary, recomputeTelemetrySummary } from '../core/telemetry.js';
 
 export interface StatusOptions {
@@ -27,8 +28,10 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     const plan: MasterPlan = JSON.parse(raw);
     const telemetry = loadTelemetry(telemetryPath, plan.projectName);
 
+    const codeStyle = styleSummary(targetDir);
+
     if (options.json) {
-      console.log(JSON.stringify(buildStatusJson(plan, telemetry, !!options.full), null, 2));
+      console.log(JSON.stringify({ ...buildStatusJson(plan, telemetry, !!options.full), codeStyle }, null, 2));
       return;
     }
 
@@ -75,6 +78,8 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     console.log(pc.bold(pc.cyan(`\n📈 Completion: ${completedTasks}/${totalTasks} tasks (${pct}%)`)));
 
+    if (codeStyle) console.log(pc.dim(styleLine(codeStyle)) + '\n');
+
     if (options.telemetry || telemetry.summary.totalTasksCompleted > 0) {
       // Re-derive the summary in memory so it reflects current rates even before the next write.
       recomputeTelemetrySummary(telemetry);
@@ -119,4 +124,32 @@ function buildStatusJson(plan: MasterPlan, telemetry: ReturnType<typeof loadTele
         }
   );
   return { ...base, milestones, telemetry: telemetry.summary };
+}
+
+interface StyleSummary {
+  commit: string | null;
+  behind: number | null;
+  stale: boolean;
+  pending: string[];
+}
+
+// Null when there is no usable .ai/code_style.json.
+function styleSummary(root: string): StyleSummary | null {
+  const style = loadCodeStyle(root).file;
+  if (!style) return null;
+  const age = styleStaleness(root, style);
+  return {
+    commit: style.scannedAt?.commit ?? null,
+    behind: age ? age.behind : null,
+    stale: age ? age.stale : false,
+    pending: style.decisions.filter((d) => d.status === 'pending').map((d) => d.rule),
+  };
+}
+
+function styleLine(s: StyleSummary): string {
+  const at = s.commit ? `scanned at ${s.commit.slice(0, 7)}` : 'scanned outside git';
+  const behind = s.behind === null ? '' : `, ${s.behind} commits behind HEAD`;
+  const n = s.pending.length;
+  const pending = n ? `; ${n} pending decisions (nativ style decide <rule> --follow nativ|codebase)` : '';
+  return `Code style: ${at}${behind}${pending}`;
 }
