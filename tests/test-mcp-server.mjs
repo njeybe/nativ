@@ -38,6 +38,7 @@ const EXPECTED_RESOURCES = [
   'nativ://db-schema',
   'nativ://api-contracts',
   'nativ://escalation',
+  'nativ://code-style',
 ];
 
 /** A loopback port with nothing listening, so connections are refused quickly. */
@@ -210,6 +211,10 @@ try {
   assert.match(ctxRes.result.contents[0].text, /Fixture Context/);
   const escRes = await server.request('resources/read', { uri: 'nativ://escalation' });
   assert.deepEqual(JSON.parse(escRes.result.contents[0].text), { escalations: [] });
+  const styleRes = await server.request('resources/read', { uri: 'nativ://code-style' });
+  const style = JSON.parse(styleRes.result.contents[0].text);
+  assert.equal(style.missing, true);
+  assert.match(style.hint, /nativ style scan/);
   check('resources/read returns .ai/ file contents (escalation defaults to empty)');
 
   // 4. nativ_task_next
