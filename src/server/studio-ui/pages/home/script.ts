@@ -39,7 +39,22 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     return out;
   }
 
+  // The copied command stops before the choice: the human types nativ or codebase.
+  function copyCommand(command) { return String(command).replace(/nativ\|codebase$/, ''); }
+
+  function styleItem(item) {
+    var n = item.count + (item.count === 1 ? ' place' : ' places');
+    return '<div class="need" data-need="' + esc(item.key) + '"><div class="body">' +
+      '<div class="l1"><b>Style decision</b><span class="mono">' + esc(item.rule) + '</span></div>' +
+      '<span class="why">' + esc(item.title) + ' (' + n + ')</span>' +
+      '<code class="mono cmd">' + esc(item.command) + '</code></div>' +
+      '<div class="acts"><span class="copy-wrap"><span class="tooltip">Copied!</span>' +
+      '<button type="button" class="btn" data-act="home-copy-style" data-cmd="' +
+      esc(copyCommand(item.command)) + '">Copy</button></span></div></div>';
+  }
+
   function needItem(item) {
+    if (item.kind === 'style') return styleItem(item);
     var t = item.task;
     return '<div class="need" data-need="' + esc(t.id) + '"><div class="body">' +
       '<div class="l1"><b>Human Decision Required</b><span class="mono">' + esc(t.id) + '</span></div>' +
@@ -160,6 +175,8 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
       milestoneProgress(model) + recentActivity(model) + '</div>';
   }
 
+  function copyStyle(el) { copyText(el.getAttribute('data-cmd'), el); }
+
   function forward(name) {
     return function (el) { Studio.taskAction(name, el.getAttribute('data-id')); };
   }
@@ -170,7 +187,7 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     skeleton: skeleton,
     actions: {
       'home-start': forward('start'), 'home-proposal': forward('proposal'), 'home-ask': forward('ask'),
-      'home-console': forward('logs'), 'home-dispatch': forward('dispatch')
+      'home-console': forward('logs'), 'home-copy-style': copyStyle, 'home-dispatch': forward('dispatch')
     }
   });
 `;

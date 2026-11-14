@@ -185,6 +185,19 @@ test('decision items keep their task and reason hooks', () => {
   assert.match(q, /<span class="mono">task-a<\/span>/);
 });
 
+test('style decisions join the queue with a copy button and no approve', () => {
+  const api = busyApi();
+  api.status = { styleDecisions: [{ rule: 'raw-sql', title: 'Raw SQL', count: 2, files: [],
+    command: 'nativ style decide raw-sql --follow nativ|codebase' }] };
+  const q = sec(renderPage('home', api), 'decisions');
+  assert.match(q, /4 items/);
+  assert.match(q, /data-need="style:raw-sql"/);
+  assert.match(q, /data-cmd="nativ style decide raw-sql --follow "/);
+  assert.match(q, /nativ style decide raw-sql --follow nativ|codebase/);
+  assert.match(q, /data-act="home-copy-style"/);
+  assert.doesNotMatch(q.slice(q.indexOf('style:raw-sql')), /home-(start|proposal|ask|dispatch)/);
+});
+
 test('now running lists only running tasks', () => {
   const r = sec(renderPage('home', busyApi()), 'running');
   assert.match(r, /1 running/);
