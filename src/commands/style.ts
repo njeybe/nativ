@@ -2,6 +2,7 @@ import path from 'node:path';
 import pc from 'picocolors';
 import { resolveMainRoot } from '../core/root-resolver.js';
 import { scanStyle } from '../core/style/style-scan.js';
+import { buildStyleSlice } from '../core/style/style-slice.js';
 import { loadCodeStyle } from '../core/style/style-store.js';
 import type { CodeStyleFile } from '../core/style/style-types.js';
 
@@ -12,6 +13,7 @@ export interface StyleScanOptions {
 
 export interface StyleShowOptions {
   json?: boolean;
+  files?: string;
 }
 
 function rootOf(targetDirArg?: string): string {
@@ -66,8 +68,18 @@ function showTraits(style: CodeStyleFile): void {
   }
 }
 
+function showSlice(root: string, files: string, json?: boolean): void {
+  const targetFiles = files.split(',').map((f) => f.trim()).filter(Boolean);
+  const slice = buildStyleSlice(root, { targetFiles });
+  if (json) return console.log(JSON.stringify(slice, null, 2));
+  if (slice.text) console.log(slice.text);
+  for (const w of slice.warnings) console.log(pc.yellow(w));
+}
+
 export async function runStyleShow(targetDirArg?: string, options: StyleShowOptions = {}) {
-  const loaded = loadCodeStyle(rootOf(targetDirArg));
+  const root = rootOf(targetDirArg);
+  if (options.files) return showSlice(root, options.files, options.json);
+  const loaded = loadCodeStyle(root);
   if (!loaded.file) {
     const why = loaded.unreadable ? loaded.problems.join(' ') : 'Run `nativ style scan` first.';
     return fail(`No usable code style file. ${why}`);

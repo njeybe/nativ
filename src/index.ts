@@ -412,6 +412,7 @@ export function createProgram(): Command {
   style
     .command('show [targetDir]')
     .description('Print the project style rules')
+    .option('--files <list>', 'Print the style summary for these comma-separated files')
     .option('--json', 'Output as JSON')
     .action(async (targetDir, options) => {
       await runStyleShow(targetDir, options);

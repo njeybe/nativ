@@ -5,6 +5,7 @@ import { resolveSpecSlices } from '../../core/spec-slices.js';
 import { resolveWorkerModel } from '../../core/model-routing.js';
 import { learningsForTask, type Learning } from '../../core/learnings.js';
 import { taskEscalationHistory } from '../../governor/index.js';
+import { buildStyleSlice } from '../../core/style/style-slice.js';
 import { archivedTaskIds } from '../../core/milestone-archive.js';
 import type { MasterPlanTask } from '../../scanner/types.js';
 import { getPlanPath, getRoleGuide, getRecommendedContractSlice } from './task-common.js';
@@ -270,6 +271,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   const projectRoot = path.dirname(path.dirname(planPath));
   const learnings = learningsForTask(projectRoot, targetTask);
   const priorEscalations = taskEscalationHistory(projectRoot, targetTask.id);
+  const style = buildStyleSlice(projectRoot, targetTask);
 
   if (options.json) {
     const specResult = targetTask.specRefs?.length
@@ -288,6 +290,8 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         ...(specResult ? { specSlices: specResult.slices, ...(specResult.warnings.length ? { specWarnings: specResult.warnings } : {}) } : {}),
         ...(learnings.length ? { learnings: learnings.map(toTaskLearning) } : {}),
         ...(priorEscalations.length ? { priorEscalations } : {}),
+        ...(style.text ? { styleSlice: style.text } : {}),
+        ...(style.warnings.length ? { styleWarnings: style.warnings } : {}),
       }
     }));
     return;
@@ -317,6 +321,13 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
   for (const e of priorEscalations) {
     const outcome = e.resolutionNotes ? ` -> ${e.resolutionNotes}` : '';
     console.log(pc.bold(`  Past escalation:   `) + pc.white(`${e.id} ${e.status}: ${e.summary}${outcome}`));
+  }
+  if (style.text) {
+    const indented = style.text.replace(/\n/g, '\n                     ');
+    console.log(pc.bold(`  Code style:        `) + pc.white(indented));
+  }
+  for (const w of style.warnings) {
+    console.log(pc.bold(`  Style warning:     `) + pc.yellow(w));
   }
 
   console.log(pc.dim('\n─── Quick CLI Actions ──────────────────────────────────────────'));
