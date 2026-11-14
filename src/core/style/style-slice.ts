@@ -22,7 +22,8 @@ function decisionLines(style: CodeStyleFile): string[] {
   const lines: string[] = [];
   for (const d of style.decisions) {
     if (d.status === 'pending' && d.evidence.count === 0) continue;
-    const title = STYLE_RULES.find((r) => r.id === d.rule)?.title ?? d.rule;
+    // loadCodeStyle rejects unknown rules, so every decision has a known title
+    const title = STYLE_RULES.find((r) => r.id === d.rule)!.title;
     if (d.status === 'codebase') lines.push(`${title}: matching the existing code is allowed`);
     else lines.push(`${title}: follow nativ's rule`);
   }

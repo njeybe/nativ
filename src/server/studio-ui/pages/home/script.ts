@@ -46,7 +46,7 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
     var files = item.count === 1 ? 'file' : 'files';
     return '<div class="need" data-need="' + esc(item.key) + '"><div class="body">' +
       '<div class="l1"><b>Code style decision</b><span class="mono">' + esc(item.rule) + '</span></div>' +
-      '<span class="why">' + 'Code style: ' + esc(item.title) + ', ' + item.count + ' ' + files + '</span>' +
+      '<span class="why">Code style: ' + esc(item.title) + ', ' + item.count + ' ' + files + '</span>' +
       '<code class="mono cmd">' + esc(item.command) + '</code></div>' +
       '<div class="acts"><span class="copy-wrap"><span class="tooltip">Copied!</span>' +
       '<button type="button" class="btn" data-act="home-copy-style" data-cmd="' +

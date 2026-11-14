@@ -106,6 +106,7 @@ function checkFile(root: string, style: CodeStyleFile, file: string): CodeShapeI
   try {
     text = fs.readFileSync(path.join(root, file), 'utf8');
   } catch {
+    // A target file the task deleted has no new code to check
     return [];
   }
   const isNew = gitOutput(root, ['cat-file', '-e', `HEAD:${file}`]) === null;

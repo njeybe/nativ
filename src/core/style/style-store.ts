@@ -127,13 +127,13 @@ export function styleStaleness(root: string, style: CodeStyleFile): Staleness | 
   return { behind, gone: false, stale: behind >= STALE_COMMITS };
 }
 
-/** Settles one conflict rule under the store lock; throws on an unknown rule or missing decision. */
 /** Throws a plain error unless the choice is "nativ" or "codebase". */
 export function assertFollowChoice(follow: string): asserts follow is 'nativ' | 'codebase' {
   if (follow === 'nativ' || follow === 'codebase') return;
   throw new Error(`Choice must be "nativ" or "codebase", found "${follow}".`);
 }
 
+/** Settles one conflict rule under the store lock; throws on an unknown rule or missing decision. */
 export function decideStyleRule(root: string, rule: string, follow: string): CodeStyleFile {
   if (!STYLE_RULES.some((r) => r.id === rule)) throw new Error(`Unknown rule "${rule}".`);
   assertFollowChoice(follow);
