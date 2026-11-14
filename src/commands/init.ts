@@ -8,6 +8,9 @@ import { buildContextContent } from '../scanner/context-builder.js';
 import { runSetup, printSetupResult } from './setup.js';
 import { stampManaged } from '../core/setup-assets.js';
 import { DESIGN_PROFILES } from '../core/design-rules.js';
+import { scanStyle } from '../core/style/style-scan.js';
+import { isExistingCodebase } from '../core/style/style-sources.js';
+import { mixedTraits } from './style.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,6 +61,26 @@ function installTasteBundle(templatesDir: string, aiDir: string, force?: boolean
   fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   console.log(pc.green('✔ Installed design bundle .ai/design/taste/'));
+}
+
+// Scans an existing git codebase; returns the rules still pending. Never throws.
+function scanCodeStyle(targetDir: string): string[] {
+  try {
+    if (!isExistingCodebase(targetDir)) {
+      const reason = scanStyle(targetDir, true).reason;
+      if (reason) console.log(pc.dim(`- Code style scan skipped: ${reason}`));
+      return [];
+    }
+    const style = scanStyle(targetDir).style;
+    if (!style) return [];
+    const tools = [...new Set(style.formatters.map((f) => f.tool))];
+    const parts = [...style.languages, ...tools, `${mixedTraits(style).length} mixed traits`];
+    console.log(pc.green(`✔ Code style: ${parts.join(', ')}`));
+    return style.decisions.filter((d) => d.status === 'pending').map((d) => d.rule);
+  } catch (err) {
+    console.log(pc.yellow(`! Code style scan failed: ${(err as Error).message}`));
+    return [];
+  }
 }
 
 export async function runInit(
@@ -196,11 +219,17 @@ export async function runInit(
     printSetupResult(setup);
   }
 
+  const pendingRules = scanCodeStyle(targetDir);
+
   console.log(pc.bold(pc.cyan('\n✨ Pipeline Scaffolding Completed Successfully!\n')));
   console.log(pc.bold('Next Steps:'));
   console.log(pc.white(` 1. Run ${pc.green('claude')} in this directory and ask the ${pc.magenta('architect')} agent to design your contracts (database, API, UI). You approve each step.`));
   console.log(pc.white(` 2. The architect writes ${pc.cyan('.ai/db_schema.json')}, ${pc.cyan('.ai/api_contracts.json')}, ${pc.cyan('.ai/ui_specs.md')}, and ${pc.cyan('.ai/master_plan.json')}.`));
   console.log(pc.white(` 3. Ask Claude to run ${pc.green('nativ task next')} and delegate each task to a ${pc.magenta('worker')} agent; use ${pc.magenta('verifier')} for an independent check.`));
   console.log(pc.white(` On existing code, ask for the ${pc.magenta('explorer')} agent first: it maps the code for the architect.`));
+  for (const rule of pendingRules) {
+    const cmd = `nativ style decide ${rule} --follow nativ|codebase`;
+    console.log(pc.white(` Decide code style rule ${pc.cyan(rule)}: ${pc.green(cmd)}`));
+  }
   console.log(pc.dim(` Run ${pc.white('nativ doctor')} any time, and after updating Claude Code, to confirm the integration is intact.\n`));
 }

@@ -23,7 +23,7 @@ function fail(message: string): void {
   process.exitCode = 1;
 }
 
-function mixedTraits(style: CodeStyleFile): string[] {
+export function mixedTraits(style: CodeStyleFile): string[] {
   const out: string[] = [];
   for (const [lang, map] of Object.entries(style.project)) {
     for (const [trait, e] of Object.entries(map ?? {})) {

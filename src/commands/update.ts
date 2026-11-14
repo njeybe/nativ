@@ -165,6 +165,10 @@ export async function runUpdate(targetDirArg?: string, options: UpdateOptions = 
   console.log(pc.dim('  • Preserved existing .ai/master_plan.json (active milestones intact)'));
   console.log(pc.dim('  • Preserved existing .ai/context.md (project context intact)'));
 
+  if (!fs.existsSync(path.join(aiDir, 'code_style.json'))) {
+    console.log(pc.dim("  • Run nativ style scan to record this project's code style."));
+  }
+
   if (kept > 0) {
     console.log(pc.yellow(`\n! ${kept} file(s) were kept because they were edited by hand. Compare them with the templates in the nativ package, or run \`nativ update --force\` to replace them.`));
   }
