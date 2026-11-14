@@ -44,14 +44,18 @@ assert.equal(soloSettings.governorMode, 'auto_adopt');
 assert.equal(loadEnforcementMode(dir), 'warn', 'solo mode uses advisory warn enforcement');
 
 // Test 5: CI Headless overrides
+// The verify sandbox ignores CI vars on purpose, so clear its flag for this check
 const origCI = process.env.CI;
+const origSandbox = process.env.NATIV_VERIFY_SANDBOX;
 try {
+  delete process.env.NATIV_VERIFY_SANDBOX;
   process.env.CI = 'true';
   assert.equal(isCiEnvironment(), true, 'detects CI=true');
   assert.equal(refuseHeadless('nativ task complete --no-verify'), false, 'does not refuse headless in CI');
 } finally {
   if (origCI !== undefined) process.env.CI = origCI;
   else delete process.env.CI;
+  if (origSandbox !== undefined) process.env.NATIV_VERIFY_SANDBOX = origSandbox;
 }
 
 {

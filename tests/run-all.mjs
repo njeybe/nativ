@@ -16,6 +16,8 @@ const NODE_SUITES = [
   'taste-bundle', 'taste-digest', 'init-design', 'design-check',
   'gitignore-block', 'env-reads', 'verify-env', 'clean-tree', 'check-docs', 'portability-lint', 'm16-templates',
   'm16-e2e', 'single-startup-context', 'milestone-archive', 'archive-integration',
+  'style-store', 'style-sources', 'style-measure-js', 'style-measure-python', 'style-formatters', 'style-aggregate',
+  'style-scan', 'style-health', 'init-style', 'style-conflicts', 'style-status',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',
