@@ -422,7 +422,7 @@ export function createProgram(): Command {
     .command('decide <rule> [targetDir]')
     .description('Settle a style conflict: follow "nativ" or "codebase" (human only)')
     .requiredOption('--follow <choice>', 'nativ or codebase')
-    .option('--yes', 'Skip the confirmation')
+    .option('-y, --yes', 'Skip the confirmation question (still needs a terminal)')
     .action(async (rule, targetDir, options) => {
       await runStyleDecide(rule, options.follow, targetDir, options);
     });
