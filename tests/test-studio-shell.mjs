@@ -37,6 +37,7 @@ const api = {
   status: {
     contracts: { a: true, b: true, c: true, d: false, e: true },
     telemetry: { actualSpendUsd: 1.5, cacheHitRate: 0.5 },
+    styleDecisions: [],
   },
   telemetry: {
     summary: {

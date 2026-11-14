@@ -187,6 +187,8 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       return open;
     });
     if (!active && milestones.length) active = milestones[milestones.length - 1].id;
+    // Until the pipeline status has loaded there are no style decisions to list
+    var styleDecisions = api.status ? api.status.styleDecisions : [];
     return {
       milestones: milestones,
       tasks: tasks,
@@ -194,7 +196,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       activeMilestoneId: active,
       running: tasks.filter(function (t) { return t.status === 'in_progress' && !t.stale; }),
       stuck: tasks.filter(function (t) { return t.status === 'blocked'; }),
-      needsYou: needsYouItems(tasks, byId, api.escalations, api.status && api.status.styleDecisions),
+      needsYou: needsYouItems(tasks, byId, api.escalations, styleDecisions),
       summary: summaryOf(api, milestones, tasks)
     };
   }
