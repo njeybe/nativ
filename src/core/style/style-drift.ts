@@ -8,15 +8,8 @@ import { measureJs } from './measure-js.js';
 import { measurePython } from './measure-python.js';
 import { langOf } from './style-scan.js';
 import { loadCodeStyle } from './style-store.js';
+import type { CodeShapeIssue } from '../code-shape.js';
 import type { CodeStyleFile, StyleLanguage } from './style-types.js';
-
-export interface StyleDriftIssue {
-  file: string;
-  line: number;
-  kind: 'style-drift';
-  category: 'drift';
-  message: string;
-}
 
 type Counts = Record<string, Record<string, number>>;
 interface Line {
@@ -90,7 +83,7 @@ interface Ctx {
   counts: Counts;
 }
 
-function checkTrait(ctx: Ctx, trait: string, expected: string): StyleDriftIssue | null {
+function checkTrait(ctx: Ctx, trait: string, expected: string): CodeShapeIssue | null {
   const values = ctx.counts[trait] ?? {};
   const pct = Math.round(shareOf(ctx.style, ctx.file, ctx.lang, trait) * 100);
   const total = Object.values(values).reduce((a, b) => a + b, 0);
@@ -111,7 +104,7 @@ function checkTrait(ctx: Ctx, trait: string, expected: string): StyleDriftIssue 
   return { ...base, line, message };
 }
 
-function checkFile(root: string, style: CodeStyleFile, file: string): StyleDriftIssue[] {
+function checkFile(root: string, style: CodeStyleFile, file: string): CodeShapeIssue[] {
   const lang = langOf(file);
   if (!lang) return [];
   let text: string;
@@ -127,7 +120,7 @@ function checkFile(root: string, style: CodeStyleFile, file: string): StyleDrift
   const counts = measure(lang, file, lines.map((l) => l.text).join('\n'));
   const ctx: Ctx = { style, file, lang, isNew, lines, counts };
   const expected = resolveExpected(style, file, lang);
-  const issues: StyleDriftIssue[] = [];
+  const issues: CodeShapeIssue[] = [];
   for (const [trait, value] of Object.entries(expected)) {
     if (!isNew && !LINE_TRAITS.includes(trait)) continue;
     const found = checkTrait(ctx, trait, value);
@@ -137,7 +130,7 @@ function checkFile(root: string, style: CodeStyleFile, file: string): StyleDrift
 }
 
 /** Drift findings for the given files; none without git or `.ai/code_style.json`. */
-export function checkStyleDrift(root: string, targetFiles: string[]): StyleDriftIssue[] {
+export function checkStyleDrift(root: string, targetFiles: string[]): CodeShapeIssue[] {
   const style = loadCodeStyle(root).file;
   if (!style || !git(root, ['rev-parse', '--verify', 'HEAD']).ok) return [];
   const files = targetFiles.map((f) => f.replace(/\\/g, '/'));
