@@ -21,7 +21,7 @@ export interface StyleScanResult {
 
 const LANGUAGES: StyleLanguage[] = ['js', 'python'];
 
-function langOf(file: string): StyleLanguage | null {
+export function langOf(file: string): StyleLanguage | null {
   if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file)) return 'js';
   return file.endsWith('.py') ? 'python' : null;
 }
