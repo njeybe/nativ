@@ -35,6 +35,7 @@ import { runTriage } from './commands/triage.js';
 import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
 import { runStyleScan, runStyleShow } from './commands/style.js';
+import { runStyleDecide } from './commands/style-decide.js';
 import { runRunsList, runRunsShow } from './commands/runs.js';
 import { runProfileCommand } from './commands/profile.js';
 import { runDesignCheck } from './commands/design-check.js';
@@ -414,6 +415,15 @@ export function createProgram(): Command {
     .option('--json', 'Output as JSON')
     .action(async (targetDir, options) => {
       await runStyleShow(targetDir, options);
+    });
+
+  style
+    .command('decide <rule> [targetDir]')
+    .description('Settle a style conflict: follow "nativ" or "codebase" (human only)')
+    .requiredOption('--follow <choice>', 'nativ or codebase')
+    .option('--yes', 'Skip the confirmation')
+    .action(async (rule, targetDir, options) => {
+      await runStyleDecide(rule, options.follow, targetDir, options);
     });
 
   const runs = program

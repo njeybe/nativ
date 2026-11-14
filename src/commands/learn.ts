@@ -1,8 +1,7 @@
 import path from 'node:path';
-import readline from 'node:readline/promises';
 import pc from 'picocolors';
 import { resolveMainRoot } from '../core/root-resolver.js';
-import { refuseHeadless } from '../core/human-gate.js';
+import { confirm, refuseHeadless } from '../core/human-gate.js';
 import {
   LEARNING_STATUSES,
   proposeLearning,
@@ -71,15 +70,6 @@ export async function runLearnPropose(insight: string, targetDirArg?: string, op
   console.log(pc.green('\n✔ Proposed'));
   for (const line of fullText(item)) console.log(`  ${line}`);
   console.log(pc.dim(`  A human approves it in a terminal: nativ learn approve ${item.id}\n`));
-}
-
-async function confirm(question: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return /^y(es)?$/i.test((await rl.question(question)).trim());
-  } finally {
-    rl.close();
-  }
 }
 
 export async function runLearnDecide(
