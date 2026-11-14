@@ -1,11 +1,11 @@
 /** nativ · Checks new and changed code against the recorded project style. */
 
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveExpected } from './aggregate.js';
 import { measureJs } from './measure-js.js';
 import { measurePython } from './measure-python.js';
+import { gitOutput } from './style-git.js';
 import { langOf } from './style-scan.js';
 import { loadCodeStyle } from './style-store.js';
 import type { CodeShapeIssue } from '../code-shape.js';
@@ -23,18 +23,13 @@ const MIN_OCCURRENCES = 3;
 const NOUNS: Record<string, string> = { quotes: 'strings', indent: 'indented lines' };
 const FILE_LABELS: Record<string, string> = { moduleSystem: 'module system', exportStyle: 'export style' };
 
-function git(root: string, args: string[]): { ok: boolean; out: string } {
-  const res = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
-  return { ok: res.status === 0, out: res.stdout ?? '' };
-}
-
 /** Lines added since HEAD in a tracked file, with their new line numbers. */
 function addedLines(root: string, file: string, text: string): Line[] {
-  const diff = git(root, ['diff', '-U0', 'HEAD', '--', file]);
-  if (!diff.ok) return [];
+  const diff = gitOutput(root, ['diff', '-U0', 'HEAD', '--', file]);
+  if (diff === null) return [];
   const lines = text.split(/\r?\n/);
   const out: Line[] = [];
-  for (const m of diff.out.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)) {
+  for (const m of diff.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)) {
     const start = Number(m[1]);
     const count = m[2] === undefined ? 1 : Number(m[2]);
     for (let no = start; no < start + count; no++) out.push({ no, text: lines[no - 1] ?? '' });
@@ -113,7 +108,7 @@ function checkFile(root: string, style: CodeStyleFile, file: string): CodeShapeI
   } catch {
     return [];
   }
-  const isNew = !git(root, ['cat-file', '-e', `HEAD:${file}`]).ok;
+  const isNew = gitOutput(root, ['cat-file', '-e', `HEAD:${file}`]) === null;
   const all = text.split(/\r?\n/).map((t, i) => ({ no: i + 1, text: t }));
   const lines = isNew ? all : addedLines(root, file, text);
   if (lines.length === 0) return [];
@@ -132,7 +127,7 @@ function checkFile(root: string, style: CodeStyleFile, file: string): CodeShapeI
 /** Drift findings for the given files; none without git or `.ai/code_style.json`. */
 export function checkStyleDrift(root: string, targetFiles: string[]): CodeShapeIssue[] {
   const style = loadCodeStyle(root).file;
-  if (!style || !git(root, ['rev-parse', '--verify', 'HEAD']).ok) return [];
+  if (!style || gitOutput(root, ['rev-parse', '--verify', 'HEAD']) === null) return [];
   const files = targetFiles.map((f) => f.replace(/\\/g, '/'));
   return files.flatMap((file) => checkFile(root, style, file));
 }

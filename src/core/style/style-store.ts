@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { withFileLockSync, writeJsonAtomicSync } from '../lock-manager.js';
 import { parseJsonLoose } from '../enforcement.js';
+import { gitOutput } from './style-git.js';
 import {
   DECISION_STATUSES,
   MAX_PATTERN_TEXT,
@@ -114,22 +114,16 @@ export function mergeScan(prev: CodeStyleFile | null, scan: CodeStyleFile): Code
   return { ...scan, decisions, patterns: prev?.patterns ?? scan.patterns };
 }
 
-function git(root: string, args: string[]): string | null {
-  try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch {
-    return null;
-  }
-}
-
 /** Null outside git or without a scanned commit; otherwise how far the scan is behind HEAD. */
 export function styleStaleness(root: string, style: CodeStyleFile): Staleness | null {
   const commit = style.scannedAt?.commit;
-  if (!commit || git(root, ['rev-parse', '--git-dir']) === null) return null;
-  const known = git(root, ['cat-file', '-e', `${commit}^{commit}`]) !== null;
-  const ancestor = known && git(root, ['merge-base', '--is-ancestor', commit, 'HEAD']) !== null;
+  if (!commit || gitOutput(root, ['rev-parse', '--git-dir']) === null) return null;
+  const known = gitOutput(root, ['cat-file', '-e', `${commit}^{commit}`]) !== null;
+  const ancestor = known && gitOutput(root, ['merge-base', '--is-ancestor', commit, 'HEAD']) !== null;
   if (!ancestor) return { behind: 0, gone: true, stale: true };
-  const behind = Number(git(root, ['rev-list', '--count', `${commit}..HEAD`]) ?? 0);
+  const count = gitOutput(root, ['rev-list', '--count', `${commit}..HEAD`]);
+  if (count === null) return { behind: 0, gone: true, stale: true };
+  const behind = Number(count.trim());
   return { behind, gone: false, stale: behind >= STALE_COMMITS };
 }
 

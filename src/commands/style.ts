@@ -53,8 +53,9 @@ export async function runStyleScan(targetDirArg?: string, options: StyleScanOpti
   if (options.json) return console.log(JSON.stringify(result.style, null, 2));
   const at = result.style.scannedAt;
   const verb = result.written ? 'Scanned' : 'Scanned (dry run, nothing written)';
-  console.log(pc.green(`✔ ${verb}: ${at.files} files at ${at.commit || 'no commit'}`));
+  console.log(pc.green(`✔ ${verb}: ${at.files} files at ${at.commit}`));
   for (const line of summary(result.style)) console.log(`  ${line}`);
+  if (result.unreadable) console.log(pc.yellow(`  ${result.unreadable} file(s) could not be read and were skipped`));
 }
 
 function showTraits(style: CodeStyleFile): void {
