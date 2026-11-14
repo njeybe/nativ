@@ -69,7 +69,7 @@ function styleDecisions(root: string) {
     .filter((d) => d.status === 'pending')
     .map((d) => ({
       rule: d.rule,
-      title: STYLE_RULES.find((r) => r.id === d.rule)?.title ?? d.rule,
+      title: STYLE_RULES.find((r) => r.id === d.rule)!.title,
       count: d.evidence.count,
       files: d.evidence.files,
       command: `nativ style decide ${d.rule} --follow nativ|codebase`,

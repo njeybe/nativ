@@ -43,10 +43,10 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
   function copyCommand(command) { return String(command).replace(/nativ\|codebase$/, ''); }
 
   function styleItem(item) {
-    var n = item.count + (item.count === 1 ? ' place' : ' places');
+    var files = item.count === 1 ? 'file' : 'files';
     return '<div class="need" data-need="' + esc(item.key) + '"><div class="body">' +
-      '<div class="l1"><b>Style decision</b><span class="mono">' + esc(item.rule) + '</span></div>' +
-      '<span class="why">' + esc(item.title) + ' (' + n + ')</span>' +
+      '<div class="l1"><b>Code style decision</b><span class="mono">' + esc(item.rule) + '</span></div>' +
+      '<span class="why">' + 'Code style: ' + esc(item.title) + ', ' + item.count + ' ' + files + '</span>' +
       '<code class="mono cmd">' + esc(item.command) + '</code></div>' +
       '<div class="acts"><span class="copy-wrap"><span class="tooltip">Copied!</span>' +
       '<button type="button" class="btn" data-act="home-copy-style" data-cmd="' +

@@ -133,7 +133,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       // A completed task answered its own question; a left-over pending record is not a request for you.
       if (t && t.status !== 'completed' && !seen[e.taskId]) add(t);
     });
-    (styleDecisions || []).forEach(function (d) {
+    styleDecisions.forEach(function (d) {
       items.push({ kind: 'style', key: 'style:' + d.rule, rule: d.rule, title: d.title,
         count: d.count, command: d.command });
     });
