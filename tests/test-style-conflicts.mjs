@@ -9,6 +9,8 @@ assert.equal(isModelLayerPath('src/models/user.ts'), true);
 assert.equal(isModelLayerPath('src/db/x.py'), true);
 assert.equal(isModelLayerPath('src/app/user.ts'), false);
 assert.equal(isModelLayerPath('models.ts'), false);
+assert.equal(isModelLayerPath('src\\models\\user.ts'), true);
+assert.equal(isModelLayerPath('src\\app\\user.ts'), false);
 
 const sql = (p) => f(p, 'const q = "SELECT * FROM users";');
 assert.deepEqual(rules([sql('a.ts'), sql('b.ts')]), ['raw-sql']);

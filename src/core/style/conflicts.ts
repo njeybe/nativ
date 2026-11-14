@@ -32,7 +32,7 @@ const SWALLOWED = [
 
 /** True when any folder in the path is a model-layer folder. */
 export function isModelLayerPath(file: string): boolean {
-  const folders = file.split(/[\/]/).slice(0, -1);
+  const folders = file.split(/[\\/]/).slice(0, -1);
   return folders.some((p) => MODEL_SEGMENTS.has(p.toLowerCase()));
 }
 

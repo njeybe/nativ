@@ -2,7 +2,7 @@ import path from 'node:path';
 import pc from 'picocolors';
 import { resolveMainRoot } from '../core/root-resolver.js';
 import { confirm, refuseHeadless } from '../core/human-gate.js';
-import { loadCodeStyle, decideStyleRule } from '../core/style/style-store.js';
+import { assertFollowChoice, decideStyleRule, loadCodeStyle } from '../core/style/style-store.js';
 import { STYLE_RULES } from '../core/style/style-types.js';
 
 function fail(message: string): void {
@@ -10,8 +10,11 @@ function fail(message: string): void {
   process.exitCode = 1;
 }
 
-function printEvidence(rule: string, status: string, count: number, files: string[]): void {
-  const title = STYLE_RULES.find((r) => r.id === rule)?.title ?? rule;
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function printEvidence(rule: string, title: string, status: string, count: number, files: string[]): void {
   console.log(`\n  ${pc.bold(rule)} ${pc.dim(`[${status}]`)} ${title}`);
   const places = count === 1 ? 'place' : 'places';
   console.log(`    ${count} ${places} found`);
@@ -25,12 +28,15 @@ export async function runStyleDecide(
   options: { yes?: boolean } = {},
 ) {
   if (refuseHeadless('nativ style decide')) return;
-  if (!STYLE_RULES.some((r) => r.id === rule)) {
+  const meta = STYLE_RULES.find((r) => r.id === rule);
+  if (!meta) {
     fail(`Unknown rule "${rule}". Valid rules: ${STYLE_RULES.map((r) => r.id).join(', ')}.`);
     return;
   }
-  if (follow !== 'nativ' && follow !== 'codebase') {
-    fail(`Choice must be "nativ" or "codebase", found "${follow}".`);
+  try {
+    assertFollowChoice(follow);
+  } catch (err: unknown) {
+    fail(errorText(err));
     return;
   }
   const root = resolveMainRoot(path.resolve(targetDirArg || process.cwd()));
@@ -39,7 +45,7 @@ export async function runStyleDecide(
     fail(`No decision recorded for rule "${rule}"; run nativ style scan.`);
     return;
   }
-  printEvidence(rule, current.status, current.evidence.count, current.evidence.files);
+  printEvidence(rule, meta.title, current.status, current.evidence.count, current.evidence.files);
   if (current.decidedAt) console.log(pc.dim(`    previous choice: ${current.status} (${current.decidedAt})`));
   if (!options.yes && !(await confirm(`\n  Follow ${follow} for ${rule}? [y/N] `))) {
     console.log(pc.dim('  Nothing changed.\n'));
@@ -47,8 +53,8 @@ export async function runStyleDecide(
   }
   try {
     decideStyleRule(root, rule, follow);
-  } catch (err: any) {
-    fail(err.message);
+  } catch (err: unknown) {
+    fail(errorText(err));
     return;
   }
   console.log(pc.green(`\n✔ ${rule}: following ${follow}`));
