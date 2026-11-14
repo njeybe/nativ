@@ -3,6 +3,7 @@ import type { MasterPlanTask } from '../scanner/types.js';
 import { resolveSpecSlices } from '../core/spec-slices.js';
 import { taskEscalationHistory } from '../governor/index.js';
 import { learningsForTask } from '../core/learnings.js';
+import { taskStyleLines } from './cli-config.js';
 import {
   DEFAULT_NATIVE_EFFORT,
   NATIVE_MAX_OUTPUT_TOKENS,
@@ -112,6 +113,14 @@ export function buildLearningsBlock(task: MasterPlanTask, rootDir: string | unde
   return `<learnings>\n${body}\n</learnings>\n${note}`;
 }
 
+export function buildStyleSliceBlock(task: MasterPlanTask, rootDir: string | undefined): string {
+  const lines = taskStyleLines(task, rootDir);
+  if (!lines.length) return '';
+  const body = lines.map((l) => untag(l, 'style_slice')).join('\n');
+  const note = 'Follow these unless the formatter or the task contract says otherwise.';
+  return `<style_slice>\n${body}\n</style_slice>\n${note}`;
+}
+
 /** Keeps stored text from closing the block it sits in and passing as instructions. */
 export function untag(text: string, tag: string): string {
   // Repeat until nothing changes: a tag split around another one would otherwise rebuild itself.
@@ -142,6 +151,7 @@ export function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | 
     buildSpecSlicesBlock(task, rootDir),
     buildPriorEscalationsBlock(task, rootDir),
     buildLearningsBlock(task, rootDir),
+    buildStyleSliceBlock(task, rootDir),
     'Load only the contract slice your role needs (.ai/api_contracts.json, .ai/db_schema.json, .ai/ui_specs.md, .ai/context.md) with the editor view command.',
     useWorktree
       ? 'You are in an isolated git worktree on the agent branch. After `nativ task complete` succeeds, commit the target files there (`git add <targetFiles> && git commit -m "<type>(<scope>): <summary>"`) so the operator can merge the branch.'

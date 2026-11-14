@@ -505,7 +505,7 @@ export class AgentSupervisor extends EventEmitter {
 
     // A runner that exits without reading its input must not crash us or fail the run.
     child.stdin?.on('error', () => {});
-    const prompt = buildRunnerPrompt(task);
+    const prompt = buildRunnerPrompt(task, this.rootDir);
     run.transcript?.write('prompt', { text: prompt });
     child.stdin?.end(prompt, 'utf8');
 
