@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Code style learning.** `nativ style scan` measures the style of the existing TypeScript, JavaScript and Python code and records it in `.ai/code_style.json`. `nativ style show` prints it (`--files` gives the slice for those files). `nativ style decide <rule> --follow nativ|codebase` settles, once per rule, where the codebase breaks a nativ rule; it is human only and denied to agents.
+- **Style reaches workers and checks.** `nativ init` scans an existing git codebase of 10 or more files by itself, and `nativ update` hints at it. `nativ task next` and worker prompts carry a short per-task style summary, and the `nativ://code-style` MCP resource is read-only. The new `codeStyle.styleDrift` setting (`off`, `warn` or `block`, default `warn`) flags new code that departs from the learned style. `status`, `doctor`, `validate` and the Studio show the style state.
+
 ### Changed
 
 - **Clean-code rules for workers.** `AGENTS.md` and the native engine's worker prompt now ask for the simplest readable code, with no conditional whose branches give the same result and no variable that mixes concatenation with a ternary. Data access must go through the project's models or ORM, not raw SQL or direct connection calls. Errors are handled where they happen, never hidden in a default value. The verifier checklist flags raw SQL, direct connection calls and swallowed errors.

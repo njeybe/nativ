@@ -164,6 +164,7 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | [`task unlock`](#nativ-task-unlock) | Lift a task's file scope in an emergency | *You only* |
 | [`milestone archive` / `restore`](#nativ-milestone-archive--restore) | Move a finished milestone out of the plan, or bring it back | You, Agent (`restore` by CLI) |
 | [`verify`](#nativ-verify) | Run verification for a task, a milestone or all | You, Agent |
+| [`style scan` / `show` / `decide`](#nativ-style) | Learn the project's code style, show it, settle rule conflicts | You, Agent (`decide`: *You only*) |
 | [`learn propose`](#nativ-learn-propose) | Propose a lesson for later workers | Agent |
 | [`learn list`](#nativ-learn-list) | List lessons | You, Agent |
 | [`learn approve` / `reject`](#nativ-learn-approve--reject) | Decide on a lesson | *You only* |
@@ -543,6 +544,30 @@ Skip a line with `<!-- nativ-check-ignore -->`, or wrap a block in `<!-- nativ-c
 
 ---
 
+### Code style
+
+#### `nativ style`
+
+Learn how the existing code is written, so workers match it. The scan is deterministic and reads only git-tracked TypeScript, JavaScript and Python files (first version scope).
+
+```bash
+nativ style scan [targetDir] [--dry-run] [--json]
+nativ style show [targetDir] [--files a,b] [--json]
+nativ style decide <rule> [targetDir] --follow nativ|codebase [-y, --yes]
+```
+
+- `scan` records the result in `.ai/code_style.json`; `--dry-run` only prints it. Outside a git repository it prints the reason and exits 1.
+- `show` prints the recorded rules; with `--files` it prints the short style slice for those files.
+- `decide` is *You only*: it refuses without a terminal and the permission rules deny it to agents. Where the codebase breaks a nativ rule (raw SQL outside the model layer, errors hidden in defaults, required settings with fallback values), you choose once per rule: follow nativ's rule or accept the codebase habit.
+
+`.ai/code_style.json` records the languages found, detected formatters, measured traits per project and folder (indentation, quotes, naming, imports and similar, with their share), your rule decisions and architect-written patterns. It is written only by `scan`, `decide` and the architect.
+
+`nativ init` runs the scan by itself on an existing git codebase with 10 or more TypeScript, JavaScript or Python files. `nativ update` hints at it when no style file exists. `nativ task next` and worker prompts carry a short per-task style summary, and the `nativ://code-style` MCP resource is read-only. `status`, `doctor`, `validate` and the Studio report the style state and pending decisions. The gatekeeper's drift check follows `codeStyle.styleDrift`.
+
+[Back to contents](#contents)
+
+---
+
 ### Learnings
 
 Lessons from earlier tasks that the contracts do not capture: a setup quirk, a library gotcha, a convention. Agents propose; only you approve. Stored in `.ai/learnings.json`.
@@ -789,6 +814,7 @@ Written by `setup`; every key is optional.
 | `codeStyle.mode` | `warn` | `warn`, `block` or `off` for the line-length and comment check |
 | `codeStyle.maxLineLength` | `120` | Longest allowed line |
 | `codeStyle.maxCommentLines` | `2` | Longest allowed comment block |
+| `codeStyle.styleDrift` | `warn` | `off`, `warn` or `block` for new code that departs from the learned style |
 | `codeStyle.configFallback` | `warn` | `off`, `warn` or `block` for reads of settings that silently fall back to empty. Opt out per line with `nativ-allow-fallback` |
 | `verifyIsolation` | `none` (`clean` in solo and enterprise) | Run checks in a clean copy of the repo. See [`nativ verify`](#verification) |
 | `verifyIsolationFailure` | `warn` | `warn` or `block` when a check fails in the clean copy but passes in place |
@@ -898,6 +924,7 @@ A deterministic firewall between agents and the contracts:
 | `.ai/archive/<id>.json` | `nativ milestone archive` | Full copy of an archived milestone; the plan keeps a one-line summary |
 | `.ai/subagents/*.md` | init, update | One guide per worker role |
 | `.ai/escalation.json` | `task escalate`, triage | Escalations and how they were settled |
+| `.ai/code_style.json` | `nativ style scan`, `style decide`, architect | Learned style traits, formatters, rule decisions and patterns |
 | `.ai/learnings.json` | `nativ learn` | Proposed, approved and rejected lessons |
 | `.ai/telemetry.json` | nativ | Durations, costs, pass rates, role violations |
 | `.nativ/runs/transcripts/<runId>.jsonl` | Studio runs | One turn-by-turn record per agent run. See [`nativ runs`](#nativ-runs) |
@@ -928,7 +955,7 @@ Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched fi
 
 | Resources (read-only) |
 | :--- |
-| `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`, `nativ://telemetry` |
+| `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`, `nativ://code-style`, `nativ://telemetry` |
 
 There is deliberately no MCP tool to unlock a task, approve a lesson, write a contract, sync a database schema, restore an archived milestone or run setup.
 
