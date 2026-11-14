@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseJsonLoose } from './enforcement.js';
 import { getTemplatesDir, planTemplateFile } from './setup-assets.js';
+import { loadCodeStyle, styleStaleness } from './style/style-store.js';
 import { canonicalRole, listLearnings, loadLearnings } from './learnings.js';
 
 /**
@@ -16,7 +17,7 @@ export interface IntegrityFinding {
   status: CheckStatus;
   message: string;
   /** `guardrail` and `secret` findings decide whether doctor may report the harness as clean. */
-  category: 'guardrail' | 'secret' | 'roles' | 'learnings' | 'specs';
+  category: 'guardrail' | 'secret' | 'roles' | 'learnings' | 'specs' | 'style';
 }
 
 /** Well-known credential shapes only; loose `password=` matches would flag every doc that mentions one. */
@@ -218,6 +219,30 @@ function checkUiSpecs(root: string, templatesDir: string): IntegrityFinding[] {
   return [...checkDesignProfile(specs), ...checkTasteBundle(root, templatesDir)];
 }
 
+function checkCodeStyle(root: string): IntegrityFinding[] {
+  const mk = (id: string, status: CheckStatus, message: string): IntegrityFinding[] =>
+    [{ id: `style:${id}`, status, category: 'style', message }];
+  const { file, unreadable, problems } = loadCodeStyle(root);
+  if (unreadable) {
+    return mk('invalid', 'warn', `.ai/code_style.json cannot be used (${problems[0]}). `
+      + 'Fix it or run `nativ style scan` again.');
+  }
+  if (!file) return [];
+  const findings: IntegrityFinding[] = [];
+  const age = styleStaleness(root, file);
+  if (age?.stale) {
+    const why = age.gone ? 'its scanned commit is no longer in history' : `it is ${age.behind} commits behind HEAD`;
+    findings.push(...mk('stale', 'info', `The code style scan is stale: ${why}. Run \`nativ style scan\`.`));
+  }
+  const pending = file.decisions.filter((d) => d.status === 'pending');
+  if (pending.length) {
+    const rules = pending.map((d) => d.rule).join(', ');
+    findings.push(...mk('pending', 'info', `${pending.length} code style decisions are pending (${rules}): `
+      + 'nativ style decide <rule> --follow nativ|codebase'));
+  }
+  return findings;
+}
+
 export function checkHarnessIntegrity(root: string, options: { templatesDir?: string } = {}): IntegrityFinding[] {
   const findings = [
     ...checkGuardrailOverrides(root),
@@ -226,6 +251,7 @@ export function checkHarnessIntegrity(root: string, options: { templatesDir?: st
     ...checkEditedRoleGuides(root, options.templatesDir ?? getTemplatesDir()),
     ...checkLearnings(root),
     ...checkUiSpecs(root, options.templatesDir ?? getTemplatesDir()),
+    ...checkCodeStyle(root),
   ];
   if (!findings.some((f) => f.category === 'guardrail' || f.category === 'secret')) {
     const message = 'No guardrail overrides and no secrets in files agents read';

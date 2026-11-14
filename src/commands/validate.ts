@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import { resolveSpecSlices } from '../core/spec-slices.js';
+import { loadCodeStyle, codeStylePath } from '../core/style/style-store.js';
 
 export async function runValidate(targetDirArg?: string) {
   const targetDir = path.resolve(targetDirArg || process.cwd());
@@ -100,6 +101,13 @@ export async function runValidate(targetDirArg?: string) {
       console.log(pc.red('  ✖ .ai/escalation.json missing `escalations` array'));
       hasErrors = true;
     }
+  }
+
+  if (fs.existsSync(codeStylePath(targetDir))) {
+    const { problems } = loadCodeStyle(targetDir);
+    if (!problems.length) console.log(pc.green('  ✔ Valid code style: .ai/code_style.json'));
+    for (const p of problems) console.log(pc.red(`  ✖ .ai/code_style.json: ${p}`));
+    if (problems.length) hasErrors = true;
   }
 
   console.log(pc.bold('\n3. Sub-agent Profiles:'));
