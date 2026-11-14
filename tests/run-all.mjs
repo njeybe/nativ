@@ -18,6 +18,7 @@ const NODE_SUITES = [
   'm16-e2e', 'single-startup-context', 'milestone-archive', 'archive-integration',
   'style-store', 'style-sources', 'style-measure-js', 'style-measure-python', 'style-formatters', 'style-aggregate',
   'style-scan', 'style-health', 'init-style', 'style-conflicts', 'style-status',
+  'style-decide', 'style-delivery', 'style-prompt', 'style-templates', 'style-drift',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',
