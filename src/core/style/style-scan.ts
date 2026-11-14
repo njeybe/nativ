@@ -1,13 +1,16 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { detectConflicts, type SourceFile } from './conflicts.js';
 import { aggregateStyle, type FileMeasure } from './aggregate.js';
 import { detectFormatters } from './formatters.js';
 import { measureJs } from './measure-js.js';
 import { measurePython } from './measure-python.js';
 import { listStyleSources } from './style-sources.js';
 import { loadCodeStyle, mergeScan, saveCodeStyle } from './style-store.js';
-import type { CodeStyleFile, StyleFormatter, StyleLanguage, TraitMap } from './style-types.js';
+import type {
+  CodeStyleFile, StyleDecision, StyleFormatter, StyleLanguage, TraitMap,
+} from './style-types.js';
 
 export interface StyleScanResult {
   available: boolean;
@@ -23,17 +26,32 @@ function langOf(file: string): StyleLanguage | null {
   return file.endsWith('.py') ? 'python' : null;
 }
 
-function measureFile(root: string, file: string): FileMeasure | null {
-  const lang = langOf(file);
-  if (!lang) return null;
-  let text: string;
-  try {
-    text = fs.readFileSync(path.join(root, file), 'utf8');
-  } catch {
-    return null;
+function readSources(root: string, files: string[]): SourceFile[] {
+  const out: SourceFile[] = [];
+  for (const file of files) {
+    try {
+      out.push({ path: file, text: fs.readFileSync(path.join(root, file), 'utf8') });
+    } catch {
+      // an unreadable file is skipped, like a missing one
+    }
   }
-  const counts = lang === 'js' ? measureJs(file, text) : measurePython(file, text);
-  return { path: file, lang, counts };
+  return out;
+}
+
+function measureFile(f: SourceFile): FileMeasure | null {
+  const lang = langOf(f.path);
+  if (!lang) return null;
+  const counts = lang === 'js' ? measureJs(f.path, f.text) : measurePython(f.path, f.text);
+  return { path: f.path, lang, counts };
+}
+
+function pendingDecisions(sources: SourceFile[]): StyleDecision[] {
+  return detectConflicts(sources).map((c) => ({
+    rule: c.rule,
+    status: 'pending',
+    evidence: { count: c.count, files: c.files },
+    decidedAt: null,
+  }));
 }
 
 function headCommit(root: string): string {
@@ -57,8 +75,9 @@ function markOwners(map: TraitMap | undefined, formatters: StyleFormatter[], lan
 export function buildStyleScan(root: string): StyleScanResult {
   const sources = listStyleSources(root);
   if (!sources.available) return { available: false, reason: sources.reason };
-  const measures = sources.files
-    .map((f) => measureFile(root, f))
+  const texts = readSources(root, sources.files);
+  const measures = texts
+    .map(measureFile)
     .filter((m): m is FileMeasure => m !== null);
   const scope = aggregateStyle(measures);
   const formatters = detectFormatters(root);
@@ -76,7 +95,7 @@ export function buildStyleScan(root: string): StyleScanResult {
     languages: LANGUAGES.filter((l) => measures.some((m) => m.lang === l)),
     formatters,
     ...scope,
-    decisions: [],
+    decisions: pendingDecisions(texts),
     patterns: [],
   };
   return { available: true, style };

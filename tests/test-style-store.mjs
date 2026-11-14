@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  loadCodeStyle, saveCodeStyle, validateCodeStyle, mergeScan, styleStaleness, codeStylePath,
+  loadCodeStyle, saveCodeStyle, validateCodeStyle, mergeScan, decideStyleRule, styleStaleness, codeStylePath,
 } from '../dist/core/style/style-store.js';
 import { STYLE_RULES } from '../dist/core/style/style-types.js';
 
@@ -92,4 +92,13 @@ assert.deepEqual(styleStaleness(repo, at(first)), { behind: 50, gone: false, sta
 assert.deepEqual(styleStaleness(repo, at('1234567890abcdef1234567890abcdef12345678')),
   { behind: 0, gone: true, stale: true });
 assert.equal(styleStaleness(repo, base({ scannedAt: { commit: '', date: '', files: 0 } })), null);
+const dRoot = tmp();
+saveCodeStyle(dRoot, base({ decisions: [decision('raw-sql', 'pending', 2, ['a.js'])] }));
+const out = decideStyleRule(dRoot, 'raw-sql', 'codebase');
+assert.equal(out.decisions[0].status, 'codebase');
+assert.ok(out.decisions[0].decidedAt);
+assert.equal(loadCodeStyle(dRoot).file.decisions[0].status, 'codebase');
+assert.throws(() => decideStyleRule(dRoot, 'nope', 'nativ'), /Unknown rule/);
+assert.throws(() => decideStyleRule(dRoot, 'raw-sql', 'maybe'), /Choice/);
+assert.throws(() => decideStyleRule(dRoot, 'swallowed-errors', 'nativ'), /No decision/);
 console.log('style store ok');

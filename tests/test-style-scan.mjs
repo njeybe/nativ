@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { scanStyle } from '../dist/core/style/style-scan.js';
 import { runStyleScan, runStyleShow } from '../dist/commands/style.js';
-import { loadCodeStyle } from '../dist/core/style/style-store.js';
+import { loadCodeStyle, saveCodeStyle } from '../dist/core/style/style-store.js';
 
 const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' });
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-style-'));
@@ -21,6 +21,13 @@ fs.writeFileSync(path.join(root, '.prettierrc'), '{}\n');
 g(root, '-c', 'core.autocrlf=false', 'add', '-A');
 g(root, '-c', 'core.autocrlf=false', 'commit', '-qm', 'init');
 
+for (const n of ['a', 'b']) {
+  const body = "db.q('SELECT * FROM t');\ntry { x(); } catch {}\n";
+  fs.writeFileSync(path.join(root, 'src', `sql${n}.js`), body);
+}
+g(root, '-c', 'core.autocrlf=false', 'add', '-A');
+g(root, '-c', 'core.autocrlf=false', 'commit', '-qm', 'more');
+
 const dry = scanStyle(root, true);
 assert.ok(dry.style && !dry.written);
 assert.ok(!fs.existsSync(path.join(root, '.ai', 'code_style.json')));
@@ -28,7 +35,13 @@ assert.ok(!fs.existsSync(path.join(root, '.ai', 'code_style.json')));
 const real = scanStyle(root);
 assert.ok(real.written);
 const { file } = loadCodeStyle(root);
-assert.equal(file.scannedAt.files, 6);
+assert.equal(file.scannedAt.files, 8);
+assert.deepEqual(file.decisions.map((d) => d.rule), ['raw-sql', 'swallowed-errors']);
+assert.ok(file.decisions.every((d) => d.status === 'pending' && d.evidence.count === 2));
+const settled = { ...file, decisions: file.decisions.map((d) => ({ ...d, status: 'nativ', decidedAt: '2026-01-01' })) };
+saveCodeStyle(root, settled);
+scanStyle(root);
+assert.ok(loadCodeStyle(root).file.decisions.every((d) => d.status === 'nativ' && d.decidedAt === '2026-01-01'));
 assert.equal(file.scannedAt.commit, g(root, 'rev-parse', '--short', 'HEAD').trim());
 assert.deepEqual(file.languages, ['js']);
 assert.equal(file.formatters[0].tool, 'prettier');

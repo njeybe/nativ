@@ -132,3 +132,21 @@ export function styleStaleness(root: string, style: CodeStyleFile): Staleness | 
   const behind = Number(git(root, ['rev-list', '--count', `${commit}..HEAD`]) ?? 0);
   return { behind, gone: false, stale: behind >= STALE_COMMITS };
 }
+
+/** Settles one conflict rule under the store lock; throws on an unknown rule or missing decision. */
+export function decideStyleRule(root: string, rule: string, follow: string): CodeStyleFile {
+  if (!STYLE_RULES.some((r) => r.id === rule)) throw new Error(`Unknown rule "${rule}".`);
+  if (follow !== 'nativ' && follow !== 'codebase') {
+    throw new Error(`Choice must be "nativ" or "codebase", found "${follow}".`);
+  }
+  const target = codeStylePath(root);
+  return withFileLockSync(target, () => {
+    const file = loadCodeStyle(root).file;
+    const found = file?.decisions.find((d) => d.rule === rule);
+    if (!file || !found) throw new Error(`No decision recorded for rule "${rule}"; run nativ style scan.`);
+    found.status = follow;
+    found.decidedAt = new Date().toISOString().slice(0, 10);
+    writeJsonAtomicSync(target, file);
+    return file;
+  });
+}
