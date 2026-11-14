@@ -1,13 +1,23 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { runInit } from '../dist/commands/init.js';
+import { runUpdate } from '../dist/commands/update.js';
 
 console.log('--- Starting init style Tests ---');
-const CLI = path.resolve('bin', 'cli.js');
-const nativ = (cwd, ...a) =>
-  spawnSync(process.execPath, [CLI, ...a], { cwd, encoding: 'utf8', timeout: 120_000 });
+async function nativ(cwd, cmd) {
+  const lines = [];
+  const orig = console.log;
+  console.log = (x) => lines.push(String(x));
+  try {
+    await (cmd === 'init' ? runInit(cwd) : runUpdate(cwd));
+  } finally {
+    console.log = orig;
+  }
+  return lines.join('\n');
+}
 const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' });
 const dirs = [];
 const tmp = () => {
@@ -28,24 +38,24 @@ try {
   }
   g(a, '-c', 'core.autocrlf=false', 'add', '-A');
   g(a, '-c', 'core.autocrlf=false', 'commit', '-qm', 'init');
-  const r = nativ(a, 'init', a);
-  assert.equal(r.status, 0, r.stderr);
+  const out = await nativ(a, 'init');
   assert.ok(fs.existsSync(path.join(a, '.ai', 'code_style.json')));
-  assert.equal((r.stdout.match(/Code style:/g) ?? []).length, 1);
+  assert.match(out, /Pipeline Scaffolding Completed/);
+  assert.equal((out.match(/Code style:/g) ?? []).length, 1);
   console.log('✔ Test 1: init scans an existing git codebase');
 
   const b = tmp();
-  const rb = nativ(b, 'init', b);
-  assert.equal(rb.status, 0, rb.stderr);
+  const rb = await nativ(b, 'init');
   assert.ok(!fs.existsSync(path.join(b, '.ai', 'code_style.json')));
-  assert.match(rb.stdout, /Code style scan skipped: not a git repository/);
+  assert.match(rb, /Pipeline Scaffolding Completed/);
+  assert.match(rb, /Code style scan skipped: not a git repository/);
   console.log('✔ Test 2: outside git init prints one reason line');
 
-  const u1 = nativ(b, 'update', b);
-  assert.match(u1.stdout, /Run nativ style scan to record/);
+  const u1 = await nativ(b, 'update');
+  assert.match(u1, /Run nativ style scan to record/);
   assert.ok(!fs.existsSync(path.join(b, '.ai', 'code_style.json')));
-  const u2 = nativ(a, 'update', a);
-  assert.doesNotMatch(u2.stdout, /Run nativ style scan to record/);
+  const u2 = await nativ(a, 'update');
+  assert.doesNotMatch(u2, /Run nativ style scan to record/);
   console.log('✔ Test 3: update hints only when the record is missing');
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });

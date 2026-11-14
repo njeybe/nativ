@@ -58,8 +58,13 @@ export function listStyleSources(root: string): StyleSources {
   return { available: true, files };
 }
 
+/** True when enough of the sampled files are code to count as an existing codebase. */
+export function isCodebase(files: string[]): boolean {
+  return files.filter((f) => CODE_FILE.test(f)).length >= EXISTING_CODEBASE_MIN_FILES;
+}
+
 export function isExistingCodebase(root: string): boolean {
   const sources = listStyleSources(root);
   if (!sources.available) return false;
-  return sources.files.filter((f) => CODE_FILE.test(f)).length >= EXISTING_CODEBASE_MIN_FILES;
+  return isCodebase(sources.files);
 }

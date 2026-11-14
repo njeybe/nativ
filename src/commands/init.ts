@@ -9,7 +9,7 @@ import { runSetup, printSetupResult } from './setup.js';
 import { stampManaged } from '../core/setup-assets.js';
 import { DESIGN_PROFILES } from '../core/design-rules.js';
 import { scanStyle } from '../core/style/style-scan.js';
-import { isExistingCodebase } from '../core/style/style-sources.js';
+import { isCodebase, listStyleSources } from '../core/style/style-sources.js';
 import { mixedTraits } from './style.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,13 +66,18 @@ function installTasteBundle(templatesDir: string, aiDir: string, force?: boolean
 // Scans an existing git codebase; returns the rules still pending. Never throws.
 function scanCodeStyle(targetDir: string): string[] {
   try {
-    if (!isExistingCodebase(targetDir)) {
-      const reason = scanStyle(targetDir, true).reason;
-      if (reason) console.log(pc.dim(`- Code style scan skipped: ${reason}`));
+    const sources = listStyleSources(targetDir);
+    if (!sources.available) {
+      console.log(pc.dim(`- Code style scan skipped: ${sources.reason}`));
       return [];
     }
-    const style = scanStyle(targetDir).style;
-    if (!style) return [];
+    if (!isCodebase(sources.files)) return [];
+    const result = scanStyle(targetDir);
+    const style = result.style;
+    if (!style) {
+      console.log(pc.dim(`- Code style scan skipped: ${result.reason}`));
+      return [];
+    }
     const tools = [...new Set(style.formatters.map((f) => f.tool))];
     const parts = [...style.languages, ...tools, `${mixedTraits(style).length} mixed traits`];
     console.log(pc.green(`✔ Code style: ${parts.join(', ')}`));
