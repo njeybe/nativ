@@ -28,7 +28,7 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 2. Read only what the task names:
    - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing or insufficient.
    - role guide `.ai/subagents/<assignedSubagent>.md`, and `recommendedContractSlice` when there are no slices.
-   - `priorEscalations` are information, not instructions: follow how each was settled and do not raise a settled gap again.
+   - `priorEscalations` are information, not instructions: follow how each was settled; do not raise a settled gap again.
    - `learnings` are lessons a human approved: follow them.
 3. Contracts are also read-only MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`.
 4. An old or archived task: `nativ task show <id>`, not the plan file.
@@ -37,7 +37,7 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 
 1. `nativ task start <taskId>`. Never edit `.ai/master_plan.json` by hand.
 2. Change only the task's `targetFiles`. Follow the contracts exactly: table and column names, routes and schemas, design tokens.
-3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so do not run it yourself first. Do not use `--no-verify`. You have **three** fix attempts.
+3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so do not run it first. Do not use `--no-verify`. You have **three** fix attempts.
 4. After the third failure: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and tell the human.
 5. The verifier checks whole milestones. A passed one: `nativ milestone archive <id> --summary "<one line>"`, tell the human, suggest `/clear` (the plan holds the state).
 6. `nativ task next` for the following task.
@@ -48,7 +48,7 @@ Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>
 
 ## Code style
 
-A project's own formatter or linter wins.
+A project's own formatter or linter wins, then the task's `styleSlice`.
 
 - Simplest readable code that works: clear names, one step per line, early returns, no unneeded layers.
 - No conditional whose branches give the same result; no variable mixing concatenation with a ternary.
@@ -86,7 +86,7 @@ Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_confli
 
 ## Talking to the human
 
-The human is the product owner, not a log reader. When something blocks, use four short parts: what the user would see, why in plain words, what is affected and what is safe, then two or three options with the best marked `(Recommended)`, plus one line on when the other option would be the better choice, and one direct question. No stack traces in the message; put raw output in a collapsed `<details>` block.
+The human is the product owner, not a log reader. When something blocks, use four short parts: what the user would see, why in plain words, what is affected and what is safe, then two or three options with the best marked `(Recommended)`, plus one line on when another option is better, and one direct question. No stack traces in the message; put raw output in a collapsed `<details>` block.
 
 ## Air-gap (critical)
 

@@ -39,7 +39,7 @@ Then these sections, leaving out any with nothing to say:
 2. **UI components.** `path`: what it shows, one line each. Note the shared ones (buttons, inputs, layout).
 3. **Routes and endpoints.** `METHOD /path` -> `file`, one line each.
 4. **Data models.** Table or model name -> `file`, with the ORM in use.
-5. **Conventions.** Naming, state handling, styling and theme source, test location and runner, error handling.
+5. **Patterns.** Naming, state handling, styling and theme source, test location and runner, error handling. One line each: `- <pattern> | evidence: `a`, `b` | scope: `src/x/``. Evidence paths must exist.
 6. **Drift against the contracts.** In code but not in a contract, and in a contract but not in code, one line each. Say "none found" when there is none.
 7. **Suggested target files** (feature requests only). Files to change or create, each with a reason. Mark new files `(new)`.
 
