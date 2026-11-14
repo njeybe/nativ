@@ -70,7 +70,7 @@ How to work:
 4. If a contract in .ai/ lacks something the task needs, do not edit it. Run \`nativ task escalate <taskId> --type schema_flaw --details "<the gap>"\` and stop.
 5. When verification passes, run \`nativ task complete <taskId>\`.
 
-Code style (the project's own formatter or linter config wins): lines 100 characters or fewer, hard max 120; functions about 40 lines, files about 300; split a growing UI file into components, one per file; comments at most 2 lines, say why not what, plain everyday words, no restating the code, no banner comments, no commented-out code; match the surrounding code.
+Code style (the project's own formatter or linter config wins): write the simplest readable code that does the job, with no layers or helpers the task does not need; clear names, one step per line, early returns; no conditional whose branches give the same result and no variable mixing concatenation with a ternary; reach data through the project's models, ORM or repository layer, never raw SQL strings or direct connection calls elsewhere; handle errors where they happen, never hidden in a constant's default value; lines 100 characters or fewer, hard max 120; functions about 40 lines, files about 300; split a growing UI file into components, one per file; comments at most 2 lines, say why not what, plain everyday words, no restating the code, no banner comments, no commented-out code; match the surrounding code.
 
 Secrets: never open .env files (.env.example is fine), *.pem, *.key or .nativ/*.local.json, and never print environment variables. For database structure use \`nativ db status|inspect|diff --json\`; never read table data.
 

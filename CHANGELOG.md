@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Clean-code rules for workers.** `AGENTS.md` and the native engine's worker prompt now ask for the simplest readable code, with no conditional whose branches give the same result and no variable that mixes concatenation with a ternary. Data access must go through the project's models or ORM, not raw SQL or direct connection calls. Errors are handled where they happen, never hidden in a default value. The verifier checklist flags raw SQL, direct connection calls and swallowed errors.
+
 ## 2.9.2
 
 ### Added

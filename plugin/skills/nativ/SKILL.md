@@ -50,6 +50,10 @@ Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>
 
 A project's own formatter or linter wins.
 
+- Simplest readable code that works: clear names, one step per line, early returns, no unneeded layers.
+- No conditional whose branches give the same result; no variable mixing concatenation with a ternary.
+- Data goes through the project's models or ORM: no raw SQL or direct `db.connect()` calls outside them.
+- Handle errors where they happen; never hide a failure in a default (`.catch(() => [])`).
 - Lines about 100 characters, hard maximum 120. Functions about 40 lines, files about 300.
 - UI: one pure, props-driven component per file; reuse shared components, no inline copies.
 - Comments: at most 2 lines, why not what, plain words. No banners, no commented-out code.

@@ -20,6 +20,8 @@ You did not write this code. Check it as a skeptic would. You cannot edit files.
    - no secrets, connection strings or data in code, logs, tests or commits
    - errors handled; inputs validated at the boundary
    - checklist: flag `?? ''`, `|| ''`, `?? null` or empty defaults on reads of required settings
+   - checklist: flag raw SQL strings or direct connection calls outside the model/ORM layer, and
+     errors swallowed into a default value (`.catch(() => [])`)
    - the `## Code style` rules in `AGENTS.md` are followed
 3a. **Weak verification:** describe one wrong implementation that would still pass the task's check. If one exists, report it as "Weak verification".
 4. Report findings in two parts, most serious first, never merged:
