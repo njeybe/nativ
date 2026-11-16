@@ -274,7 +274,7 @@ async function runConcurrencyScenario(concurrency: number = 6): Promise<Benchmar
     const completePromises = Array.from({ length: 20 }, async (_, i) => {
       const taskId = `bench-task-${String(i + 1).padStart(2, '0')}`;
       const t0 = Date.now();
-      await runTaskComplete(taskId, sandbox, { skipVerify: true });
+      await runTaskComplete(taskId, sandbox);
       lockWaitTimes.push(Date.now() - t0);
     });
     await Promise.all(completePromises);
