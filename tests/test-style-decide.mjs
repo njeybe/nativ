@@ -45,7 +45,8 @@ assert.deepEqual(validateCodeStyle({ version: 1, decisions: [{ rule: 'raw-sql', 
 // An existing file without decidedBy stays valid.
 const old = { version: 1, scannedAt: { commit: 'abc1234', date: '2026-11-14', files: 3 }, languages: ['js'],
   formatters: [], project: {}, folders: {}, patterns: [],
-  decisions: [{ rule: 'config-fallback', status: 'nativ', evidence: { count: 1, files: ['a.js'] }, decidedAt: '2026-11-14' }] };
+  decisions: [{ rule: 'config-fallback', status: 'nativ', evidence: { count: 1, files: ['a.js'] },
+    decidedAt: '2026-11-14' }] };
 assert.deepEqual(validateCodeStyle(old), []);
 
 // Command path with a local git name in an isolated repo.

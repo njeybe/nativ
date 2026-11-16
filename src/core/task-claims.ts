@@ -36,5 +36,6 @@ export function startRefusal(plan: MasterPlan, task: MasterPlanTask, agent: stri
 export function claimConflict(task: MasterPlanTask, agent: string | undefined, now = Date.now()): string | null {
   if (task.status !== 'in_progress' || !task.claimedBy || !agent || task.claimedBy === agent) return null;
   if (isStaleClaim(task, DEFAULT_STALE_HOURS, now)) return null;
-  return `Task [${task.id}] is already claimed by ${task.claimedBy} since ${task.claimedAt}. Pick another task with \`nativ task next\`.`;
+  return `Task [${task.id}] is already claimed by ${task.claimedBy} since ${task.claimedAt}. ` +
+    'Pick another task with `nativ task next`.';
 }

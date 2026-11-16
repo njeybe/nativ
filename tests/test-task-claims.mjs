@@ -148,7 +148,8 @@ try {
   // Test 8: complete and block refuse a fresh claim by another id; anonymous and stale pass
   {
     const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.5) };
-    const dir = project([task('t1', fresh), task('t2', fresh), task('t3', fresh), task('t4', { ...fresh, claimedAt: hoursAgo(5) })]);
+    const dir = project([task('t1', fresh), task('t2', fresh), task('t3', fresh),
+      task('t4', { ...fresh, claimedAt: hoursAgo(5) })]);
     const done = nativ(dir, ['task', 'complete', 't1', dir], 'agent-b');
     assert.equal(done.status, 1);
     assert.match(done.stderr, /already claimed by agent-a/);
@@ -167,7 +168,8 @@ try {
     const dir = project([task('t0')]);
     const planFile = path.join(dir, '.ai', 'master_plan.json');
     const rewrite = (patch) => {
-      const js = `const f=${JSON.stringify(planFile)};const fs=require('fs');const p=JSON.parse(fs.readFileSync(f,'utf8'));` +
+      const js = `const f=${JSON.stringify(planFile)};const fs=require('fs');` +
+        `const p=JSON.parse(fs.readFileSync(f,'utf8'));` +
         `Object.assign(p.milestones[0].tasks[0],${JSON.stringify(patch)});fs.writeFileSync(f,JSON.stringify(p))`;
       return `node -e ${JSON.stringify(js)}`;
     };
@@ -179,11 +181,16 @@ try {
     for (const [patch, message] of cases) {
       const cmd = rewrite(patch);
       fs.writeFileSync(planFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(planFile, 'utf8')),
-        milestones: [{ id: 'm1', name: 'One', status: 'in_progress', tasks: [task('t1', { status: 'in_progress', verificationCommand: cmd })] }] }));
+        milestones: [{ id: 'm1', name: 'One', status: 'in_progress',
+          tasks: [task('t1', { status: 'in_progress', verificationCommand: cmd })] }] }));
       const run = nativ(dir, ['task', 'complete', 't1', dir]);
       assert.equal(run.status, 1, run.stdout + run.stderr);
       assert.match(run.stderr, message);
       assert.doesNotMatch(run.stdout, /successfully marked/);
+      const tele = path.join(dir, '.ai', 'telemetry.json');
+      const tasks = fs.existsSync(tele) ? JSON.parse(fs.readFileSync(tele, 'utf8')).tasks ?? [] : [];
+      const recorded = tasks.some((t) => t.taskId === 't1' && t.status === 'completed');
+      assert.equal(recorded, false, 'an aborted completion records no telemetry');
       const after = get(dir, 't1');
       for (const [k, v] of Object.entries(patch)) assert.equal(after[k], v, 'the plan keeps what changed');
     }
@@ -204,7 +211,8 @@ try {
   {
     const next = (dir, agent) => JSON.parse(nativ(dir, ['task', 'next', dir, '--json'], agent).stdout).task?.id;
     const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.5) };
-    const dir = project([task('t1', fresh), task('t2', { status: 'in_progress', claimedBy: 'agent-b', claimedAt: hoursAgo(0.5) }), task('t3')]);
+    const dir = project([task('t1', fresh),
+      task('t2', { status: 'in_progress', claimedBy: 'agent-b', claimedAt: hoursAgo(0.5) }), task('t3')]);
     assert.equal(next(dir, 'agent-b'), 't2', 'own claim preferred');
     assert.equal(next(dir, 'agent-c'), 't3', 'fresh foreign claims skipped, pending returned');
     const stale = project([task('t1', { ...fresh, claimedAt: hoursAgo(5) }), task('t2')]);
@@ -220,7 +228,8 @@ try {
     dirs.push(emptyCfg);
     const human = (dir, args) => spawnSync(process.execPath, [CLI, ...args], {
       cwd: dir, encoding: 'utf8', timeout: 60_000,
-      env: { ...HEADLESS_ENV, NATIV_HEADLESS_OVERRIDE: '1', NATIV_AGENT_ID: '', GIT_CONFIG_GLOBAL: emptyCfg, GIT_CONFIG_NOSYSTEM: '1' },
+      env: { ...HEADLESS_ENV, NATIV_HEADLESS_OVERRIDE: '1', NATIV_AGENT_ID: '',
+        GIT_CONFIG_GLOBAL: emptyCfg, GIT_CONFIG_NOSYSTEM: '1' },
     });
     const repo = (tasks, name) => {
       const dir = project(tasks);
@@ -257,7 +266,8 @@ try {
 
     const old = project([task('t1')]);
     fs.mkdirSync(path.join(old, '.nativ'), { recursive: true });
-    fs.writeFileSync(path.join(old, '.nativ', 'unlocks.json'), JSON.stringify({ unlocks: [{ taskId: 't1', at: 'x' }] }));
+    fs.writeFileSync(path.join(old, '.nativ', 'unlocks.json'),
+      JSON.stringify({ unlocks: [{ taskId: 't1', at: 'x' }] }));
     assert.equal(nativ(old, ['task', 'start', 't1', old]).status, 0, 'a plan without overrides works');
     assert.equal(get(old, 't1').overrides, undefined);
 

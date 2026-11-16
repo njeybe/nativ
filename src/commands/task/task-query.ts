@@ -216,7 +216,8 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         }
       }
     }
-    if (fastPathCandidate?.task.status === 'in_progress' && (!agent || fastPathCandidate.task.claimedBy === agent)) break;
+    if (fastPathCandidate?.task.status === 'in_progress'
+      && (!agent || fastPathCandidate.task.claimedBy === agent)) break;
   }
 
   let activeMilestone: any;

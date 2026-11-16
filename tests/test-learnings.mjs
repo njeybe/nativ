@@ -254,7 +254,8 @@ try {
     fs.writeFileSync(learningsFile(legacy), JSON.stringify({ learnings: [
       { id: 'learn-01', status: 'proposed', insight: 'pre-upgrade', createdAt: '' },
     ] }));
-    assert.equal(decideLearning(legacy, 'learn-01', 'approved', undefined, undefined, 'Grace Hopper').decidedBy, 'Grace Hopper');
+    const decided = decideLearning(legacy, 'learn-01', 'approved', undefined, undefined, 'Grace Hopper');
+    assert.equal(decided.decidedBy, 'Grace Hopper');
     console.log('✔ A decision records who made it and a re-decision without a name clears it');
   }
 

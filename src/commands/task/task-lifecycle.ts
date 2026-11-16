@@ -419,7 +419,8 @@ function changedDuringVerification(
   }
   const now = task.claimedBy;
   if (now && now !== seen.claimedBy && now !== agent) {
-    return `Task [${task.id}] is already claimed by ${now} since ${task.claimedAt}. Pick another task with \`nativ task next\`.`;
+    return `Task [${task.id}] is already claimed by ${now} since ${task.claimedAt}. ` +
+      'Pick another task with `nativ task next`.';
   }
   return null;
 }
