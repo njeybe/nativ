@@ -4,6 +4,7 @@ import { resolveMainRoot } from '../core/root-resolver.js';
 import { confirm, refuseHeadless } from '../core/human-gate.js';
 import { assertFollowChoice, decideStyleRule, loadCodeStyle } from '../core/style/style-store.js';
 import { STYLE_RULES } from '../core/style/style-types.js';
+import { resolvePerson } from '../core/identity.js';
 
 function fail(message: string): void {
   console.error(pc.red(`✖ ${message}`));
@@ -46,13 +47,16 @@ export async function runStyleDecide(
     return;
   }
   printEvidence(rule, meta.title, current.status, current.evidence.count, current.evidence.files);
-  if (current.decidedAt) console.log(pc.dim(`    previous choice: ${current.status} (${current.decidedAt})`));
+  if (current.decidedAt) {
+    const who = current.decidedBy ? `, ${current.decidedBy}` : '';
+    console.log(pc.dim(`    previous choice: ${current.status} (${current.decidedAt}${who})`));
+  }
   if (!options.yes && !(await confirm(`\n  Follow ${follow} for ${rule}? [y/N] `))) {
     console.log(pc.dim('  Nothing changed.\n'));
     return;
   }
   try {
-    decideStyleRule(root, rule, follow);
+    decideStyleRule(root, rule, follow, resolvePerson(root));
   } catch (err: unknown) {
     fail(errorText(err));
     return;

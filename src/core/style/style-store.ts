@@ -44,6 +44,9 @@ function checkDecision(d: any, i: number, out: string[]): void {
   if (!Array.isArray(files) || files.some(unsafePath)) {
     out.push(`${at}: evidence files must be relative paths inside the project.`);
   }
+  if (d?.decidedBy !== undefined && typeof d.decidedBy !== 'string') {
+    out.push(`${at}: decidedBy must be a text value when present.`);
+  }
 }
 
 function checkPatterns(patterns: unknown, out: string[]): void {
@@ -133,8 +136,8 @@ export function assertFollowChoice(follow: string): asserts follow is 'nativ' | 
   throw new Error(`Choice must be "nativ" or "codebase", found "${follow}".`);
 }
 
-/** Settles one conflict rule under the store lock; throws on an unknown rule or missing decision. */
-export function decideStyleRule(root: string, rule: string, follow: string): CodeStyleFile {
+/** Settles one conflict rule under the store lock; `by` is the decider's name, dropped when absent. */
+export function decideStyleRule(root: string, rule: string, follow: string, by?: string): CodeStyleFile {
   if (!STYLE_RULES.some((r) => r.id === rule)) throw new Error(`Unknown rule "${rule}".`);
   assertFollowChoice(follow);
   const target = codeStylePath(root);
@@ -144,6 +147,8 @@ export function decideStyleRule(root: string, rule: string, follow: string): Cod
     if (!file || !found) throw new Error(`No decision recorded for rule "${rule}"; run nativ style scan.`);
     found.status = follow;
     found.decidedAt = new Date().toISOString().slice(0, 10);
+    if (by) found.decidedBy = by;
+    else delete found.decidedBy;
     writeJsonAtomicSync(target, file);
     return file;
   });

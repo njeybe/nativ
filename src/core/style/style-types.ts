@@ -36,6 +36,8 @@ export interface StyleDecision {
   status: DecisionStatus;
   evidence: { count: number; files: string[] };
   decidedAt: string | null;
+  /** The git user.name of the person who decided; absent when unknown. */
+  decidedBy?: string;
 }
 
 export interface StylePattern {
