@@ -426,7 +426,7 @@ nativ task reclaim [taskId] [targetDir] [--older-than <hours>] [--dry-run] [--js
 
 Puts `in_progress` tasks whose agent stopped (a crash or a closed session) back to `pending`. Without a task id it reclaims every claim older than `--older-than` hours (default 4). Tasks started before claims were recorded have no claim time; name them to reclaim them. A fresh claim is refused unless a person passes `--force`; that is human only, and it is recorded in the task's `overrides` list only when it actually overrode a fresh claim.
 
-A claim belongs to `NATIV_AGENT_ID` (or `--agent` on `task start`). `task complete` and `task block` read the id from `NATIV_AGENT_ID` only; they have no `--agent` flag. With an id set, `task next` returns your own in-progress task first and skips tasks freshly claimed by another id, and `task complete` and `task block` refuse a task freshly claimed by another id. A caller with no id is never refused, and a claim older than 4 hours is stale and never blocks. After verification, `task complete` checks the task again and changes nothing (exit code 1) if it was completed, blocked or claimed by another id meanwhile. Each parallel agent, and each extra session on the same checkout, needs its own `NATIV_AGENT_ID`. The main session and its workers are deliberately one actor: the main session starts a task and a worker completes it.
+A claim belongs to `NATIV_AGENT_ID` (or `--agent` on `task start`). `task complete` and `task block` read the id from `NATIV_AGENT_ID` only; they have no `--agent` flag. With an id set, `task next` returns your own in-progress task first and skips tasks freshly claimed by another id, and `task complete` and `task block` refuse a task freshly claimed by another id. A caller with no `NATIV_AGENT_ID` is never refused because of a claim, and a claim older than 4 hours is stale and never blocks. Separately, after verification `task complete` checks the task again. For any caller, with or without an id, it changes nothing and exits 1 if the task was completed, blocked or claimed by another id meanwhile. So completing an already-completed task now exits 1 instead of rewriting it. Each parallel agent, and each extra session on the same checkout, needs its own `NATIV_AGENT_ID`. The main session and its workers are deliberately one actor: the main session starts a task and a worker completes it.
 
 Human-only actions (`task complete --no-verify`, `task start --force`, `task reclaim --force`) record `{action, at, by}` in the task's `overrides` list. `by` is the person from `git config user.name`; with no git name it is left out and the action still runs. It is a record, not a permission, and the email is never stored. Task claims do not use the git name. The SessionStart orientation lists stale tasks. The previous agent may have left partial changes, so review the working tree before restarting.
 
@@ -564,6 +564,8 @@ nativ style decide <rule> [targetDir] --follow nativ|codebase [-y, --yes]
 - `show` prints the recorded rules; with `--files` it prints the short style slice for those files.
 - `decide` is *You only*: it refuses without a terminal and the permission rules deny it to agents. Where the codebase breaks a nativ rule (raw SQL outside the model layer, errors hidden in defaults, required settings with fallback values), you choose once per rule: follow nativ's rule or accept the codebase habit.
 
+`style decide` records who decided in `decidedBy`, taken from `git config user.name` and left out when it is unset. The next `style decide` on the same rule shows that previous choice and who made it.
+
 `.ai/code_style.json` records the languages found, detected formatters, measured traits per project and folder (indentation, quotes, naming, imports and similar, with their share), your rule decisions and architect-written patterns. It is written only by `scan`, `decide` and the architect.
 
 `nativ init` runs the scan by itself on an existing git codebase with 10 or more TypeScript, JavaScript or Python files. `nativ update` hints at it when no style file exists. `nativ task next` and worker prompts carry a short per-task style summary, and the `nativ://code-style` MCP resource is read-only. `status`, `doctor`, `validate` and the Studio report the style state and pending decisions. The gatekeeper's drift check follows `codeStyle.styleDrift`.
@@ -575,6 +577,8 @@ nativ style decide <rule> [targetDir] --follow nativ|codebase [-y, --yes]
 ### Learnings
 
 Lessons from earlier tasks that the contracts do not capture: a setup quirk, a library gotcha, a convention. Agents propose; only you approve. Stored in `.ai/learnings.json`.
+
+`learn approve` and `learn reject` record who decided in `decidedBy`, taken from `git config user.name`. The field is left out when that name is unset. `learn list` shows it.
 
 #### `nativ learn propose`
 
@@ -941,6 +945,7 @@ A deterministic firewall between agents and the contracts:
 | `.ai/escalation.json` | `task escalate`, triage | Escalations and how they were settled |
 | `.ai/code_style.json` | `nativ style scan`, `style decide`, architect | Learned style traits, formatters, rule decisions and patterns |
 | `.ai/learnings.json` | `nativ learn` | Proposed, approved and rejected lessons |
+| `.nativ/unlocks.json` | `nativ task unlock` | Unlocked tasks: task id, time, reason and, when a git name exists, who unlocked |
 | `.ai/telemetry.json` | nativ | Durations, costs, pass rates, role violations |
 | `.nativ/runs/transcripts/<runId>.jsonl` | Studio runs | One turn-by-turn record per agent run. See [`nativ runs`](#nativ-runs) |
 
