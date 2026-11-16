@@ -5,7 +5,8 @@ import { archivedTaskMessage, findArchivedMilestoneId } from './task-show.js';
 import { parseIsolation } from '../verify.js';
 import { resolveActiveProfileSettings } from '../../core/profiles.js';
 import { resolveMainRoot } from '../../core/root-resolver.js';
-import { MasterPlanTask } from '../../scanner/types.js';
+import { MasterPlanTask, TaskOverride, TaskOverrideAction } from '../../scanner/types.js';
+import { resolvePerson } from '../../core/identity.js';
 import { runTaskVerification, VerificationResult } from '../../core/verifier.js';
 import { evaluateSkip } from '../../core/verifier/skip-policy.js';
 import { digestFailure } from '../../core/verifier/output-digest.js';
@@ -61,7 +62,9 @@ export async function runTaskStart(taskId: string, targetDirArg?: string, option
       return;
     }
 
-    const refusal = options.force ? null : startRefusal(withArchivedAsDone(plan), foundTask, agent);
+    const wouldRefuse = startRefusal(withArchivedAsDone(plan), foundTask, agent);
+    const refusal = options.force ? null : wouldRefuse;
+    if (options.force && wouldRefuse) recordOverride(foundTask, 'start --force', targetDir);
     if (refusal) {
       ctx.abort();
       console.error(pc.red(`\n✖ ${refusal}\n`));
@@ -115,7 +118,7 @@ export async function runTaskUnlock(taskId: string, targetDirArg?: string, optio
     console.log(removed ? pc.green(`\n✔ Task [${taskId}] re-locked to its target files.\n`) : pc.dim(`\nTask [${taskId}] was not unlocked.\n`));
     return;
   }
-  addTaskUnlock(targetDir, taskId, options.reason?.trim() || undefined);
+  addTaskUnlock(targetDir, taskId, options.reason?.trim() || undefined, resolvePerson(targetDir));
   console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] unlocked: its agent may edit files outside targetFiles.`));
   console.log(pc.dim('  .ai/ contracts and secret files stay protected. Re-lock with `nativ task unlock ' + taskId + ' --revoke`.\n'));
 }
@@ -304,6 +307,7 @@ export async function runTaskComplete(
       return;
     }
 
+    if (options.skipVerify) recordOverride(taskToComplete, 'complete --no-verify', targetDir);
     taskToComplete.status = 'completed';
     delete taskToComplete.claimedBy;
     delete taskToComplete.claimedAt;
@@ -383,6 +387,13 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
     console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] marked as `) + pc.red('✖ blocked'));
     console.log(pc.dim(`  Reason: ${foundTask.notes}\n`));
   });
+}
+
+/** Appends a record of a human override to the task; call it inside the plan lock. */
+export function recordOverride(task: MasterPlanTask, action: TaskOverrideAction, root: string): void {
+  const by = resolvePerson(root);
+  const entry: TaskOverride = { action, at: new Date().toISOString(), ...(by ? { by } : {}) };
+  task.overrides = [...(task.overrides ?? []), entry];
 }
 
 /** Prints and flags a fresh claim held by another explicit id; true when the caller must stop. */

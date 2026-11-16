@@ -213,6 +213,62 @@ try {
     console.log('✔ Test 11: task next respects claims of other agents');
   }
 
+  // Test 12: overrides are recorded on the task and unlocks record who
+  {
+    const emptyCfg = path.join(os.tmpdir(), `nativ-claims-empty-${process.pid}.gitconfig`);
+    fs.writeFileSync(emptyCfg, '');
+    dirs.push(emptyCfg);
+    const human = (dir, args) => spawnSync(process.execPath, [CLI, ...args], {
+      cwd: dir, encoding: 'utf8', timeout: 60_000,
+      env: { ...HEADLESS_ENV, NATIV_HEADLESS_OVERRIDE: '1', NATIV_AGENT_ID: '', GIT_CONFIG_GLOBAL: emptyCfg, GIT_CONFIG_NOSYSTEM: '1' },
+    });
+    const repo = (tasks, name) => {
+      const dir = project(tasks);
+      spawnSync('git', ['init', '-q'], { cwd: dir });
+      if (name) spawnSync('git', ['config', 'user.name', name], { cwd: dir });
+      return dir;
+    };
+    const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.2) };
+    const dir = repo([task('s', { status: 'blocked', notes: 'x' }), task('c', fresh), task('r', fresh),
+      task('stale', { ...fresh, claimedAt: hoursAgo(6) }), task('d', fresh)], 'Ada Lovelace');
+    assert.equal(human(dir, ['task', 'start', 's', dir, '--force']).status, 0);
+    assert.equal(human(dir, ['task', 'complete', 'c', dir, '--no-verify']).status, 0);
+    assert.equal(human(dir, ['task', 'reclaim', 'd', dir, '--force', '--dry-run']).status, 0);
+    assert.equal(get(dir, 'd').overrides, undefined, 'a dry run records nothing');
+    assert.equal(human(dir, ['task', 'reclaim', 'r', dir, '--force']).status, 0);
+    assert.equal(human(dir, ['task', 'reclaim', 'stale', dir, '--force']).status, 0);
+    for (const [id, action] of [['s', 'start --force'], ['c', 'complete --no-verify'], ['r', 'reclaim --force']]) {
+      const [o] = get(dir, id).overrides;
+      assert.equal(o.action, action);
+      assert.equal(o.by, 'Ada Lovelace');
+      assert.ok(!Number.isNaN(Date.parse(o.at)));
+    }
+    assert.equal(get(dir, 'stale').overrides, undefined, 'a stale claim needed no force');
+
+    const anon = repo([task('c', fresh)]);
+    assert.equal(human(anon, ['task', 'complete', 'c', anon, '--no-verify']).status, 0);
+    const entry = get(anon, 'c').overrides[0];
+    assert.equal(entry.action, 'complete --no-verify');
+    assert.ok(!('by' in entry), 'no git name omits by');
+
+    assert.equal(human(dir, ['task', 'unlock', 'r', dir]).status, 0);
+    const unlocks = JSON.parse(fs.readFileSync(path.join(dir, '.nativ', 'unlocks.json'), 'utf8')).unlocks;
+    assert.equal(unlocks[0].by, 'Ada Lovelace');
+
+    const old = project([task('t1')]);
+    fs.mkdirSync(path.join(old, '.nativ'), { recursive: true });
+    fs.writeFileSync(path.join(old, '.nativ', 'unlocks.json'), JSON.stringify({ unlocks: [{ taskId: 't1', at: 'x' }] }));
+    assert.equal(nativ(old, ['task', 'start', 't1', old]).status, 0, 'a plan without overrides works');
+    assert.equal(get(old, 't1').overrides, undefined);
+
+    const { validateMasterPlanTask } = await import('../dist/scanner/types.js');
+    const base = task('v');
+    assert.deepEqual(validateMasterPlanTask({ ...base, overrides: [{ action: 'start --force', at: 'x' }] }), []);
+    assert.equal(validateMasterPlanTask({ ...base, overrides: 'no' }).length, 1);
+    assert.equal(validateMasterPlanTask({ ...base, overrides: [{ action: 'bogus', at: 'x' }] }).length, 1);
+    console.log('✔ Test 12: overrides and unlocks record what was bypassed and by whom');
+  }
+
   console.log('\n🎉 ALL TASK CLAIM TESTS PASSED!');
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });
