@@ -2,6 +2,7 @@ import path from 'node:path';
 import pc from 'picocolors';
 import { resolveMainRoot } from '../core/root-resolver.js';
 import { confirm, refuseHeadless } from '../core/human-gate.js';
+import { resolvePerson } from '../core/identity.js';
 import {
   LEARNING_STATUSES,
   proposeLearning,
@@ -45,6 +46,7 @@ function fullText(item: Learning): string[] {
     item.files?.length ? `files ${item.files.join(', ')}` : 'any file',
   ];
   lines.push(pc.dim(`    for ${scope.join('; ')}${item.proposedBy ? `; proposed by ${item.proposedBy}` : ''}`));
+  if (item.decidedBy) lines.push(pc.dim(`    decided by ${item.decidedBy}`));
   return lines;
 }
 
@@ -94,7 +96,7 @@ export async function runLearnDecide(
   }
   let result: Learning | string;
   try {
-    result = decideLearning(root, id, decision, options.note, lessonContent(current));
+    result = decideLearning(root, id, decision, options.note, lessonContent(current), resolvePerson(root));
   } catch (err: any) {
     fail(err.message);
     return;
