@@ -7,6 +7,7 @@ import { learningsForTask, type Learning } from '../../core/learnings.js';
 import { taskEscalationHistory } from '../../governor/index.js';
 import { buildStyleSlice } from '../../core/style/style-slice.js';
 import { archivedTaskIds } from '../../core/milestone-archive.js';
+import { claimConflict, resolveAgentId } from '../../core/task-claims.js';
 import type { MasterPlanTask } from '../../scanner/types.js';
 import { getPlanPath, getRoleGuide, getRecommendedContractSlice } from './task-common.js';
 
@@ -165,6 +166,13 @@ function toTaskLearning({ id, insight, details, files }: Learning) {
   return { id, insight, ...(details ? { details } : {}), ...(files ? { files } : {}) };
 }
 
+/** The caller's own in_progress task, else the first one no other agent holds fresh. */
+function pickInProgress(tasks: MasterPlanTask[], agent: string | undefined, now: number) {
+  const active = tasks.filter((t) => t.status === 'in_progress');
+  const own = agent ? active.find((t) => t.claimedBy === agent) : undefined;
+  return own || active.find((t) => !claimConflict(t, agent, now)) || null;
+}
+
 export async function runTaskNext(targetDirArg?: string, options: { json?: boolean } = {}) {
   const { planPath } = getPlanPath(targetDirArg);
   const plan = loadPlan(planPath);
@@ -173,6 +181,8 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
     return;
   }
 
+  const agent = resolveAgentId();
+  const now = Date.now();
   const completedTaskIds = new Set<string>(archivedTaskIds(plan));
   for (const m of plan.milestones) {
     for (const t of m.tasks) {
@@ -188,8 +198,13 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
     for (const t of m.tasks) {
       if (t.fastPath) {
         if (t.status === 'in_progress') {
-          fastPathCandidate = { task: t, milestone: m };
-          break;
+          if (claimConflict(t, agent, now)) continue;
+          const own = !!agent && t.claimedBy === agent;
+          if (own || fastPathCandidate?.task.status !== 'in_progress') {
+            fastPathCandidate = { task: t, milestone: m };
+          }
+          if (own) break;
+          continue;
         }
         if (t.status === 'pending') {
           const deps = t.dependencies || [];
@@ -201,7 +216,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
         }
       }
     }
-    if (fastPathCandidate && fastPathCandidate.task.status === 'in_progress') break;
+    if (fastPathCandidate?.task.status === 'in_progress' && (!agent || fastPathCandidate.task.claimedBy === agent)) break;
   }
 
   let activeMilestone: any;
@@ -233,7 +248,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
     }
 
     // 1. Look for in_progress task first
-    targetTask = activeMilestone.tasks.find((t: any) => t.status === 'in_progress') || null;
+    targetTask = pickInProgress(activeMilestone.tasks, agent, now);
 
     // 2. If none in progress, find first pending task whose dependencies are satisfied
     if (!targetTask) {

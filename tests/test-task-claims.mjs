@@ -200,6 +200,19 @@ try {
     console.log('✔ Test 10: anonymous start then complete still completes');
   }
 
+  // Test 11: task next prefers own claim, skips fresh foreign claims, ignores stale ones
+  {
+    const next = (dir, agent) => JSON.parse(nativ(dir, ['task', 'next', dir, '--json'], agent).stdout).task?.id;
+    const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.5) };
+    const dir = project([task('t1', fresh), task('t2', { status: 'in_progress', claimedBy: 'agent-b', claimedAt: hoursAgo(0.5) }), task('t3')]);
+    assert.equal(next(dir, 'agent-b'), 't2', 'own claim preferred');
+    assert.equal(next(dir, 'agent-c'), 't3', 'fresh foreign claims skipped, pending returned');
+    const stale = project([task('t1', { ...fresh, claimedAt: hoursAgo(5) }), task('t2')]);
+    assert.equal(next(stale, 'agent-b'), 't1', 'a stale claim is not skipped');
+    assert.equal(next(dir), 't1', 'no id gives the first in_progress task');
+    console.log('✔ Test 11: task next respects claims of other agents');
+  }
+
   console.log('\n🎉 ALL TASK CLAIM TESTS PASSED!');
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });
