@@ -44,7 +44,7 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 
 The project manager passes the task's `recommendedModel` as the `model` parameter of the worker call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
-Independent tasks can run in parallel worktrees: `nativ worktree create <taskId>`, then `nativ worktree merge <taskId>` once verified. Each parallel agent and each extra session on the same checkout needs its own `NATIV_AGENT_ID`. With an id set, nativ refuses and skips a task another agent holds.
+Independent tasks can run in parallel worktrees (`nativ worktree create|merge <taskId>`; merge once verified). Each parallel agent and extra session on one checkout needs its own `NATIV_AGENT_ID`.
 
 ## Code style
 
