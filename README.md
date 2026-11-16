@@ -284,7 +284,7 @@ Read the [CHANGELOG](CHANGELOG.md) before upgrading across a major version.
 
 #### `nativ validate`
 
-Check that every `.ai/` contract parses and has the expected shape, that role guides exist, and that each task's `specRefs` resolve.
+Check that every `.ai/` contract parses and has the expected shape, that role guides exist, and that each task's `specRefs` resolve. It exits with code 1 on duplicate task ids (archived milestones count) and on duplicate milestone ids, and names the id and where it appears.
 
 ```bash
 nativ validate [targetDir]
@@ -424,7 +424,11 @@ A summaries file maps each milestone id to its one-line summary, and the suite r
 nativ task reclaim [taskId] [targetDir] [--older-than <hours>] [--dry-run] [--json]
 ```
 
-Puts `in_progress` tasks whose agent stopped (a crash or a closed session) back to `pending`. Without a task id it reclaims every claim older than `--older-than` hours (default 4). Tasks started before claims were recorded have no claim time; name them to reclaim them. A fresh claim is refused unless a person passes `--force`. The SessionStart orientation lists stale tasks. The previous agent may have left partial changes, so review the working tree before restarting.
+Puts `in_progress` tasks whose agent stopped (a crash or a closed session) back to `pending`. Without a task id it reclaims every claim older than `--older-than` hours (default 4). Tasks started before claims were recorded have no claim time; name them to reclaim them. A fresh claim is refused unless a person passes `--force`; that is human only, and it is recorded in the task's `overrides` list only when it actually overrode a fresh claim.
+
+A claim belongs to `NATIV_AGENT_ID` (or `--agent` on `task start`). `task complete` and `task block` read the id from `NATIV_AGENT_ID` only; they have no `--agent` flag. With an id set, `task next` returns your own in-progress task first and skips tasks freshly claimed by another id, and `task complete` and `task block` refuse a task freshly claimed by another id. A caller with no id is never refused, and a claim older than 4 hours is stale and never blocks. After verification, `task complete` checks the task again and changes nothing (exit code 1) if it was completed, blocked or claimed by another id meanwhile. Each parallel agent, and each extra session on the same checkout, needs its own `NATIV_AGENT_ID`. The main session and its workers are deliberately one actor: the main session starts a task and a worker completes it.
+
+Human-only actions (`task complete --no-verify`, `task start --force`, `task reclaim --force`) record `{action, at, by}` in the task's `overrides` list. `by` is the person from `git config user.name`; with no git name it is left out and the action still runs. It is a record, not a permission, and the email is never stored. Task claims do not use the git name. The SessionStart orientation lists stale tasks. The previous agent may have left partial changes, so review the working tree before restarting.
 
 #### `nativ task complete`
 
@@ -688,6 +692,8 @@ nativ worktree merge <taskId> [-f] [--json]      # Safe Merge Gatekeeper; -f byp
 nativ worktree remove <taskId> [-f] [--json]     # alias: cleanup; discards the branch
 ```
 
+Agent branches (`agent/task-*`) are local. `worktree merge` merges into the branch you have checked out and deletes the agent branch; then push your own branch. nativ never pushes. Give each parallel agent its own `NATIV_AGENT_ID`.
+
 Parallel agents share your Claude usage limit; two or three at a time is a sensible default on a subscription.
 
 [Back to contents](#contents)
@@ -831,7 +837,8 @@ Written by `setup`; every key is optional.
 | Variable | Used for |
 | :--- | :--- |
 | `NATIV_ROLE` | Session role; `NATIV_ROLE=architect` lets a whole session write `.ai/` |
-| `NATIV_AGENT_ID` | Who claims a task on `task start`, so parallel agents never take the same task |
+| `NATIV_AGENT_ID` | Who claims a task, so parallel agents never take the same task. Each parallel agent and each extra session on one checkout needs its own |
+| `NATIV_HEADLESS_OVERRIDE` | Set to `1` or `true` to run human-only commands without an interactive terminal. `NATIV_CI_OVERRIDE` is an alias, also only `1` or `true` |
 | `NATIV_NOTIFY_WEBHOOK`, `NATIV_NOTIFY_COMMAND` | Override the `notify` webhook or command from `.nativ/config.json` |
 | `ANTHROPIC_API_KEY` | The Studio native runner only. Triage never uses it |
 | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | The `gemini` provider |
@@ -879,6 +886,14 @@ Studio's native runner runs headless, so the terminal-only commands refuse there
 ### Air-gap
 
 Credentials exist only in `.env*` files and inside the local nativ process. Agents use the masked, structure-only `nativ db` commands and never read row data. Migrations and destructive changes run only against local or staging databases, and any `[DROPPED]` or `[DESTRUCTIVE]` diff goes to you.
+
+### Human gate
+
+Human-only commands (`task complete --no-verify`, `task start --force`, `task unlock`, `task reclaim --force`, `learn approve` and `reject`, `style decide`, `db sync`) run only in an interactive terminal. `CI`, `GITHUB_ACTIONS` and `GITLAB_CI` do not open the gate. The one documented override is `NATIV_HEADLESS_OVERRIDE` set to `1` or `true`; `NATIV_CI_OVERRIDE` stays as an alias and accepts only `1` or `true`. The limit is honest: an agent with a shell could still set the override on purpose. The gate, the deny rules and the directive are layers, not a sandbox.
+
+These actions record who did them from `git config user.name`: a lesson's `decidedBy` (shown in `learn list`), a style decision's `decidedBy` (shown in the previous-choice line of `style decide`), and an unlock entry's `by` in `.nativ/unlocks.json`. The field is optional and the email is never stored.
+
+CI: with `.ai/` hidden (the default), CI cannot see the plan, so nativ adds no CI job. Your project's own test suite in CI is the trust anchor.
 
 ### Contract Governor
 
@@ -995,7 +1010,7 @@ A provider that hits a usage limit is remembered in `.nativ/provider-state.json`
 ## Concurrency and telemetry
 
 - **Locks.** `.ai/master_plan.json`, `.ai/telemetry.json`, `.ai/escalation.json` and `.ai/learnings.json` use OS-level advisory locks with atomic writes and retry backoff for Windows `EBUSY`/`EPERM`. Agents in separate terminals can start, complete and add tasks without lost updates. Long verification runs outside the lock.
-- **Telemetry.** `.ai/telemetry.json` records task durations, token and cost estimates, verification pass rates, circuit-breaker trips and the latest 200 enforcement violations (rule, mode, tool, path, task). File contents are never logged. View it with `nativ status --telemetry` or in Studio.
+- **Telemetry.** `.ai/telemetry.json` records task durations, token and cost estimates, verification pass rates, circuit-breaker trips (reported with the task's own role) and the latest 200 enforcement violations (rule, mode, tool, path, task). File contents are never logged. View it with `nativ status --telemetry` or in Studio.
 
 [Back to contents](#contents)
 
