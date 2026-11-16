@@ -32,10 +32,10 @@ const suites = [
   ...TSX_SUITES.map((name) => ({ name, cmd: 'npx', args: ['tsx', `tests/test-${name}.mjs`] })),
 ].filter((s) => !filter || s.name.includes(filter));
 
-// Only the explicit override opens human-only gates. Strip it and the CI variables so every suite sees the
-// plain headless agent it expects; suites that test the override set it themselves.
+// Strip the override, CI and host session variables so each suite sees a plain headless agent and no host project.
+// Suites that test the override or a project directory set those variables themselves.
 const env = { ...process.env };
-for (const key of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE']) {
+for (const key of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE', 'CLAUDE_PROJECT_DIR']) {
   delete env[key];
 }
 
