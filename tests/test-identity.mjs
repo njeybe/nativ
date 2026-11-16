@@ -35,7 +35,7 @@ function withIsolatedGit(fn) {
 
 try {
   const withName = makeRepo('named');
-  spawnSync('git', ['config', 'user.name', '​  Ada Lovelace\u0007  '], { cwd: withName });
+  spawnSync('git', ['config', 'user.name', String.fromCharCode(0x200b) + '  Ada Lovelace\u0007  '], { cwd: withName });
   withIsolatedGit(() => {
     assert.equal(resolvePerson(withName), 'Ada Lovelace');
   });

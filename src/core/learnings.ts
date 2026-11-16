@@ -125,7 +125,7 @@ function nextId(records: unknown[]): string {
 // Control characters, bidi overrides, zero-width marks and line/paragraph separators can make the
 // text a human approves read differently from what a worker receives.
 const HIDDEN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
-const HIDDEN_AND_NEWLINE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
+export const HIDDEN_AND_NEWLINE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
 
 function clean(text: string | undefined, max: number, keepNewlines = false): string | undefined {
   const t = text?.replace(keepNewlines ? HIDDEN : HIDDEN_AND_NEWLINE, keepNewlines ? '' : ' ').trim();

@@ -61,6 +61,15 @@ const q = (s) => JSON.stringify(s);
   assert.equal(hasHeadlessOverride(), false);
   process.env.NATIV_CI_OVERRIDE = 'true';
   assert.equal(hasHeadlessOverride(), true);
+  process.env.NATIV_CI_OVERRIDE = '1';
+  assert.equal(hasHeadlessOverride(), true);
+  process.env.NATIV_CI_OVERRIDE = '0';
+  assert.equal(hasHeadlessOverride(), false);
+  delete process.env.NATIV_CI_OVERRIDE;
+  process.env.NATIV_HEADLESS_OVERRIDE = '0';
+  assert.equal(hasHeadlessOverride(), false);
+  process.env.NATIV_HEADLESS_OVERRIDE = 'true';
+  assert.equal(hasHeadlessOverride(), true);
   for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
   Object.assign(process.env, saved);
 }
