@@ -32,8 +32,8 @@ const suites = [
   ...TSX_SUITES.map((name) => ({ name, cmd: 'npx', args: ['tsx', `tests/test-${name}.mjs`] })),
 ].filter((s) => !filter || s.name.includes(filter));
 
-// CI runners set CI=true, which nativ reads as permission for human-only overrides. Suites that test that set it
-// themselves; every other suite must see the plain headless agent it expects, on a laptop or in CI alike.
+// Only the explicit override opens human-only gates. Strip it and the CI variables so every suite sees the
+// plain headless agent it expects; suites that test the override set it themselves.
 const env = { ...process.env };
 for (const key of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE']) {
   delete env[key];

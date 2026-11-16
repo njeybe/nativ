@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadProfile, setProfile, resolveActiveProfileSettings, PROFILE_DEFAULTS } from '../dist/core/profiles.js';
 import { loadEnforcementMode } from '../dist/core/enforcement.js';
-import { refuseHeadless, isCiEnvironment } from '../dist/core/human-gate.js';
+import { refuseHeadless, hasHeadlessOverride } from '../dist/core/human-gate.js';
 import { TestIntegrityGuard } from '../dist/governor/test-integrity.js';
 
 console.log('--- Starting Adaptive Ceremony Profiles Tests ---');
@@ -44,18 +44,22 @@ assert.equal(soloSettings.governorMode, 'auto_adopt');
 assert.equal(loadEnforcementMode(dir), 'warn', 'solo mode uses advisory warn enforcement');
 
 // Test 5: CI Headless overrides
-// The verify sandbox ignores CI vars on purpose, so clear its flag for this check
+// CI=true no longer opens the gate; only the explicit override does
 const origCI = process.env.CI;
-const origSandbox = process.env.NATIV_VERIFY_SANDBOX;
+const origOverride = process.env.NATIV_HEADLESS_OVERRIDE;
 try {
-  delete process.env.NATIV_VERIFY_SANDBOX;
+  delete process.env.NATIV_HEADLESS_OVERRIDE;
+  delete process.env.NATIV_CI_OVERRIDE;
   process.env.CI = 'true';
-  assert.equal(isCiEnvironment(), true, 'detects CI=true');
-  assert.equal(refuseHeadless('nativ task complete --no-verify'), false, 'does not refuse headless in CI');
+  assert.equal(hasHeadlessOverride(), false, 'CI=true does not open the gate');
+  process.env.NATIV_HEADLESS_OVERRIDE = '1';
+  assert.equal(hasHeadlessOverride(), true, 'explicit override opens the gate');
+  assert.equal(refuseHeadless('nativ task complete --no-verify'), false, 'override skips the refusal');
 } finally {
   if (origCI !== undefined) process.env.CI = origCI;
   else delete process.env.CI;
-  if (origSandbox !== undefined) process.env.NATIV_VERIFY_SANDBOX = origSandbox;
+  if (origOverride !== undefined) process.env.NATIV_HEADLESS_OVERRIDE = origOverride;
+  else delete process.env.NATIV_HEADLESS_OVERRIDE;
 }
 
 {
