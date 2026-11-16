@@ -19,7 +19,7 @@ import { loadPlan, withPlanLock } from '../../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../../core/telemetry.js';
 import { addTaskUnlock, removeTaskUnlock } from '../../core/enforcement.js';
 import { refuseHeadless } from '../../core/human-gate.js';
-import { resolveAgentId, startRefusal } from '../../core/task-claims.js';
+import { claimConflict, resolveAgentId, startRefusal } from '../../core/task-claims.js';
 import {
   getPlanPath,
   TaskUnlockOptions,
@@ -166,6 +166,10 @@ export async function runTaskComplete(
     return;
   }
 
+  const agent = resolveAgentId();
+  if (refuseOnClaim(foundTask, agent)) return;
+  const seen = { status: foundTask.status, claimedBy: foundTask.claimedBy };
+
   // ── Test-Integrity Invariant ───────────────────────────────────────────────
   const integrity = TestIntegrityGuard.evaluate(targetDir, taskId);
   if (!integrity.approved) {
@@ -268,6 +272,7 @@ export async function runTaskComplete(
     console.log(pc.yellow(`\n⚠ Verification skipped via --no-verify for [${taskId}]`));
   }
 
+  let changed = false;
   await withPlanLock(planPath, (plan, ctx) => {
     let taskToComplete: MasterPlanTask | null = null;
     let milestoneToComplete: any = null;
@@ -285,6 +290,17 @@ export async function runTaskComplete(
       ctx.abort();
       console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
       process.exitCode = 1;
+      return;
+    }
+
+    const why = changedDuringVerification(taskToComplete, seen, agent);
+    if (why) {
+      ctx.abort();
+      console.error(pc.red(`
+✖ ${why}
+`));
+      process.exitCode = 1;
+      changed = true;
       return;
     }
 
@@ -312,6 +328,7 @@ export async function runTaskComplete(
       }
     }
   });
+  if (changed) return;
 
   CircuitBreaker.recordSuccess(targetDir, taskId);
   CircuitBreaker.clearBaseline(targetDir, taskId);
@@ -353,6 +370,11 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
       return;
     }
 
+    if (refuseOnClaim(foundTask, resolveAgentId())) {
+      ctx.abort();
+      return;
+    }
+
     foundTask.status = 'blocked';
     foundTask.notes = reason.trim();
     delete foundTask.claimedBy;
@@ -361,4 +383,32 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
     console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] marked as `) + pc.red('✖ blocked'));
     console.log(pc.dim(`  Reason: ${foundTask.notes}\n`));
   });
+}
+
+/** Prints and flags a fresh claim held by another explicit id; true when the caller must stop. */
+function refuseOnClaim(task: MasterPlanTask, agent: string | undefined): boolean {
+  const conflict = claimConflict(task, agent);
+  if (!conflict) return false;
+  console.error(pc.red(`
+✖ ${conflict}
+`));
+  process.exitCode = 1;
+  return true;
+}
+
+/** Why completion must not write: the task changed under us while verification ran. */
+function changedDuringVerification(
+  task: MasterPlanTask,
+  seen: { status: string; claimedBy?: string },
+  agent: string | undefined,
+): string | null {
+  if (task.status === 'completed') return `Task [${task.id}] is already completed; nothing to change.`;
+  if (task.status === 'blocked' && seen.status !== 'blocked') {
+    return `Task [${task.id}] was blocked while verification ran${task.notes ? ` (${task.notes})` : ''}.`;
+  }
+  const now = task.claimedBy;
+  if (now && now !== seen.claimedBy && now !== agent) {
+    return `Task [${task.id}] is already claimed by ${now} since ${task.claimedAt}. Pick another task with \`nativ task next\`.`;
+  }
+  return null;
 }

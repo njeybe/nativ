@@ -145,6 +145,61 @@ try {
     console.log('✔ Test 7: the session orientation lists stale tasks');
   }
 
+  // Test 8: complete and block refuse a fresh claim by another id; anonymous and stale pass
+  {
+    const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.5) };
+    const dir = project([task('t1', fresh), task('t2', fresh), task('t3', fresh), task('t4', { ...fresh, claimedAt: hoursAgo(5) })]);
+    const done = nativ(dir, ['task', 'complete', 't1', dir], 'agent-b');
+    assert.equal(done.status, 1);
+    assert.match(done.stderr, /already claimed by agent-a/);
+    const blocked = nativ(dir, ['task', 'block', 't1', dir, '--reason', 'x'], 'agent-b');
+    assert.equal(blocked.status, 1);
+    assert.match(blocked.stderr, /already claimed by agent-a/);
+    assert.equal(get(dir, 't1').status, 'in_progress', 'refusals change nothing');
+    assert.equal(nativ(dir, ['task', 'complete', 't2', dir]).status, 0, 'an anonymous caller passes');
+    assert.equal(nativ(dir, ['task', 'block', 't3', dir, '--reason', 'x']).status, 0);
+    assert.equal(nativ(dir, ['task', 'complete', 't4', dir], 'agent-b').status, 0, 'a stale claim passes');
+    console.log('✔ Test 8: complete and block respect fresh claims of other agents');
+  }
+
+  // Test 9: complete re-checks under the lock what changed while verification ran
+  {
+    const dir = project([task('t0')]);
+    const planFile = path.join(dir, '.ai', 'master_plan.json');
+    const rewrite = (patch) => {
+      const js = `const f=${JSON.stringify(planFile)};const fs=require('fs');const p=JSON.parse(fs.readFileSync(f,'utf8'));` +
+        `Object.assign(p.milestones[0].tasks[0],${JSON.stringify(patch)});fs.writeFileSync(f,JSON.stringify(p))`;
+      return `node -e ${JSON.stringify(js)}`;
+    };
+    const cases = [
+      [{ status: 'completed' }, /already completed/],
+      [{ status: 'blocked', notes: 'by a human' }, /blocked while verification ran/],
+      [{ claimedBy: 'agent-z', claimedAt: new Date().toISOString() }, /already claimed by agent-z/],
+    ];
+    for (const [patch, message] of cases) {
+      const cmd = rewrite(patch);
+      fs.writeFileSync(planFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(planFile, 'utf8')),
+        milestones: [{ id: 'm1', name: 'One', status: 'in_progress', tasks: [task('t1', { status: 'in_progress', verificationCommand: cmd })] }] }));
+      const run = nativ(dir, ['task', 'complete', 't1', dir]);
+      assert.equal(run.status, 1, run.stdout + run.stderr);
+      assert.match(run.stderr, message);
+      assert.doesNotMatch(run.stdout, /successfully marked/);
+      const after = get(dir, 't1');
+      for (const [k, v] of Object.entries(patch)) assert.equal(after[k], v, 'the plan keeps what changed');
+    }
+    console.log('✔ Test 9: complete changes nothing when the task changed during verification');
+  }
+
+  // Test 10: with no ids anywhere, start then complete works as before
+  {
+    const dir = project([task('t1', { verificationCommand: 'node -e "process.exit(0)"' })]);
+    assert.equal(nativ(dir, ['task', 'start', 't1', dir]).status, 0);
+    const run = nativ(dir, ['task', 'complete', 't1', dir]);
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(get(dir, 't1').status, 'completed');
+    console.log('✔ Test 10: anonymous start then complete still completes');
+  }
+
   console.log('\n🎉 ALL TASK CLAIM TESTS PASSED!');
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });

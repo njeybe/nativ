@@ -29,8 +29,12 @@ export function startRefusal(plan: MasterPlan, task: MasterPlanTask, agent: stri
   const done = new Set(plan.milestones.flatMap((m) => m.tasks).filter((t) => t.status === 'completed').map((t) => t.id));
   const waiting = (task.dependencies ?? []).filter((d) => !done.has(d));
   if (waiting.length) return `Task [${task.id}] waits on unfinished dependencies: ${waiting.join(', ')}.`;
-  if (task.status === 'in_progress' && task.claimedBy && agent && task.claimedBy !== agent && !isStaleClaim(task, DEFAULT_STALE_HOURS, now)) {
-    return `Task [${task.id}] is already claimed by ${task.claimedBy} since ${task.claimedAt}. Pick another task with \`nativ task next\`.`;
-  }
-  return null;
+  return claimConflict(task, agent, now);
+}
+
+/** Why `agent` may not act on a task another explicit id holds a fresh claim on, or null. */
+export function claimConflict(task: MasterPlanTask, agent: string | undefined, now = Date.now()): string | null {
+  if (task.status !== 'in_progress' || !task.claimedBy || !agent || task.claimedBy === agent) return null;
+  if (isStaleClaim(task, DEFAULT_STALE_HOURS, now)) return null;
+  return `Task [${task.id}] is already claimed by ${task.claimedBy} since ${task.claimedAt}. Pick another task with \`nativ task next\`.`;
 }
