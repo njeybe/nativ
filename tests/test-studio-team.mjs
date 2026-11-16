@@ -16,7 +16,7 @@ const timing = (id, endMinsAgo, durationMs, costUsd) => ({
 function api(tasks, breakdowns = []) {
   return {
     milestones: [{ id: 'm1', name: 'One', tasks }],
-    status: {}, telemetry: { taskBreakdowns: breakdowns }, runs: [], escalations: [], logTail: {},
+    status: { styleDecisions: [] }, telemetry: { taskBreakdowns: breakdowns }, runs: [], escalations: [], logTail: {},
   };
 }
 
@@ -130,7 +130,7 @@ assert.ok(!/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(html), 'no emojis');
 assert.ok(!/[\u2013\u2014]/.test(html), 'no en or em dashes');
 
 // Empty state
-const empty = renderPage('team', { milestones: [], status: {}, telemetry: {}, runs: [], escalations: [], logTail: {} });
+const empty = renderPage('team', { milestones: [], status: { styleDecisions: [] }, telemetry: {}, runs: [], escalations: [], logTail: {} });
 assert.ok(empty.includes('No agents have worked on this project yet.') && !empty.includes('<table'));
 
 console.log('✔ Team page render checks passed');

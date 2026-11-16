@@ -98,6 +98,17 @@ function createProjectFixture() {
             verificationCommand: '',
             notes: '',
           })),
+          {
+            id: 'task-06',
+            title: 'Frontend Task',
+            description: 'Escalations name the role',
+            assignedSubagent: 'frontend',
+            dependencies: [],
+            targetFiles: [],
+            status: 'in_progress',
+            verificationCommand: '',
+            notes: '',
+          },
         ],
       },
     ],
@@ -459,6 +470,15 @@ try {
   assert.equal(restore.proposedPatch.verificationProof.passed, true, 'every file to restore exists at the baseline');
   assert.deepEqual([...restore.proposedPatch.files].sort(), ['package.json', 'tests/a.test.mjs', 'tests/b.test.mjs']);
   console.log('✔ Deleted, weakened and skipped tests are refused, trip the breaker, and propose a verified restore.');
+
+  // Test 12: An escalation is filed under the tripped task's role, not a fixed one
+  console.log('12. Testing escalation role for a frontend task...');
+  for (let i = 0; i < 3; i++) await drop('task-06');
+  const esc12 = readJson('escalation.json').escalations.filter((e) => e.taskId === 'task-06');
+  assert.equal(esc12.length, 1, 'the frontend task escalates once on its trip');
+  assert.equal(esc12[0].taskId, 'task-06');
+  assert.equal(esc12[0].reportedBy, 'frontend', 'the escalation names the task role');
+  console.log('✔ A frontend task escalates as reportedBy frontend.');
 
   console.log('\n🎉 ALL CONTRACT GOVERNOR INVARIANT TESTS PASSED!');
 } finally {

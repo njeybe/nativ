@@ -83,6 +83,27 @@ export interface MasterPlanTask {
   /** Set by `task start` while in_progress: who claimed it (NATIV_AGENT_ID or --agent) and when. */
   claimedBy?: string;
   claimedAt?: string;
+  /** Human overrides that changed this task: what was bypassed, when, and by whom. */
+  overrides?: TaskOverride[];
+}
+
+export type TaskOverrideAction = 'start --force' | 'complete --no-verify' | 'reclaim --force';
+
+export const TASK_OVERRIDE_ACTIONS: readonly TaskOverrideAction[] = [
+  'start --force', 'complete --no-verify', 'reclaim --force',
+];
+
+export interface TaskOverride {
+  action: TaskOverrideAction;
+  at: string;
+  by?: string;
+}
+
+function isTaskOverride(v: unknown): boolean {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (TASK_OVERRIDE_ACTIONS as readonly unknown[]).includes(o.action) && typeof o.at === 'string' &&
+    (o.by === undefined || typeof o.by === 'string');
 }
 
 export type TaskComplexity = 'simple' | 'standard' | 'complex';
@@ -132,6 +153,9 @@ export function validateMasterPlanTask(task: unknown): string[] {
   }
   if (t.verificationKind !== undefined && !(TASK_VERIFICATION_KINDS as readonly unknown[]).includes(t.verificationKind)) {
     errors.push(`${label}: "verificationKind" must be one of ${TASK_VERIFICATION_KINDS.join(', ')}`);
+  }
+  if (t.overrides !== undefined && !(Array.isArray(t.overrides) && t.overrides.every(isTaskOverride))) {
+    errors.push(`${label}: "overrides" must be an array of { action, at, by? } entries`);
   }
   return errors;
 }

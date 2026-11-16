@@ -1,3 +1,4 @@
+import readline from 'node:readline/promises';
 import pc from 'picocolors';
 
 /**
@@ -9,23 +10,29 @@ export function isInteractive(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
-export function isCiEnvironment(): boolean {
-  // Inside a verification sandbox, CI vars are set by nativ and must not open gates
-  const sandbox = process.env.NATIV_VERIFY_SANDBOX === '1';
-  return Boolean(
-    (!sandbox &&
-      (process.env.CI === 'true' ||
-        process.env.GITHUB_ACTIONS === 'true' ||
-        process.env.GITLAB_CI === 'true')) ||
-    process.env.NATIV_CI_OVERRIDE ||
-    process.env.NATIV_HEADLESS_OVERRIDE === '1'
-  );
+function isOn(value: string | undefined): boolean {
+  return value === '1' || value === 'true';
 }
 
-/** Prints why and sets a failing exit code when there is no terminal, unless in CI or overridden. */
+/** Only the explicit override opens the gate; ambient CI variables do not. */
+export function hasHeadlessOverride(): boolean {
+  return isOn(process.env.NATIV_HEADLESS_OVERRIDE) || isOn(process.env.NATIV_CI_OVERRIDE);
+}
+
+/** Prints why and sets a failing exit code when there is no terminal, unless overridden. */
 export function refuseHeadless(command: string): boolean {
-  if (isInteractive() || isCiEnvironment()) return false;
+  if (isInteractive() || hasHeadlessOverride()) return false;
   console.error(pc.red(`✖ ${command} needs an interactive terminal; agents cannot run it.`));
   process.exitCode = 1;
   return true;
+}
+
+/** Asks a yes/no question in the terminal; only "y" or "yes" counts as yes. */
+export async function confirm(question: string): Promise<boolean> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
 }

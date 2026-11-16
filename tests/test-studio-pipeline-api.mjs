@@ -526,6 +526,7 @@ try {
       apiContractsExists: true,
       uiSpecsExists: true,
     });
+    assert.deepEqual(pipeline.styleDecisions, [], 'no style file means no style decisions');
     assert.deepEqual(pipeline.milestones, { total: 3, completed: 1, inProgress: 1, pending: 1 });
 
     const { progressPercentage, ...taskCounts } = pipeline.tasks;

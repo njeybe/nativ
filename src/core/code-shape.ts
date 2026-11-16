@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseJsonLoose } from './enforcement.js';
 import { resolveMainRoot } from './root-resolver.js';
 import { scanEnvReads } from './env-reads.js';
+import { checkStyleDrift } from './style/style-drift.js';
 
 /**
  * Code-shape check: flags over-long lines and long comment blocks in a task's target files.
@@ -16,24 +17,26 @@ export interface CodeShapeSettings {
   maxLineLength: number;
   maxCommentLines: number;
   configFallback: CodeShapeMode;
+  styleDrift: CodeShapeMode;
 }
 
 export interface CodeShapeIssue {
   file: string;
   line: number;
-  kind: 'long-line' | 'long-comment' | 'config-fallback';
-  category: 'style' | 'config';
+  kind: 'long-line' | 'long-comment' | 'config-fallback' | 'style-drift';
+  category: 'style' | 'config' | 'drift';
   message: string;
 }
 
 export interface CodeShapeReport {
   mode: CodeShapeMode;
   configMode: CodeShapeMode;
+  driftMode: CodeShapeMode;
   issues: CodeShapeIssue[];
 }
 
 const DEFAULTS: CodeShapeSettings = { mode: 'warn', maxLineLength: 120, maxCommentLines: 2,
-  configFallback: 'warn' };
+  configFallback: 'warn', styleDrift: 'warn' };
 const SOURCE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.java', '.kt', '.dart',
   '.c', '.cc', '.cpp', '.h', '.cs', '.rb', '.php', '.swift', '.vue', '.svelte', '.css', '.scss',
@@ -51,6 +54,7 @@ export function loadCodeShapeSettings(targetDir: string): CodeShapeSettings {
     if (['warn', 'block', 'off'].includes(style.configFallback)) {
       settings.configFallback = style.configFallback;
     }
+    if (['warn', 'block', 'off'].includes(style.styleDrift)) settings.styleDrift = style.styleDrift;
     if (Number.isInteger(style.maxLineLength) && style.maxLineLength > 0) {
       settings.maxLineLength = style.maxLineLength;
     }
@@ -134,13 +138,22 @@ export function checkConfigFallbacks(file: string, text: string): CodeShapeIssue
   }));
 }
 
+/** The mode that applies to one finding, chosen by its category. */
+export function modeForIssue(report: CodeShapeReport, issue: CodeShapeIssue): CodeShapeMode {
+  if (issue.category === 'config') return report.configMode;
+  if (issue.category === 'drift') return report.driftMode;
+  return report.mode;
+}
+
 export function checkCodeShape(targetDir: string, targetFiles: string[] = []): CodeShapeReport {
   const settings = loadCodeShapeSettings(targetDir);
   const report: CodeShapeReport = {
-    mode: settings.mode, configMode: settings.configFallback, issues: [],
+    mode: settings.mode, configMode: settings.configFallback, driftMode: settings.styleDrift,
+    issues: [],
   };
   const style = settings.mode !== 'off';
   const config = settings.configFallback !== 'off';
+  if (settings.styleDrift !== 'off') report.issues.push(...checkStyleDrift(targetDir, targetFiles));
   if (!style && !config) return report;
   for (const file of targetFiles) {
     if (!isCheckable(file)) continue;
@@ -167,6 +180,7 @@ function formatBlock(head: string, issues: CodeShapeIssue[]): string {
 export function formatCodeShapeReport(report: CodeShapeReport): string {
   const config = report.issues.filter((i) => i.category === 'config');
   const style = report.issues.filter((i) => i.category === 'style');
+  const drift = report.issues.filter((i) => i.category === 'drift');
   const blocks: string[] = [];
   if (config.length > 0) {
     blocks.push(formatBlock(report.configMode === 'block'
@@ -177,6 +191,11 @@ export function formatCodeShapeReport(report: CodeShapeReport): string {
     blocks.push(formatBlock(report.mode === 'block'
       ? `Code shape: ${style.length} issue(s) must be fixed before this task can pass.`
       : `Code shape: ${style.length} style warning(s). Verification is not affected.`, style));
+  }
+  if (drift.length > 0) {
+    blocks.push(formatBlock(report.driftMode === 'block'
+      ? `Style drift: ${drift.length} issue(s) must be fixed before this task can pass.`
+      : `Style drift: ${drift.length} drift warning(s). Verification is not affected.`, drift));
   }
   return blocks.join('\n');
 }

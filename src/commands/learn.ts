@@ -1,8 +1,8 @@
 import path from 'node:path';
-import readline from 'node:readline/promises';
 import pc from 'picocolors';
 import { resolveMainRoot } from '../core/root-resolver.js';
-import { refuseHeadless } from '../core/human-gate.js';
+import { confirm, refuseHeadless } from '../core/human-gate.js';
+import { resolvePerson } from '../core/identity.js';
 import {
   LEARNING_STATUSES,
   proposeLearning,
@@ -46,6 +46,7 @@ function fullText(item: Learning): string[] {
     item.files?.length ? `files ${item.files.join(', ')}` : 'any file',
   ];
   lines.push(pc.dim(`    for ${scope.join('; ')}${item.proposedBy ? `; proposed by ${item.proposedBy}` : ''}`));
+  if (item.decidedBy) lines.push(pc.dim(`    decided by ${item.decidedBy}`));
   return lines;
 }
 
@@ -73,15 +74,6 @@ export async function runLearnPropose(insight: string, targetDirArg?: string, op
   console.log(pc.dim(`  A human approves it in a terminal: nativ learn approve ${item.id}\n`));
 }
 
-async function confirm(question: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return /^y(es)?$/i.test((await rl.question(question)).trim());
-  } finally {
-    rl.close();
-  }
-}
-
 export async function runLearnDecide(
   id: string,
   decision: LearningDecision,
@@ -104,7 +96,7 @@ export async function runLearnDecide(
   }
   let result: Learning | string;
   try {
-    result = decideLearning(root, id, decision, options.note, lessonContent(current));
+    result = decideLearning(root, id, decision, options.note, lessonContent(current), resolvePerson(root));
   } catch (err: any) {
     fail(err.message);
     return;

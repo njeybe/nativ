@@ -2,6 +2,37 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import { resolveSpecSlices } from '../core/spec-slices.js';
+import { loadCodeStyle, codeStylePath } from '../core/style/style-store.js';
+
+// Task ids live in each milestone's tasks and in the archived stub list.
+function taskIdsOf(m: any): Array<[string, string]> {
+  const live = Array.isArray(m?.tasks) ? m.tasks.map((t: any) => t?.id) : [];
+  const stubs = Array.isArray(m?.archived?.taskIds) ? m.archived.taskIds : [];
+  return [...live, ...stubs].filter((id) => typeof id === 'string').map((id) => [id, String(m.id)]);
+}
+
+// Prints an error per id held by more than one entry; returns true if any.
+function reportDuplicates(kind: string, pairs: Array<[string, string]>): boolean {
+  const homes = new Map<string, string[]>();
+  for (const [id, where] of pairs) homes.set(id, [...(homes.get(id) ?? []), where]);
+  let found = false;
+  for (const [id, where] of homes) {
+    if (where.length < 2) continue;
+    found = true;
+    console.log(pc.red(`  ✖ Duplicate ${kind} id ${id} in ${where.join(', ')}`));
+  }
+  return found;
+}
+
+function checkDuplicateIds(milestones: any[]): boolean {
+  const taskPairs = milestones.flatMap((m) => taskIdsOf(m));
+  const milestonePairs = milestones.flatMap((m, i): Array<[string, string]> =>
+    typeof m?.id === 'string' ? [[m.id, `position ${i + 1}`]] : [],
+  );
+  const taskDup = reportDuplicates('task', taskPairs);
+  const milestoneDup = reportDuplicates('milestone', milestonePairs);
+  return taskDup || milestoneDup;
+}
 
 export async function runValidate(targetDirArg?: string) {
   const targetDir = path.resolve(targetDirArg || process.cwd());
@@ -88,6 +119,7 @@ export async function runValidate(targetDirArg?: string) {
   }
 
   if (plan && Array.isArray(plan.milestones)) {
+    if (checkDuplicateIds(plan.milestones)) hasErrors = true;
     for (const m of plan.milestones) {
       if (m?.archived && !checkArchive(m)) hasErrors = true;
     }
@@ -100,6 +132,13 @@ export async function runValidate(targetDirArg?: string) {
       console.log(pc.red('  ✖ .ai/escalation.json missing `escalations` array'));
       hasErrors = true;
     }
+  }
+
+  if (fs.existsSync(codeStylePath(targetDir))) {
+    const { problems } = loadCodeStyle(targetDir);
+    if (!problems.length) console.log(pc.green('  ✔ Valid code style: .ai/code_style.json'));
+    for (const p of problems) console.log(pc.red(`  ✖ .ai/code_style.json: ${p}`));
+    if (problems.length) hasErrors = true;
   }
 
   console.log(pc.bold('\n3. Sub-agent Profiles:'));

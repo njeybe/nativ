@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MasterPlan, MasterPlanTask, MasterPlanMilestone } from '../../scanner/types.js';
-import { checkCodeShape, formatCodeShapeReport } from '../code-shape.js';
+import { checkCodeShape, formatCodeShapeReport, modeForIssue } from '../code-shape.js';
 import { resolveActiveProfileSettings } from '../profiles.js';
 import { resolveMainRoot } from '../root-resolver.js';
 import {
@@ -43,8 +43,7 @@ export function applyCodeShape(
   result.codeShape = report;
   const summary = formatCodeShapeReport(report);
   if (summary) console.error(summary);
-  const blocking = report.issues.filter((i) =>
-    (i.category === 'config' ? report.configMode : report.mode) === 'block');
+  const blocking = report.issues.filter((i) => modeForIssue(report, i) === 'block');
   if (blocking.length > 0) {
     const names = [...new Set(blocking.filter((i) => i.category === 'config')
       .map((i) => i.message.split(' ')[0]))];

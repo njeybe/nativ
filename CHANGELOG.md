@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.10.0
+
+### Added
+
+- **Code style learning.** `nativ style scan` measures the style of the existing TypeScript, JavaScript and Python code and records it in `.ai/code_style.json`. `nativ style show` prints it (`--files` gives the slice for those files). `nativ style decide <rule> --follow nativ|codebase` settles, once per rule, where the codebase breaks a nativ rule; it is human only and denied to agents.
+- **Style reaches workers and checks.** `nativ init` scans an existing git codebase of 10 or more files by itself, and `nativ update` hints at it. `nativ task next` and worker prompts carry a short per-task style summary, and the `nativ://code-style` MCP resource is read-only. The new `codeStyle.styleDrift` setting (`off`, `warn` or `block`, default `warn`) flags new code that departs from the learned style. `status`, `doctor`, `validate` and the Studio show the style state.
+
+### Changed
+
+- **Human gate.** Human-only commands (`task complete --no-verify`, `task start --force`, `task unlock`, `task reclaim --force`, `learn approve`/`reject`, `style decide`, `db sync`) run only in an interactive terminal. `CI`, `GITHUB_ACTIONS` and `GITLAB_CI` no longer open the gate. The one documented override is `NATIV_HEADLESS_OVERRIDE=1` (or `true`); `NATIV_CI_OVERRIDE` stays as an alias and now accepts only `1` or `true`, not any non-empty value. If you ran human-only commands in CI, for example `db sync --yes`, set `NATIV_HEADLESS_OVERRIDE=1` in that job. An agent with a shell could still set the override on purpose: the gate, the deny rules and the directive are layers, not a sandbox.
+- **Claims.** A claim's identity is `NATIV_AGENT_ID` (or `--agent` on `task start`). With an id set, `task next` returns your own in-progress task first and skips tasks freshly claimed by another id, and `task complete` and `task block` refuse such a task. A caller with no `NATIV_AGENT_ID` is never refused because of a claim, and a claim older than 4 hours never blocks. Separately, `task complete` re-checks the task after verification. For any caller, with or without an id, it changes nothing and exits 1 if the task was completed, blocked or claimed by another id meanwhile, so completing an already-completed task now exits 1 instead of rewriting it. The directive now says each parallel agent and each extra session needs its own `NATIV_AGENT_ID`; run `nativ update` to pick it up.
+- **Who did it.** Human-only actions record the person from `git config user.name`: a lesson's and a style decision's `decidedBy`, an unlock entry's `by`, and a task's `overrides` list of `{action, at, by}` for `start --force`, `complete --no-verify` and `reclaim --force`. An override is recorded only when it overrode something. All fields are optional, it is a record and not a permission, and the email is never stored.
+- **`nativ validate`** fails (exit code 1) on duplicate task ids, archived milestones included, and on duplicate milestone ids.
+- Circuit-breaker escalations report the task's own role instead of always `backend`.
+- `nativ bench` runs headless without an override, because the concurrency scenario completes its tasks through real verification.
+- **Worktrees.** Agent branches (`agent/task-*`) are local. `nativ worktree merge` merges into your checked-out branch and deletes the agent branch; push your own branch. nativ never pushes. With `.ai/` hidden, CI cannot see the plan, so nativ adds no CI job.
+- **Clean-code rules for workers.** `AGENTS.md` and the native engine's worker prompt now ask for the simplest readable code, with no conditional whose branches give the same result and no variable that mixes concatenation with a ternary. Data access must go through the project's models or ORM, not raw SQL or direct connection calls. Errors are handled where they happen, never hidden in a default value. The verifier checklist flags raw SQL, direct connection calls and swallowed errors.
+
 ## 2.9.2
 
 ### Added

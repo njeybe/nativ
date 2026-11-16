@@ -20,7 +20,11 @@ You did not write this code. Check it as a skeptic would. You cannot edit files.
    - no secrets, connection strings or data in code, logs, tests or commits
    - errors handled; inputs validated at the boundary
    - checklist: flag `?? ''`, `|| ''`, `?? null` or empty defaults on reads of required settings
+   - checklist: flag raw SQL strings or direct connection calls outside the model/ORM layer, and
+     errors swallowed into a default value (`.catch(() => [])`)
    - the `## Code style` rules in `AGENTS.md` are followed
+   - run `nativ style show --files <targetFiles>`; review the diff against it under **Code style**.
+     A rule decided `codebase` suppresses the matching raw-SQL or swallowed-error item above
 3a. **Weak verification:** describe one wrong implementation that would still pass the task's check. If one exists, report it as "Weak verification".
 4. Report findings in two parts, most serious first, never merged:
    - **Contract and scope**: contract names, files outside `targetFiles`, weakened tests, secrets, validation, the checklist, weak verification and config findings.

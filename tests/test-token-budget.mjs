@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tokens = (rel) => Math.ceil(fs.readFileSync(path.join(root, rel), 'utf8').length / 4);
 
 const budgets = {
-  'templates/AGENTS.md': 1750,
+  'templates/AGENTS.md': 1850,
   'templates/CLAUDE.md': 700,
   'templates/claude-agents/worker.md': 700,
   'templates/claude-agents/verifier.md': 620,

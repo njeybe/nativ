@@ -12,6 +12,8 @@ import {
   cacheHitRate,
   loadTelemetry,
 } from '../../core/telemetry.js';
+import { loadCodeStyle } from '../../core/style/style-store.js';
+import { STYLE_RULES } from '../../core/style/style-types.js';
 import { HttpError } from '../http-utils.js';
 import { AI_DIR, findTask, parseTaskId, planMilestones, readPlan } from '../plan-utils.js';
 import { runCaptured, truncateOutput } from '../cli-runner.js';
@@ -60,6 +62,20 @@ export function packageVersion(): string {
 const archivedCount = (ms: Array<{ archived?: { taskCount: number } }>) =>
   ms.reduce((n, m) => n + (m.archived?.taskCount ?? 0), 0);
 
+/** Pending style decisions for the Decision queue; [] when the style file is missing or unreadable. */
+function styleDecisions(root: string) {
+  const { file } = loadCodeStyle(root);
+  return (file?.decisions ?? [])
+    .filter((d) => d.status === 'pending')
+    .map((d) => ({
+      rule: d.rule,
+      title: STYLE_RULES.find((r) => r.id === d.rule)!.title,
+      count: d.evidence.count,
+      files: d.evidence.files,
+      command: `nativ style decide ${d.rule} --follow nativ|codebase`,
+    }));
+}
+
 /** GET /api/pipeline/status: contract matrix, milestone/task burndown and telemetry KPIs. */
 export function handlePipelineStatus(root: string) {
   const aiDir = path.join(root, AI_DIR);
@@ -81,6 +97,7 @@ export function handlePipelineStatus(root: string) {
     pipeline: {
       version: packageVersion(),
       contracts,
+      styleDecisions: styleDecisions(root),
       milestones: {
         total: milestones.length,
         completed: count(milestones, 'completed'),

@@ -24,7 +24,8 @@ function calmApi() {
       { id: 'm2', name: 'Second milestone', tasks: [...done.slice(4), task('task-9', 'pending')] },
     ],
     telemetry: { taskBreakdowns: done.slice(1).map((t, i) => timing(t.id, 10 + i * 30)) },
-    runs: [], escalations: [], logTail: {},
+    runs: [],
+    status: { styleDecisions: [] }, escalations: [], logTail: {},
   };
 }
 
@@ -43,6 +44,7 @@ function busyApi() {
     }],
     telemetry: { taskBreakdowns: [timing('task-e', 5), { taskId: 'task-c', startedAt: iso(2) }] },
     runs: [],
+    status: { styleDecisions: [] },
     escalations: [
       { id: 'esc-1', taskId: 'task-a', status: 'pending_review', proposedPatch: { op: 'ADD' } },
       { id: 'esc-2', taskId: 'task-b', status: 'pending_review' },
@@ -151,7 +153,7 @@ test('recent activity: one row per task, titles and state words', () => {
 });
 
 test('empty plan and loading copy', () => {
-  const html = renderPage('home', { milestones: [], runs: [], escalations: [] });
+  const html = renderPage('home', { milestones: [], runs: [], escalations: [], status: { styleDecisions: [] } });
   assert.match(html, /No plan yet\. Ask the architect to design one\./);
   const ctx = createStudio();
   vm.runInContext(wrapPage(homePage.script), ctx);
@@ -185,6 +187,21 @@ test('decision items keep their task and reason hooks', () => {
   assert.match(q, /<span class="mono">task-a<\/span>/);
 });
 
+test('style decisions join the queue with a copy button and no approve', () => {
+  const api = busyApi();
+  api.status = { styleDecisions: [{ rule: 'raw-sql', title: 'Raw SQL', count: 2, files: [],
+    command: 'nativ style decide raw-sql --follow nativ|codebase' }] };
+  const q = sec(renderPage('home', api), 'decisions');
+  assert.match(q, /4 items/);
+  assert.match(q, /data-need="style:raw-sql"/);
+  assert.match(q, /data-cmd="nativ style decide raw-sql --follow "/);
+  assert.match(q, /nativ style decide raw-sql --follow nativ|codebase/);
+  assert.match(q, /data-act="home-copy-style"/);
+  assert.ok(q.includes('<b>Code style decision</b>'));
+  assert.ok(q.includes('Code style: Raw SQL, 2 files</span>'));
+  assert.doesNotMatch(q.slice(q.indexOf('style:raw-sql')), /home-(start|proposal|ask|dispatch)/);
+});
+
 test('now running lists only running tasks', () => {
   const r = sec(renderPage('home', busyApi()), 'running');
   assert.match(r, /1 running/);
@@ -198,7 +215,7 @@ test('up next caps rows and puts ready tasks first', () => {
   const u = sec(renderPage('home', busyApi()), 'next');
   assert.ok(u.indexOf('task-f') < u.indexOf('task-d'));
   assert.doesNotMatch(u, /data-task="task-c"|task-e/);
-  const none = sec(renderPage('home', { milestones: [{ id: 'm', name: 'M', tasks: [task('x', 'completed')] }] }), 'next');
+  const none = sec(renderPage('home', { milestones: [{ id: 'm', name: 'M', tasks: [task('x', 'completed')] }], status: { styleDecisions: [] } }), 'next');
   assert.match(none, /Nothing is waiting\./);
 });
 

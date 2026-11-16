@@ -11,7 +11,7 @@ The project manager agent repeats this until the milestone is done:
 3. A worker agent does the task inside its `targetFiles`.
 4. `nativ task complete <taskId>` runs the verification gatekeeper and completes the task only if it passes.
 
-Give each parallel agent its own `NATIV_AGENT_ID`. Another agent's `task start` on a task with a claim younger than 4 hours is refused, so two agents never do the same work.
+Give each parallel agent, and each extra session on the same checkout, its own `NATIV_AGENT_ID`. With an id set, another agent's `task start`, `task complete` or `task block` on a task with a claim younger than 4 hours is refused, and `task next` skips it, so two agents never do the same work. `task complete` and `task block` read the id from `NATIV_AGENT_ID` only. A caller with no `NATIV_AGENT_ID` is never refused because of a claim. Separately, `task complete` re-checks the task after verification. For any caller, with or without an id, it changes nothing and exits 1 if the task was completed, blocked or claimed by another id meanwhile. Reclaiming a fresh claim with `--force` is human only and runs in an interactive terminal; `CI` variables do not open that gate, only `NATIV_HEADLESS_OVERRIDE=1`.
 
 ## When something goes wrong
 

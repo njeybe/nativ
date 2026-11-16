@@ -43,6 +43,7 @@ export function buildDesiredConfig(invocation: CliInvocation): DesiredClaudeConf
         `Bash(${p} task unlock *)`,
         `Bash(${p} learn approve *)`,
         `Bash(${p} learn reject *)`,
+        `Bash(${p} style decide *)`,
         `Bash(${p} db sync *)`,
         `Bash(${p} task complete * --no-verify)`,
         `Bash(${p} task complete * --no-verify *)`,

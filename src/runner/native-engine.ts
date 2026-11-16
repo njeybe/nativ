@@ -3,6 +3,7 @@ import type { MasterPlanTask } from '../scanner/types.js';
 import { resolveSpecSlices } from '../core/spec-slices.js';
 import { taskEscalationHistory } from '../governor/index.js';
 import { learningsForTask } from '../core/learnings.js';
+import { taskStyleLines } from './cli-config.js';
 import {
   DEFAULT_NATIVE_EFFORT,
   NATIVE_MAX_OUTPUT_TOKENS,
@@ -70,7 +71,7 @@ How to work:
 4. If a contract in .ai/ lacks something the task needs, do not edit it. Run \`nativ task escalate <taskId> --type schema_flaw --details "<the gap>"\` and stop.
 5. When verification passes, run \`nativ task complete <taskId>\`.
 
-Code style (the project's own formatter or linter config wins): lines 100 characters or fewer, hard max 120; functions about 40 lines, files about 300; split a growing UI file into components, one per file; comments at most 2 lines, say why not what, plain everyday words, no restating the code, no banner comments, no commented-out code; match the surrounding code.
+Code style (the project's own formatter or linter config wins): write the simplest readable code that does the job, with no layers or helpers the task does not need; clear names, one step per line, early returns; no conditional whose branches give the same result and no variable mixing concatenation with a ternary; reach data through the project's models, ORM or repository layer, never raw SQL strings or direct connection calls elsewhere; handle errors where they happen, never hidden in a constant's default value; lines 100 characters or fewer, hard max 120; functions about 40 lines, files about 300; split a growing UI file into components, one per file; comments at most 2 lines, say why not what, plain everyday words, no restating the code, no banner comments, no commented-out code; match the surrounding code.
 
 Secrets: never open .env files (.env.example is fine), *.pem, *.key or .nativ/*.local.json, and never print environment variables. For database structure use \`nativ db status|inspect|diff --json\`; never read table data.
 
@@ -112,6 +113,14 @@ export function buildLearningsBlock(task: MasterPlanTask, rootDir: string | unde
   return `<learnings>\n${body}\n</learnings>\n${note}`;
 }
 
+export function buildStyleSliceBlock(task: MasterPlanTask, rootDir: string | undefined): string {
+  const lines = taskStyleLines(task, rootDir);
+  if (!lines.length) return '';
+  const body = lines.map((l) => untag(l, 'style_slice')).join('\n');
+  const note = 'Follow these unless the formatter or the task contract says otherwise.';
+  return `<style_slice>\n${body}\n</style_slice>\n${note}`;
+}
+
 /** Keeps stored text from closing the block it sits in and passing as instructions. */
 export function untag(text: string, tag: string): string {
   // Repeat until nothing changes: a tag split around another one would otherwise rebuild itself.
@@ -142,6 +151,7 @@ export function buildNativeTaskPrompt(task: MasterPlanTask, roleGuide: string | 
     buildSpecSlicesBlock(task, rootDir),
     buildPriorEscalationsBlock(task, rootDir),
     buildLearningsBlock(task, rootDir),
+    buildStyleSliceBlock(task, rootDir),
     'Load only the contract slice your role needs (.ai/api_contracts.json, .ai/db_schema.json, .ai/ui_specs.md, .ai/context.md) with the editor view command.',
     useWorktree
       ? 'You are in an isolated git worktree on the agent branch. After `nativ task complete` succeeds, commit the target files there (`git add <targetFiles> && git commit -m "<type>(<scope>): <summary>"`) so the operator can merge the branch.'

@@ -84,6 +84,43 @@ try {
     console.log('✔ Test 5: check commands may not set gate-override names');
   }
 
+  // Test 6: duplicate task and milestone ids fail; a clean plan does not
+  {
+    const dupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-validate-dup-'));
+    try {
+      fs.writeFileSync(path.join(dupDir, 'package.json'), '{"name":"demo","version":"1.0.0"}', 'utf8');
+      await quietInit(dupDir);
+      const task = (id) => ({ id, title: 'T', description: 'T', status: 'pending', dependencies: [], targetFiles: [] });
+      const writePlan = (milestones) => {
+        fs.writeFileSync(path.join(dupDir, '.ai', 'master_plan.json'), JSON.stringify({ milestones }), 'utf8');
+      };
+      const archived = { id: 'm2', tasks: [{ id: 'task-2' }] };
+      fs.mkdirSync(path.join(dupDir, '.ai', 'archive'), { recursive: true });
+      fs.writeFileSync(path.join(dupDir, '.ai', 'archive', 'm2.json'), JSON.stringify(archived), 'utf8');
+
+      writePlan([
+        { id: 'm1', tasks: [task('task-1'), task('task-2')] },
+        { id: 'm2', tasks: [], archived: { taskIds: ['task-2'] } },
+      ]);
+      const taskDup = validate(dupDir);
+      assert.equal(taskDup.code, 1, `a task id in live and archived milestones fails:\n${taskDup.out}`);
+      assert.match(taskDup.out, /Duplicate task id task-2 in m1, m2/);
+
+      writePlan([{ id: 'm1', tasks: [] }, { id: 'm1', tasks: [] }]);
+      const milestoneDup = validate(dupDir);
+      assert.equal(milestoneDup.code, 1, `a duplicate milestone id fails:\n${milestoneDup.out}`);
+      assert.match(milestoneDup.out, /Duplicate milestone id m1 in position 1, position 2/);
+
+      writePlan([{ id: 'm1', tasks: [task('task-1')] }, { id: 'm2', tasks: [], archived: { taskIds: ['task-2'] } }]);
+      const clean = validate(dupDir);
+      assert.equal(clean.code, 0, `a plan without duplicates passes:\n${clean.out}`);
+      assert.doesNotMatch(clean.out, /Duplicate/);
+      console.log('✔ Test 6: duplicate task and milestone ids fail, clean plans pass');
+    } finally {
+      fs.rmSync(dupDir, { recursive: true, force: true });
+    }
+  }
+
   console.log('\n🎉 ALL nativ validate TESTS PASSED!');
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });

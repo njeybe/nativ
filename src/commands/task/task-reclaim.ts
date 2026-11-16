@@ -4,6 +4,7 @@ import { withPlanLock } from '../../core/lock-manager.js';
 import { refuseHeadless } from '../../core/human-gate.js';
 import { DEFAULT_STALE_HOURS, claimAgeHours } from '../../core/task-claims.js';
 import { getPlanPath } from './task-common.js';
+import { recordOverride } from './task-lifecycle.js';
 
 export interface TaskReclaimOptions {
   /** Claims at least this many hours old are abandoned (default 4). */
@@ -45,7 +46,7 @@ export async function runTaskReclaim(taskId?: string, targetDirArg?: string, opt
     targetDirArg = taskId;
     taskId = undefined;
   }
-  const { planPath } = getPlanPath(targetDirArg);
+  const { planPath, targetDir } = getPlanPath(targetDirArg);
   const result: TaskReclaimResult = { reclaimed: [], unknownAge: [] };
   let error = null as string | null;
   let planRead = false as boolean;
@@ -71,6 +72,7 @@ export async function runTaskReclaim(taskId?: string, targetDirArg?: string, opt
       }
       result.reclaimed.push({ id: t.id, ...(t.claimedBy ? { claimedBy: t.claimedBy } : {}), ageHours: round(age) });
       if (options.dryRun) continue;
+      if (options.force && !stale && !(taskId && age === null)) recordOverride(t, 'reclaim --force', targetDir);
       t.status = 'pending';
       delete t.claimedBy;
       delete t.claimedAt;

@@ -102,6 +102,7 @@ interface UnlockEntry {
   taskId: string;
   at: string;
   reason?: string;
+  by?: string;
 }
 
 interface UnlockFile {
@@ -139,10 +140,11 @@ export function isTaskUnlocked(root: string, taskId: string): boolean {
 }
 
 /** Lifts scope enforcement for one task until it is revoked or the task stops being in progress. */
-export function addTaskUnlock(root: string, taskId: string, reason?: string): void {
-  mutateUnlocks(root, (unlocks) =>
-    unlocks.some((u) => u.taskId === taskId) ? null : [...unlocks, { taskId, at: new Date().toISOString(), ...(reason ? { reason } : {}) }],
-  );
+export function addTaskUnlock(root: string, taskId: string, reason?: string, by?: string): void {
+  const entry: UnlockEntry = {
+    taskId, at: new Date().toISOString(), ...(reason ? { reason } : {}), ...(by ? { by } : {}),
+  };
+  mutateUnlocks(root, (unlocks) => (unlocks.some((u) => u.taskId === taskId) ? null : [...unlocks, entry]));
 }
 
 export function removeTaskUnlock(root: string, taskId: string): boolean {

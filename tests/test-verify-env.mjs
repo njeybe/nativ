@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { executeVerification } from '../dist/core/verifier/executor.js';
 import { buildVerifyEnv } from '../dist/core/verifier/verify-env.js';
-import { isCiEnvironment } from '../dist/core/human-gate.js';
+import { hasHeadlessOverride } from '../dist/core/human-gate.js';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-venv-'));
 const q = (s) => JSON.stringify(s);
@@ -39,7 +39,7 @@ const q = (s) => JSON.stringify(s);
   assert.equal(env.UNLISTED_VAR, undefined);
 }
 
-// isCiEnvironment under the sandbox marker
+// hasHeadlessOverride under the sandbox marker
 {
   const saved = { ...process.env };
   const keys = [
@@ -48,14 +48,28 @@ const q = (s) => JSON.stringify(s);
   ];
   for (const k of keys) delete process.env[k];
   process.env.CI = 'true';
-  assert.equal(isCiEnvironment(), true);
+  assert.equal(hasHeadlessOverride(), false);
   process.env.NATIV_VERIFY_SANDBOX = '1';
-  assert.equal(isCiEnvironment(), false);
+  assert.equal(hasHeadlessOverride(), false);
   process.env.GITHUB_ACTIONS = 'true';
   process.env.GITLAB_CI = 'true';
-  assert.equal(isCiEnvironment(), false);
+  assert.equal(hasHeadlessOverride(), false);
   process.env.NATIV_HEADLESS_OVERRIDE = '1';
-  assert.equal(isCiEnvironment(), true);
+  assert.equal(hasHeadlessOverride(), true);
+  delete process.env.NATIV_HEADLESS_OVERRIDE;
+  process.env.NATIV_CI_OVERRIDE = 'false';
+  assert.equal(hasHeadlessOverride(), false);
+  process.env.NATIV_CI_OVERRIDE = 'true';
+  assert.equal(hasHeadlessOverride(), true);
+  process.env.NATIV_CI_OVERRIDE = '1';
+  assert.equal(hasHeadlessOverride(), true);
+  process.env.NATIV_CI_OVERRIDE = '0';
+  assert.equal(hasHeadlessOverride(), false);
+  delete process.env.NATIV_CI_OVERRIDE;
+  process.env.NATIV_HEADLESS_OVERRIDE = '0';
+  assert.equal(hasHeadlessOverride(), false);
+  process.env.NATIV_HEADLESS_OVERRIDE = 'true';
+  assert.equal(hasHeadlessOverride(), true);
   for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
   Object.assign(process.env, saved);
 }

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { MasterPlanTask } from '../scanner/types.js';
+import { buildStyleSlice } from '../core/style/style-slice.js';
 import {
   buildDesiredConfig,
   cliString,
@@ -95,12 +96,25 @@ export function writeRunnerSettings(runsDir: string, taskId: string, settings: R
   return file;
 }
 
+/** The task's code style lines, empty without a root or a contract. Shared by both engines' prompts. */
+export function taskStyleLines(task: MasterPlanTask, rootDir: string | undefined): string[] {
+  if (!rootDir) return [];
+  return buildStyleSlice(rootDir, task).text.split('\n').filter(Boolean);
+}
+
+function buildRunnerStyleSentence(task: MasterPlanTask, rootDir: string | undefined): string {
+  const lines = taskStyleLines(task, rootDir);
+  if (!lines.length) return '';
+  return `Code style for this task: ${lines.join('; ')}.`;
+}
+
 /** The instructions text handed to the agent on its standard input. */
-export function buildRunnerPrompt(task: MasterPlanTask): string {
+export function buildRunnerPrompt(task: MasterPlanTask, rootDir?: string): string {
   return [
     `Execute task ${task.id} (${task.title}).`,
     task.description ? `Description: ${task.description}.` : '',
     task.verificationCommand ? `Verify your work using: ${task.verificationCommand}.` : '',
+    buildRunnerStyleSentence(task, rootDir),
     `Start by running: nativ task start ${task.id}. When finished and verified, run: nativ task complete ${task.id}.`,
     `If blocked, follow "Talking to the human" in AGENTS.md: explain the user experience symptom, root cause in plain English, and clear options without technical jargon.`,
   ]

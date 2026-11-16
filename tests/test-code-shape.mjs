@@ -126,4 +126,40 @@ assert.equal(batch.failed, 1);
 assert.match(batch.tasks[0].result.error, /SVC_A/);
 console.log('ok configFallback block fails with variable name');
 
+// Style drift: own git fixture with a recorded style contract.
+function driftDir(config) {
+  const d = fixture(config);
+  const g = (...a) => spawnSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: d });
+  g('init', '-q');
+  g('config', 'user.email', 't@t.t');
+  g('config', 'user.name', 't');
+  g('add', '-A');
+  g('commit', '-qm', 'init');
+  const e = (value) => ({ value, share: 0.9, samples: 10 });
+  const js = { indent: e('2'), quotes: e('single'), semicolons: e('always'),
+    fileNaming: e('kebab'), moduleSystem: e('esm'), functionNaming: e('mixed') };
+  const style = { version: 1, project: { js }, folders: {}, decisions: [], patterns: [] };
+  fs.writeFileSync(path.join(d, '.ai', 'code_style.json'), JSON.stringify(style));
+  fs.writeFileSync(path.join(d, 'goodName.ts'), 'const a = "1";\nconst b = "2";\nconst c = "3";\n');
+  const plan = JSON.parse(fs.readFileSync(path.join(d, '.ai', 'master_plan.json'), 'utf8'));
+  plan.milestones[0].tasks[0].targetFiles = ['goodName.ts'];
+  fs.writeFileSync(path.join(d, '.ai', 'master_plan.json'), JSON.stringify(plan));
+  return d;
+}
+dir = driftDir();
+report = checkCodeShape(dir, ['goodName.ts']);
+assert.equal(report.driftMode, 'warn');
+assert.ok(report.issues.length > 0 && report.issues.every((i) => i.category === 'drift'));
+assert.match(formatCodeShapeReport(report), /^Style drift: \d+ drift warning/);
+assert.equal((await verifyBatch(dir, { taskId: 't1' })).passed, 1);
+dir = driftDir({ codeStyle: { styleDrift: 'off' } });
+assert.equal(checkCodeShape(dir, ['goodName.ts']).issues.length, 0);
+dir = driftDir({ codeStyle: { styleDrift: 'block' } });
+assert.match(formatCodeShapeReport(checkCodeShape(dir, ['goodName.ts'])), /must be fixed/);
+batch = await verifyBatch(dir, { taskId: 't1' });
+assert.equal(batch.failed, 1);
+dir = driftDir({ codeStyle: { styleDrift: 'block', mode: 'warn' } });
+assert.equal(checkCodeShape(dir, ['a.ts']).issues.every((i) => i.category === 'style'), true);
+console.log('ok style drift modes');
+
 console.log('--- Code Shape Check Tests Passed ---');

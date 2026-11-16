@@ -119,7 +119,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     });
   }
 
-  function needsYouItems(tasks, byId, escalations) {
+  function needsYouItems(tasks, byId, escalations, styleDecisions) {
     var seen = {}, items = [];
     var add = function (t) {
       seen[t.id] = true;
@@ -132,6 +132,10 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       var t = pending && byId[e.taskId];
       // A completed task answered its own question; a left-over pending record is not a request for you.
       if (t && t.status !== 'completed' && !seen[e.taskId]) add(t);
+    });
+    styleDecisions.forEach(function (d) {
+      items.push({ kind: 'style', key: 'style:' + d.rule, rule: d.rule, title: d.title,
+        count: d.count, command: d.command });
     });
     return items;
   }
@@ -183,6 +187,8 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       return open;
     });
     if (!active && milestones.length) active = milestones[milestones.length - 1].id;
+    // Until the pipeline status has loaded there are no style decisions to list
+    var styleDecisions = api.status ? api.status.styleDecisions : [];
     return {
       milestones: milestones,
       tasks: tasks,
@@ -190,7 +196,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       activeMilestoneId: active,
       running: tasks.filter(function (t) { return t.status === 'in_progress' && !t.stale; }),
       stuck: tasks.filter(function (t) { return t.status === 'blocked'; }),
-      needsYou: needsYouItems(tasks, byId, api.escalations),
+      needsYou: needsYouItems(tasks, byId, api.escalations, styleDecisions),
       summary: summaryOf(api, milestones, tasks)
     };
   }

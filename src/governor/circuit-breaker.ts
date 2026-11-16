@@ -6,7 +6,7 @@ import {
   EscalationDiagnosticBundle,
   RuleEvaluationResult,
 } from './types.js';
-import { EscalationRecord, EscalationType } from '../scanner/types.js';
+import { EscalationRecord, EscalationType, isSubagentType, SubagentType } from '../scanner/types.js';
 import { withPlanLockSync } from '../core/lock-manager.js';
 import { recordCircuitBreakerTrip } from '../core/telemetry.js';
 import { notifyHuman } from '../core/notify.js';
@@ -112,6 +112,26 @@ function buildProposal(factory?: ProposalFactory): SelfHealingProposal | null {
 function describeProposal(proposal: SelfHealingProposal): string {
   const verified = proposal.verificationProof.passed ? 'verified in an isolated sandbox' : 'NOT verified';
   return `Review self-healing proposal ${proposal.proposalId} (${proposal.strategy}, ${verified}): ${proposal.rationale}`;
+}
+
+/** Reads the task's assigned role from the plan without writing the plan back. */
+function readAssignedRole(targetDir: string, taskId: string): string | undefined {
+  const planPath = path.join(targetDir, '.ai', 'master_plan.json');
+  try {
+    return withPlanLockSync(planPath, (plan, ctx) => {
+      ctx.abort();
+      const task = plan.milestones.flatMap((m) => m.tasks).find((t) => t.id === taskId);
+      return task?.assignedSubagent;
+    }) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The role an escalation is filed under: the task's assigned subagent, else backend. */
+function reporterRole(targetDir: string, taskId: string): SubagentType {
+  const role = readAssignedRole(targetDir, taskId);
+  return role && isSubagentType(role) ? role : 'backend'; // nativ-allow-fallback
 }
 
 /** Escalation writes are advisory: a failure to record one must not mask the verdict itself. */
@@ -248,11 +268,12 @@ export class CircuitBreaker {
       ? describeProposal(proposal)
       : `Review ${context.affected.join(', ')} and decide whether the change is intended; if so, have the architect update the task and unblock ${taskId}.`;
 
+    const role = reporterRole(targetDir, taskId);
     const escalationId = fileEscalation(targetDir, (id) => ({
       id,
       taskId,
       type: context.escalationType,
-      reportedBy: 'backend',
+      reportedBy: role,
       timestamp: new Date().toISOString(),
       summary: `Circuit Breaker Tripped (${state.consecutiveFailures}/${MAX_FAILURE_THRESHOLD}): ${ruleResult.ruleId}`,
       details: `${context.intent}: ${ruleResult.message}`,
@@ -313,12 +334,13 @@ export class CircuitBreaker {
     if (proposal) recommendedActions.unshift(describeProposal(proposal));
 
     // 1. Write to .ai/escalation.json (the id is assigned under the file lock)
+    const role = reporterRole(targetDir, taskId);
     const escalationId =
       fileEscalation(targetDir, (id) => ({
         id,
         taskId,
         type: patch.target === 'db_schema' ? 'schema_flaw' : 'contract_drift',
-        reportedBy: 'backend',
+        reportedBy: role,
         timestamp: new Date().toISOString(),
         summary: `Circuit Breaker Tripped (${failures}/${MAX_FAILURE_THRESHOLD}): ${ruleResult.ruleId} on ${patch.path}`,
         details: `Autonomous agent failed ${failures} times attempting ${patch.operation} on ${patch.path}: ${ruleResult.message}`,

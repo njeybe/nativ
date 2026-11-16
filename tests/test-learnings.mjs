@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
@@ -240,6 +240,56 @@ try {
     run = await asHuman(() => runLearnDecide('learn-02', 'rejected', dir, { yes: true }));
     assert.equal(loadLearnings(dir).learnings[1].status, 'rejected');
     console.log('✔ CLI: decisions need a terminal and show the full lesson; list filters; task next carries lessons');
+  }
+
+  // Decisions record the decider; a re-decision without a name drops the old one.
+  {
+    const { dir } = fixture();
+    const a = proposeLearning(dir, { insight: 'Name the decider' });
+    assert.equal(decideLearning(dir, a.id, 'approved', undefined, undefined, 'Ada Lovelace').decidedBy, 'Ada Lovelace');
+    assert.equal(decideLearning(dir, a.id, 'rejected').decidedBy, undefined, 'no name, no field');
+    assert.equal('decidedBy' in loadLearnings(dir).learnings[0], false, 'the stale name is gone');
+    assert.equal(proposeLearning(dir, { insight: 'Old record' }).decidedBy, undefined);
+    const legacy = fixture().dir;
+    fs.writeFileSync(learningsFile(legacy), JSON.stringify({ learnings: [
+      { id: 'learn-01', status: 'proposed', insight: 'pre-upgrade', createdAt: '' },
+    ] }));
+    const decided = decideLearning(legacy, 'learn-01', 'approved', undefined, undefined, 'Grace Hopper');
+    assert.equal(decided.decidedBy, 'Grace Hopper');
+    console.log('✔ A decision records who made it and a re-decision without a name clears it');
+  }
+
+  // Through the command: the git user.name is recorded and shown; no name still decides.
+  {
+    const { dir } = fixture();
+    const cfg = path.join(dir, 'empty.gitconfig');
+    fs.writeFileSync(cfg, '');
+    spawnSync('git', ['init', '-q'], { cwd: dir });
+    spawnSync('git', ['config', 'user.name', 'Grace Hopper'], { cwd: dir });
+    const saved = { g: process.env.GIT_CONFIG_GLOBAL, s: process.env.GIT_CONFIG_NOSYSTEM };
+    process.env.GIT_CONFIG_GLOBAL = cfg;
+    process.env.GIT_CONFIG_NOSYSTEM = '1';
+    try {
+      proposeLearning(dir, { insight: 'Record the decider' });
+      const run = await asHuman(() => runLearnDecide('learn-01', 'approved', dir, { yes: true }));
+      assert.equal(run.exitCode, undefined, run.text);
+      assert.equal(loadLearnings(dir).learnings[0].decidedBy, 'Grace Hopper');
+      const shown = await asHuman(() => runLearnList(dir, {}));
+      assert.match(shown.text, /decided by Grace Hopper/);
+
+      spawnSync('git', ['config', '--unset', 'user.name'], { cwd: dir });
+      proposeLearning(dir, { insight: 'No name here' });
+      const nameless = await asHuman(() => runLearnDecide('learn-02', 'rejected', dir, { yes: true }));
+      assert.equal(nameless.exitCode, undefined, nameless.text);
+      assert.equal(loadLearnings(dir).learnings[1].status, 'rejected');
+      assert.equal(loadLearnings(dir).learnings[1].decidedBy, undefined, 'the field is omitted without a name');
+    } finally {
+      for (const [key, val] of [['GIT_CONFIG_GLOBAL', saved.g], ['GIT_CONFIG_NOSYSTEM', saved.s]]) {
+        if (val === undefined) delete process.env[key];
+        else process.env[key] = val;
+      }
+    }
+    console.log('✔ The command records the git name, shows it, and decides without one');
   }
 
   // Human-only commands refuse to run headless, however they are spelled.

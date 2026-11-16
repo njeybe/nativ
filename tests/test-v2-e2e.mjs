@@ -31,12 +31,20 @@ if (/\s/.test(CLI)) {
 }
 const COMMAND = `node ${CLI}`;
 
-// Every provider is switched off: NATIV_PROVIDER_CHILD disables the Claude login, and no keys are set.
-const env = { ...process.env, NATIV_PROVIDER_CHILD: '1', GEMINI_API_KEY: '', GOOGLE_API_KEY: '', ANTHROPIC_API_KEY: '' };
-delete env.NATIV_ROLE;
-
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nativ-v2-e2e-'));
 fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'e2e-demo', version: '1.0.0' }), 'utf8');
+
+// Every provider is switched off: NATIV_PROVIDER_CHILD disables the Claude login, and no keys are set.
+// CLAUDE_PROJECT_DIR is the temp project, as Claude Code sets it when it runs a project's hooks.
+const env = {
+  ...process.env,
+  NATIV_PROVIDER_CHILD: '1',
+  GEMINI_API_KEY: '',
+  GOOGLE_API_KEY: '',
+  ANTHROPIC_API_KEY: '',
+  CLAUDE_PROJECT_DIR: root,
+};
+delete env.NATIV_ROLE;
 
 const nativ = (...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: root, encoding: 'utf8', env, timeout: 120_000 });
 const readJson = (rel) => JSON.parse(fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8'));

@@ -9,6 +9,7 @@ export const MCP_RESOURCES = [
   { name: 'db-schema', uris: ['nativ://db-schema'], file: 'db_schema.json', mimeType: 'application/json', description: 'Database schema contract (.ai/db_schema.json)' },
   { name: 'api-contracts', uris: ['nativ://api-contracts'], file: 'api_contracts.json', mimeType: 'application/json', description: 'API route and schema contracts (.ai/api_contracts.json)' },
   { name: 'escalation', uris: ['nativ://escalation'], file: 'escalation.json', mimeType: 'application/json', description: 'Tier-1 escalation records (.ai/escalation.json)' },
+  { name: 'code-style', uris: ['nativ://code-style'], file: 'code_style.json', mimeType: 'application/json', description: 'Code style contract, read only (.ai/code_style.json)' },
   { name: 'telemetry', uris: ['nativ://telemetry'], file: 'telemetry.json', mimeType: 'application/json', description: 'Execution duration, token usage and cost telemetry (.ai/telemetry.json)' },
 ] as const;
 
@@ -26,6 +27,9 @@ export function registerMcpResources(server: McpServer, targetDir: string): void
             text = fs.readFileSync(filePath, 'utf8');
           } else if (res.name === 'escalation') {
             text = JSON.stringify({ escalations: [] }, null, 2);
+          } else if (res.name === 'code-style') {
+            const hint = 'No .ai/code_style.json yet. Run nativ style scan in a terminal.';
+            text = JSON.stringify({ version: 1, missing: true, hint }, null, 2);
           } else if (res.name === 'telemetry') {
             text = JSON.stringify(
               {

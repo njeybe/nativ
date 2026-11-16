@@ -58,6 +58,22 @@ async function runTests() {
       console.log('✔ Test 4: End-to-end multi-agent lifecycle scenario passed with 100% score');
     }
 
+    // 4b. Concurrency scenario completes through real verification, headless-free
+    {
+      const keys = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE'];
+      const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+      keys.forEach((k) => delete process.env[k]);
+      try {
+        const report = await runBenchmarks({ scenario: 'concurrency' });
+        assert.equal(report.summary.passedScenarios, 1);
+        assert.equal(report.summary.score, 100);
+        assert.equal(report.scenarios[0].id, 'concurrency');
+      } finally {
+        for (const k of keys) if (saved[k] !== undefined) process.env[k] = saved[k];
+      }
+      console.log('✔ Test 4b: Concurrency scenario passed with 100% score without skipVerify');
+    }
+
     // 5. Test CLI execution with --json
     {
       const { stdout } = await execFileAsync(process.execPath, [cliPath, 'bench', '--scenario', 'telemetry', '--json']);

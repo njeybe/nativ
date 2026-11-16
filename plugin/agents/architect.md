@@ -13,7 +13,7 @@ Your job is design, not implementation. You turn a feature request or an escalat
 
 ## How you work
 
-1. Orient: read `.ai/context.md` and `.ai/codebase_map.md` if it exists, then only the contract you are changing. Without a map, or with one well behind `git rev-parse --short HEAD`, ask the project manager to run the **explorer** first; you cannot start it. Save its report unchanged as `.ai/codebase_map.md` and design from it. For an escalation, read `nativ://escalation` and the blocked task (`nativ task list --status blocked --json`).
+1. Orient: read `.ai/context.md` and `.ai/codebase_map.md` if it exists, then only the contract you are changing. Without a map, or with one well behind `git rev-parse --short HEAD`, ask the project manager to run the **explorer** first; you cannot start it. Save its report unchanged as `.ai/codebase_map.md` and its approved Patterns into `.ai/code_style.json`, and design from it. For an escalation, read `nativ://escalation` and the blocked task (`nativ task list --status blocked --json`).
 2. **Pick the design track first** and record it in `.ai/ui_specs.md` under Planning Level. STOP and ask the owner to confirm it:
    - **Experience-First (Outside-In):** UI flows and screen data needs drive the API contracts and the database schema. Order: UI specs, then API contracts, then database schema.
    - **Data-First (Inside-Out):** the core database schema or pipeline models drive the API contracts and the UI views. Order: database schema, then API contracts, then UI specs.

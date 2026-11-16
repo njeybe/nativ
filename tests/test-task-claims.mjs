@@ -145,6 +145,140 @@ try {
     console.log('✔ Test 7: the session orientation lists stale tasks');
   }
 
+  // Test 8: complete and block refuse a fresh claim by another id; anonymous and stale pass
+  {
+    const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.5) };
+    const dir = project([task('t1', fresh), task('t2', fresh), task('t3', fresh),
+      task('t4', { ...fresh, claimedAt: hoursAgo(5) })]);
+    const done = nativ(dir, ['task', 'complete', 't1', dir], 'agent-b');
+    assert.equal(done.status, 1);
+    assert.match(done.stderr, /already claimed by agent-a/);
+    const blocked = nativ(dir, ['task', 'block', 't1', dir, '--reason', 'x'], 'agent-b');
+    assert.equal(blocked.status, 1);
+    assert.match(blocked.stderr, /already claimed by agent-a/);
+    assert.equal(get(dir, 't1').status, 'in_progress', 'refusals change nothing');
+    assert.equal(nativ(dir, ['task', 'complete', 't2', dir]).status, 0, 'an anonymous caller passes');
+    assert.equal(nativ(dir, ['task', 'block', 't3', dir, '--reason', 'x']).status, 0);
+    assert.equal(nativ(dir, ['task', 'complete', 't4', dir], 'agent-b').status, 0, 'a stale claim passes');
+    console.log('✔ Test 8: complete and block respect fresh claims of other agents');
+  }
+
+  // Test 9: complete re-checks under the lock what changed while verification ran
+  {
+    const dir = project([task('t0')]);
+    const planFile = path.join(dir, '.ai', 'master_plan.json');
+    const rewrite = (patch) => {
+      const js = `const f=${JSON.stringify(planFile)};const fs=require('fs');` +
+        `const p=JSON.parse(fs.readFileSync(f,'utf8'));` +
+        `Object.assign(p.milestones[0].tasks[0],${JSON.stringify(patch)});fs.writeFileSync(f,JSON.stringify(p))`;
+      return `node -e ${JSON.stringify(js)}`;
+    };
+    const cases = [
+      [{ status: 'completed' }, /already completed/],
+      [{ status: 'blocked', notes: 'by a human' }, /blocked while verification ran/],
+      [{ claimedBy: 'agent-z', claimedAt: new Date().toISOString() }, /already claimed by agent-z/],
+    ];
+    for (const [patch, message] of cases) {
+      const cmd = rewrite(patch);
+      fs.writeFileSync(planFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(planFile, 'utf8')),
+        milestones: [{ id: 'm1', name: 'One', status: 'in_progress',
+          tasks: [task('t1', { status: 'in_progress', verificationCommand: cmd })] }] }));
+      const run = nativ(dir, ['task', 'complete', 't1', dir]);
+      assert.equal(run.status, 1, run.stdout + run.stderr);
+      assert.match(run.stderr, message);
+      assert.doesNotMatch(run.stdout, /successfully marked/);
+      const tele = path.join(dir, '.ai', 'telemetry.json');
+      const tasks = fs.existsSync(tele) ? JSON.parse(fs.readFileSync(tele, 'utf8')).tasks ?? [] : [];
+      const recorded = tasks.some((t) => t.taskId === 't1' && t.status === 'completed');
+      assert.equal(recorded, false, 'an aborted completion records no telemetry');
+      const after = get(dir, 't1');
+      for (const [k, v] of Object.entries(patch)) assert.equal(after[k], v, 'the plan keeps what changed');
+    }
+    console.log('✔ Test 9: complete changes nothing when the task changed during verification');
+  }
+
+  // Test 10: with no ids anywhere, start then complete works as before
+  {
+    const dir = project([task('t1', { verificationCommand: 'node -e "process.exit(0)"' })]);
+    assert.equal(nativ(dir, ['task', 'start', 't1', dir]).status, 0);
+    const run = nativ(dir, ['task', 'complete', 't1', dir]);
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(get(dir, 't1').status, 'completed');
+    console.log('✔ Test 10: anonymous start then complete still completes');
+  }
+
+  // Test 11: task next prefers own claim, skips fresh foreign claims, ignores stale ones
+  {
+    const next = (dir, agent) => JSON.parse(nativ(dir, ['task', 'next', dir, '--json'], agent).stdout).task?.id;
+    const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.5) };
+    const dir = project([task('t1', fresh),
+      task('t2', { status: 'in_progress', claimedBy: 'agent-b', claimedAt: hoursAgo(0.5) }), task('t3')]);
+    assert.equal(next(dir, 'agent-b'), 't2', 'own claim preferred');
+    assert.equal(next(dir, 'agent-c'), 't3', 'fresh foreign claims skipped, pending returned');
+    const stale = project([task('t1', { ...fresh, claimedAt: hoursAgo(5) }), task('t2')]);
+    assert.equal(next(stale, 'agent-b'), 't1', 'a stale claim is not skipped');
+    assert.equal(next(dir), 't1', 'no id gives the first in_progress task');
+    console.log('✔ Test 11: task next respects claims of other agents');
+  }
+
+  // Test 12: overrides are recorded on the task and unlocks record who
+  {
+    const emptyCfg = path.join(os.tmpdir(), `nativ-claims-empty-${process.pid}.gitconfig`);
+    fs.writeFileSync(emptyCfg, '');
+    dirs.push(emptyCfg);
+    const human = (dir, args) => spawnSync(process.execPath, [CLI, ...args], {
+      cwd: dir, encoding: 'utf8', timeout: 60_000,
+      env: { ...HEADLESS_ENV, NATIV_HEADLESS_OVERRIDE: '1', NATIV_AGENT_ID: '',
+        GIT_CONFIG_GLOBAL: emptyCfg, GIT_CONFIG_NOSYSTEM: '1' },
+    });
+    const repo = (tasks, name) => {
+      const dir = project(tasks);
+      spawnSync('git', ['init', '-q'], { cwd: dir });
+      if (name) spawnSync('git', ['config', 'user.name', name], { cwd: dir });
+      return dir;
+    };
+    const fresh = { status: 'in_progress', claimedBy: 'agent-a', claimedAt: hoursAgo(0.2) };
+    const dir = repo([task('s', { status: 'blocked', notes: 'x' }), task('c', fresh), task('r', fresh),
+      task('stale', { ...fresh, claimedAt: hoursAgo(6) }), task('d', fresh)], 'Ada Lovelace');
+    assert.equal(human(dir, ['task', 'start', 's', dir, '--force']).status, 0);
+    assert.equal(human(dir, ['task', 'complete', 'c', dir, '--no-verify']).status, 0);
+    assert.equal(human(dir, ['task', 'reclaim', 'd', dir, '--force', '--dry-run']).status, 0);
+    assert.equal(get(dir, 'd').overrides, undefined, 'a dry run records nothing');
+    assert.equal(human(dir, ['task', 'reclaim', 'r', dir, '--force']).status, 0);
+    assert.equal(human(dir, ['task', 'reclaim', 'stale', dir, '--force']).status, 0);
+    for (const [id, action] of [['s', 'start --force'], ['c', 'complete --no-verify'], ['r', 'reclaim --force']]) {
+      const [o] = get(dir, id).overrides;
+      assert.equal(o.action, action);
+      assert.equal(o.by, 'Ada Lovelace');
+      assert.ok(!Number.isNaN(Date.parse(o.at)));
+    }
+    assert.equal(get(dir, 'stale').overrides, undefined, 'a stale claim needed no force');
+
+    const anon = repo([task('c', fresh)]);
+    assert.equal(human(anon, ['task', 'complete', 'c', anon, '--no-verify']).status, 0);
+    const entry = get(anon, 'c').overrides[0];
+    assert.equal(entry.action, 'complete --no-verify');
+    assert.ok(!('by' in entry), 'no git name omits by');
+
+    assert.equal(human(dir, ['task', 'unlock', 'r', dir]).status, 0);
+    const unlocks = JSON.parse(fs.readFileSync(path.join(dir, '.nativ', 'unlocks.json'), 'utf8')).unlocks;
+    assert.equal(unlocks[0].by, 'Ada Lovelace');
+
+    const old = project([task('t1')]);
+    fs.mkdirSync(path.join(old, '.nativ'), { recursive: true });
+    fs.writeFileSync(path.join(old, '.nativ', 'unlocks.json'),
+      JSON.stringify({ unlocks: [{ taskId: 't1', at: 'x' }] }));
+    assert.equal(nativ(old, ['task', 'start', 't1', old]).status, 0, 'a plan without overrides works');
+    assert.equal(get(old, 't1').overrides, undefined);
+
+    const { validateMasterPlanTask } = await import('../dist/scanner/types.js');
+    const base = task('v');
+    assert.deepEqual(validateMasterPlanTask({ ...base, overrides: [{ action: 'start --force', at: 'x' }] }), []);
+    assert.equal(validateMasterPlanTask({ ...base, overrides: 'no' }).length, 1);
+    assert.equal(validateMasterPlanTask({ ...base, overrides: [{ action: 'bogus', at: 'x' }] }).length, 1);
+    console.log('✔ Test 12: overrides and unlocks record what was bypassed and by whom');
+  }
+
   console.log('\n🎉 ALL TASK CLAIM TESTS PASSED!');
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });
