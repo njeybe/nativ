@@ -101,7 +101,10 @@ const doctorJson = async (root, options = {}) => {
     assert.ok(s.permissions.deny.includes(rule), `deny must include ${rule}`);
   }
   assert.deepEqual(s.permissions.ask, ['Edit(./.ai/**)', 'Write(./.ai/**)', 'Edit(./.nativ/**)', 'Write(./.nativ/**)'], 'contract and settings writes always ask the human');
-  assert.deepEqual(s.hooks.PreToolUse, [{ matcher: 'Write|Edit|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: 'nativ hook check', timeout: 10 }] }]);
+  assert.deepEqual(s.hooks.PreToolUse, [{
+    matcher: 'Write|Edit|MultiEdit|NotebookEdit|Agent|Task',
+    hooks: [{ type: 'command', command: 'nativ hook check', timeout: 10 }],
+  }]);
   assert.deepEqual(s.hooks.SessionStart, [{ matcher: 'startup|resume|clear|compact', hooks: [{ type: 'command', command: 'nativ hook context', timeout: 10 }] }]);
   assert.deepEqual(s.enabledMcpjsonServers, ['nativ']);
   assert.ok(!JSON.stringify(s).includes('shell:') && !JSON.stringify(s).includes('mcp:'), 'no invented permission format');
@@ -272,7 +275,7 @@ const doctorJson = async (root, options = {}) => {
   assert.deepEqual(readJson(root, '.mcp.json').mcpServers.nativ, { command: 'nativ', args: ['mcp'], env: { KEEP: '1' } }, 'command fixed, extra keys kept');
   const fixed = readJson(root, '.claude/settings.json');
   assert.equal(fixed.hooks.PreToolUse.length, 1, 'the existing group is updated, not duplicated');
-  assert.equal(fixed.hooks.PreToolUse[0].matcher, 'Write|Edit|MultiEdit|NotebookEdit');
+  assert.equal(fixed.hooks.PreToolUse[0].matcher, 'Write|Edit|MultiEdit|NotebookEdit|Agent|Task');
   assert.equal(fixed.hooks.PreToolUse[0].hooks[0].command, 'nativ hook check');
 
   // A project that disabled the server keeps that choice

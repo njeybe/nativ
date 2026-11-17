@@ -9,7 +9,9 @@ export const syncScript = String.raw`  // ─── Real-time sync: EventSource 
     // The server also reports .ai/benchmark_report.json writes (e.g. a CLI "nativ bench") as telemetry changes.
     'telemetry_change': ['status', 'benchmarks', 'telemetry'],
     'benchmark_change': ['benchmarks'],
-    'worktree_change': ['worktrees']
+    'worktree_change': ['worktrees'],
+    // Activity lanes and events; only the activity page reads this slice.
+    'activity_change': ['activity']
   };
 
   function setLive(mode, detail) {

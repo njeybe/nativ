@@ -7,7 +7,7 @@ export const DEFAULT_HEARTBEAT_MS = 15_000;
 export const EVENT_DEBOUNCE_MS = 100;
 export const WATCH_POLL_INTERVAL_MS = 1000;
 
-export type PipelineEventName = 'plan_change' | 'telemetry_change';
+export type PipelineEventName = 'plan_change' | 'telemetry_change' | 'activity_change';
 
 /** Files in .ai/ that drive /api/events, mapped to the event a change emits. Anything else (tmp/lock files) is ignored. */
 export const WATCHED_FILES = new Map<string, PipelineEventName>([
@@ -81,6 +81,12 @@ export class PipelineEventHub {
   publish(event: 'runner_status' | 'runner_log' | 'runner_token_usage', data: unknown): void {
     if (this.closed || this.clients.size === 0) return;
     this.broadcast(event, data);
+  }
+
+  /** Pushes a change frame such as `activity_change` to every connected client. */
+  publishChange(name: PipelineEventName, data: unknown): void {
+    if (this.closed || this.clients.size === 0) return;
+    this.broadcast(name, data);
   }
 
   publishPlanChange(files: string[] = ['escalation.json']): void {

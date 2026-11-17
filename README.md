@@ -306,9 +306,10 @@ nativ status [targetDir] [-t, --telemetry] [--json] [--full]
 nativ hook status [targetDir] [--json]    # enforcement mode, role and active task scope
 nativ hook check                          # PreToolUse hook (reads the tool call from stdin)
 nativ hook context                        # SessionStart hook (prints orientation)
+nativ hook event                          # activity hooks (records agent activity, prints nothing)
 ```
 
-`check` and `context` are wired by `setup`; you do not run them by hand.
+`check`, `context` and `event` are wired by `setup`; you do not run them by hand. `setup` registers three more Claude Code hooks, PostToolUse, SubagentStart and SubagentStop, which call `nativ hook event` in the background (`async`), so agents do not wait for them. PreToolUse also matches `Agent` and `Task` to record subagent spawns. Studio-dispatched runs are recorded by the Studio itself. The hooks call the `nativ` on your PATH: after upgrading, rerun `nativ setup` in each project so its `.claude/settings.json` gains the new hooks.
 
 [Back to contents](#contents)
 
@@ -717,12 +718,32 @@ nativ studio [targetDir] [-p, --port <port>] [--no-open]
 | Page | Shows |
 | :--- | :--- |
 | **Home** | What needs you, what is running, what just finished |
+| **Activity** | One lane per agent seen recently, a live feed, and each run's console, transcript or task changes |
 | **Tasks** | One milestone at a time, newest completed first |
 | **Flow** | How the work connects and how the run actually happened |
 | **Team** | Each agent's tasks, time and cost |
 | **Worktrees, Benchmarks, Database** | Branches, performance and schemas |
 
 Press **Ctrl+K** (or Cmd+K or `/`) to find any task by id, title, agent or file. The theme toggle switches light and dark.
+
+The **Activity** page sits in the Now group, between Home and Tasks. Its window chips show the last 30 minutes, 2 hours or today. Buttons open a run's console or transcript, or a task's changes, in the inspector. For a chat-run task without a worktree, changes are counted since the task started, so they can include your own edits.
+
+#### `nativ watch`
+
+A live view for a split terminal pane next to your chat. Each agent gets one row with its task, status, last action, files and tokens, and the latest events follow. It works with no Studio running.
+
+```bash
+nativ watch [targetDir] [--plain] [--json] [--task <id>] [--window <minutes>]
+```
+
+| Option | Description |
+| :--- | :--- |
+| `--plain` | One line per new event, no screen redraw (the default when output is not a terminal) |
+| `--json` | Each new event as stored, one per line |
+| `--task <id>` | Only that task's lanes and events |
+| `--window <minutes>` | Lanes seen in the last N minutes, 1 to 1440 (default 30) |
+
+Press Ctrl+C to exit. An unknown value shows `-`, never an estimate.
 
 #### `nativ runs`
 
@@ -932,7 +953,7 @@ A deterministic firewall between agents and the contracts:
 | `AGENTS.md` | setup | The directive every agent follows |
 | `CLAUDE.md`, `GEMINI.md` | setup | Pointers to `AGENTS.md` (only created when absent) |
 | `.mcp.json` | setup | The `nativ` MCP server entry |
-| `.claude/settings.json` | setup | Permission rules and the enforcement and orientation hooks |
+| `.claude/settings.json` | setup | Permission rules and the enforcement, orientation and activity hooks |
 | `.claude/agents/` | setup | `architect`, `worker`, `verifier` and `explorer` |
 | `.nativ/config.json` | setup | [Configuration](#configuration) |
 | `.ai/context.md` | init | Stack scan: runtime, framework, ORM, main folders |
@@ -948,6 +969,7 @@ A deterministic firewall between agents and the contracts:
 | `.nativ/unlocks.json` | `nativ task unlock` | Unlocked tasks: task id, time, reason and, when a git name exists, who unlocked |
 | `.ai/telemetry.json` | nativ | Durations, costs, pass rates, role violations |
 | `.nativ/runs/transcripts/<runId>.jsonl` | Studio runs | One turn-by-turn record per agent run. See [`nativ runs`](#nativ-runs) |
+| `.nativ/events/events-YYYY-MM-DD-NN.jsonl` | Hooks, runner, task commands | Structure-only activity log, one segment per UTC day. Kept 14 days or 100 MB. Never shared. See [Concurrency and telemetry](#concurrency-and-telemetry) |
 
 Files nativ wrote carry a marker, so `update` and `doctor` can tell untouched files from ones you edited.
 
@@ -1016,6 +1038,7 @@ A provider that hits a usage limit is remembered in `.nativ/provider-state.json`
 
 - **Locks.** `.ai/master_plan.json`, `.ai/telemetry.json`, `.ai/escalation.json` and `.ai/learnings.json` use OS-level advisory locks with atomic writes and retry backoff for Windows `EBUSY`/`EPERM`. Agents in separate terminals can start, complete and add tasks without lost updates. Long verification runs outside the lock.
 - **Telemetry.** `.ai/telemetry.json` records task durations, token and cost estimates, verification pass rates, circuit-breaker trips (reported with the task's own role) and the latest 200 enforcement violations (rule, mode, tool, path, task). File contents are never logged. View it with `nativ status --telemetry` or in Studio.
+- **Activity log.** Hooks, the runner and the task commands append one JSON line per event to `.nativ/events/events-YYYY-MM-DD-NN.jsonl`, one segment per UTC day (a new part starts at 8 MB). The log keeps 14 days or 100 MB, deleting the oldest segments first. It holds structure only: who acted, the task id, the tool name, project-relative paths, line counts, program names, durations, exit codes, token counts and model ids. It never holds file contents, command arguments, tool output, prompts, error messages or reasons. It is never shared: hidden git mode ignores all of `.nativ/`, and shared mode lists `/.nativ/events/` in the ignore block.
 
 [Back to contents](#contents)
 

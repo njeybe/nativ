@@ -8,9 +8,11 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
     runs: '/api/pipeline/tasks/runs',
     telemetry: '/api/pipeline/telemetry/detailed',
     escalations: '/api/pipeline/escalations?status=pending_review',
-    triage: '/api/pipeline/triage/status'
+    triage: '/api/pipeline/triage/status',
+    activity: '/api/pipeline/activity'
   };
-  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs', 'telemetry', 'escalations', 'triage'];
+  var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs',
+    'telemetry', 'escalations', 'triage', 'activity'];
   var REDUCED_MOTION = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
   var pipe = {
@@ -22,6 +24,7 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
     telemetry: null,
     escalations: [],
     triage: null,
+    activity: { lanes: [], events: [], cursor: null, truncated: false },
     triageRunning: {},
     triageRecent: {},
     triageLast: null,
@@ -88,6 +91,13 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
       pipe.triage = body;
       renderTriageChip();
       if (typeof checkAutoTriage === 'function') checkAutoTriage();
+    } else if (part === 'activity') {
+      pipe.activity = {
+        lanes: Array.isArray(body.lanes) ? body.lanes : [],
+        events: Array.isArray(body.events) ? body.events : [],
+        cursor: body.cursor || null,
+        truncated: !!body.truncated
+      };
     }
   }
 

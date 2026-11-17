@@ -4,7 +4,7 @@ import { withPlanLock } from '../../core/lock-manager.js';
 import { refuseHeadless } from '../../core/human-gate.js';
 import { DEFAULT_STALE_HOURS, claimAgeHours } from '../../core/task-claims.js';
 import { getPlanPath } from './task-common.js';
-import { recordOverride } from './task-lifecycle.js';
+import { emitTaskEvent, recordOverride } from './task-lifecycle.js';
 
 export interface TaskReclaimOptions {
   /** Claims at least this many hours old are abandoned (default 4). */
@@ -82,6 +82,7 @@ export async function runTaskReclaim(taskId?: string, targetDirArg?: string, opt
 
   if (!planRead) return fail(`No readable plan at ${planPath}`);
   if (error) return fail(error);
+  if (!options.dryRun) for (const r of result.reclaimed) emitTaskEvent(targetDir, r.id, 'reclaim');
   if (options.json) {
     console.log(JSON.stringify({ ok: true, dryRun: Boolean(options.dryRun), olderThanHours: hours, ...result }));
     return result;

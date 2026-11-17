@@ -1,6 +1,8 @@
 import {
   MCP_SERVER_NAME,
   PRE_TOOL_USE_MATCHER,
+  POST_TOOL_USE_MATCHER,
+  SUBAGENT_MATCHER,
   SESSION_START_MATCHER,
   HOOK_TIMEOUT_SECONDS,
   CliInvocation,
@@ -28,6 +30,34 @@ export interface DesiredClaudeConfig {
   ask: string[];
   preToolUse: { matcher: string; command: string; timeout: number };
   sessionStart: { matcher: string; command: string; timeout: number };
+  activityHooks: ActivityHook[];
+}
+
+export interface ActivityHook {
+  event: 'PostToolUse' | 'SubagentStart' | 'SubagentStop';
+  matcher: string;
+  command: string;
+  timeout: number;
+  async?: boolean;
+}
+
+export type HookKind = 'check' | 'context' | 'event';
+export interface WantedHook {
+  kind: HookKind;
+  matcher: string;
+  command: string;
+  timeout: number;
+  async?: boolean;
+}
+
+/** Every nativ hook group keyed by event: the one source for setup, ownership checks and the plugin sync. */
+export function nativHookGroups(desired: DesiredClaudeConfig): Record<string, WantedHook> {
+  const groups: Record<string, WantedHook> = {
+    PreToolUse: { kind: 'check', ...desired.preToolUse },
+    SessionStart: { kind: 'context', ...desired.sessionStart },
+  };
+  for (const { event, ...rest } of desired.activityHooks) groups[event] = { kind: 'event', ...rest };
+  return groups;
 }
 
 export function buildDesiredConfig(invocation: CliInvocation): DesiredClaudeConfig {
@@ -54,6 +84,16 @@ export function buildDesiredConfig(invocation: CliInvocation): DesiredClaudeConf
     ask: ['Edit(./.ai/**)', 'Write(./.ai/**)', 'Edit(./.nativ/**)', 'Write(./.nativ/**)'],
     preToolUse: { matcher: PRE_TOOL_USE_MATCHER, command: `${cli} hook check`, timeout: HOOK_TIMEOUT_SECONDS },
     sessionStart: { matcher: SESSION_START_MATCHER, command: `${cli} hook context`, timeout: HOOK_TIMEOUT_SECONDS },
+    activityHooks: [
+      { event: 'PostToolUse', matcher: POST_TOOL_USE_MATCHER },
+      { event: 'SubagentStart', matcher: SUBAGENT_MATCHER },
+      { event: 'SubagentStop', matcher: SUBAGENT_MATCHER },
+    ].map((h) => ({
+      ...(h as Pick<ActivityHook, 'event' | 'matcher'>),
+      command: `${cli} hook event`,
+      timeout: HOOK_TIMEOUT_SECONDS,
+      async: true,
+    })),
   };
 }
 
@@ -69,7 +109,7 @@ export function unionStrings(existing: unknown, wanted: string[]): { list: strin
   return { list: [...list, ...added], added };
 }
 
-const isNativHookCommand = (command: unknown, kind: 'check' | 'context'): boolean =>
+const isNativHookCommand = (command: unknown, kind: HookKind): boolean =>
   typeof command === 'string' && new RegExp(`\\bhook ${kind}\\b`).test(command) && /nativ|cli\.js/.test(command);
 
 export interface HookGroup {
@@ -79,9 +119,14 @@ export interface HookGroup {
 }
 
 /** Updates our hook in place when there is one, appends a group when there is not, leaves every other group alone. */
-export function mergeHook(groups: unknown, kind: 'check' | 'context', want: { matcher: string; command: string; timeout: number }): { groups: HookGroup[]; changed: boolean } {
+export function mergeHook(
+  groups: unknown,
+  kind: HookKind,
+  want: { matcher: string; command: string; timeout: number; async?: boolean },
+): { groups: HookGroup[]; changed: boolean } {
   const list: HookGroup[] = Array.isArray(groups) ? (groups.filter(isObject) as HookGroup[]) : [];
-  const desiredHook = { type: 'command', command: want.command, timeout: want.timeout };
+  const desiredHook: Json = { type: 'command', command: want.command, timeout: want.timeout };
+  if (want.async !== undefined) desiredHook.async = want.async;
   for (const group of list) {
     const hooks = Array.isArray(group.hooks) ? group.hooks : [];
     const index = hooks.findIndex((h) => isNativHookCommand(h?.command, kind));
@@ -118,12 +163,11 @@ export function mergeClaudeSettings(existing: Json, desired: DesiredClaudeConfig
   merged.permissions = permissions;
 
   const hooks: Json = isObject(merged.hooks) ? { ...merged.hooks } : {};
-  const pre = mergeHook(hooks.PreToolUse, 'check', desired.preToolUse);
-  hooks.PreToolUse = pre.groups;
-  if (pre.changed) changes.push('hooks.PreToolUse (nativ hook check)');
-  const start = mergeHook(hooks.SessionStart, 'context', desired.sessionStart);
-  hooks.SessionStart = start.groups;
-  if (start.changed) changes.push('hooks.SessionStart (nativ hook context)');
+  for (const [event, want] of Object.entries(nativHookGroups(desired))) {
+    const result = mergeHook(hooks[event], want.kind, want);
+    hooks[event] = result.groups;
+    if (result.changed) changes.push(`hooks.${event} (nativ hook ${want.kind})`);
+  }
   merged.hooks = hooks;
 
   const enabled = unionStrings(merged.enabledMcpjsonServers, [MCP_SERVER_NAME]);

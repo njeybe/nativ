@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Agent activity log.** Hooks, the runner and the task commands record what agents did in `.nativ/events/`, one JSONL segment per UTC day, kept for 14 days or 100 MB. It holds structure only: tool names, project-relative paths, line counts, task ids, exit codes, durations, token counts and model ids. It never holds file contents, command arguments, tool output, prompts or reasons. It is never shared: hidden mode ignores `.nativ/`, and shared mode lists `/.nativ/events/` in the ignore block.
+- **New Claude Code hooks.** `nativ setup` registers PostToolUse, SubagentStart and SubagentStop hooks that call `nativ hook event` in the background, so agents do not wait for them. PreToolUse also matches `Agent` and `Task` to record subagent spawns. Rerun `nativ setup` in each project so its `.claude/settings.json` gains them. An older global `nativ` without `hook event` records nothing, and agents are not affected.
+- **`nativ watch [targetDir]`.** A live view for a split pane next to your chat: one row per agent with its task, status, last action, files and tokens, plus the latest events. Options: `--plain`, `--json`, `--task <id>` and `--window <minutes>` (1 to 1440, default 30). It works with no Studio running.
+- **Studio Activity page.** Sits in the Now group between Home and Tasks. It shows one lane per agent seen recently, window chips for 30 minutes, 2 hours and Today, and a live feed. Buttons open a run's console or transcript, or a task's changes, in the inspector. For a chat-run task without a worktree, changes are counted since the task started, which can include your own edits.
+
+### Fixed
+
+- Dispatched workers in a task worktree now get the enforcement hook even when the worktree has no project settings of its own.
+
 ## 2.10.0
 
 ### Added

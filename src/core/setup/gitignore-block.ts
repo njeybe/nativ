@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { buildDesiredConfig, isObject } from './config-merger.js';
+import { buildDesiredConfig, isObject, nativHookGroups } from './config-merger.js';
 import type { DesiredClaudeConfig, Json } from './config-merger.js';
 import { AGENT_FILES, MCP_SERVER_NAME, managedState } from './types.js';
 
@@ -17,6 +17,7 @@ export const SHARED_PATHS = [
   '/.nativ/*.log',
   '/.nativ/notify-state.json',
   '/.nativ/runs/',
+  '/.nativ/events/',
   '/.worktrees/',
 ] as const;
 
@@ -80,7 +81,7 @@ function clisFromHooks(hooks: unknown): string[] {
   for (const groups of Object.values(hooks)) {
     for (const g of Array.isArray(groups) ? groups : []) {
       for (const h of isObject(g) && Array.isArray(g.hooks) ? g.hooks : []) {
-        const m = isObject(h) ? /^(.+) hook (check|context)$/.exec(String(h.command)) : null;
+        const m = isObject(h) ? /^(.+) hook (check|context|event)$/.exec(String(h.command)) : null;
         if (m) found.add(m[1]);
       }
     }
@@ -98,9 +99,14 @@ function desiredFor(cli: string): DesiredClaudeConfig {
 function ownedHooks(hooks: unknown, wants: DesiredClaudeConfig[]): boolean {
   if (!isObject(hooks)) return false;
   const groupOk = (event: string, g: unknown): boolean => wants.some((want) => {
-    const w = event === 'PreToolUse' ? want.preToolUse : event === 'SessionStart' ? want.sessionStart : null;
-    const hook = w && { type: 'command', command: w.command, timeout: w.timeout };
-    return w !== null && sameJson(g, { matcher: w.matcher, hooks: [hook] });
+    const w = nativHookGroups(want)[event];
+    if (!w) return false;
+    const hook = { type: 'command', command: w.command, timeout: w.timeout };
+    // Activity hooks count as nativ's with or without the async flag.
+    const hooks = w.kind === 'event' ? [hook, { ...hook, async: true }] : [hook];
+    // Released nativ registered PreToolUse without the Agent and Task spawn tools.
+    const old = event === 'PreToolUse' ? w.matcher.replace(/\|Agent\|Task$/, '') : w.matcher;
+    return [w.matcher, old].some((matcher) => hooks.some((h) => sameJson(g, { matcher, hooks: [h] })));
   });
   return Object.entries(hooks).every(([event, groups]) =>
     Array.isArray(groups) && groups.every((g) => groupOk(event, g)));

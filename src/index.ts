@@ -118,6 +118,18 @@ export function createProgram(): Command {
     });
 
   program
+    .command('watch [targetDir]')
+    .description('Watch agent activity live: lanes, status and recent events')
+    .option('--plain', 'Print one line per new event (default when not a terminal)')
+    .option('--json', 'Print each new event as stored, one per line')
+    .option('--task <id>', 'Only this task\'s lanes and events')
+    .option('--window <minutes>', 'Lane window in minutes, 1 to 1440', '30')
+    .action(async (targetDir, options) => {
+      const { runWatch } = await import('./commands/watch.js');
+      await runWatch(targetDir, options);
+    });
+
+  program
     .command('validate [targetDir]')
     .description('Verify integrity of all .ai contracts, schemas, and agent profiles')
     .action(async (targetDir) => {
@@ -467,6 +479,14 @@ export function createProgram(): Command {
     .description('SessionStart hook: print a short orientation for a new Claude Code session')
     .action((targetDir) => {
       runSessionContext(targetDir);
+    });
+
+  hook
+    .command('event [targetDir]')
+    .description('Hook entry: record one activity event from the payload on stdin')
+    .action(async (targetDir) => {
+      const { runHookEvent } = await import('./commands/hook-event.js');
+      await runHookEvent(targetDir);
     });
 
   hook

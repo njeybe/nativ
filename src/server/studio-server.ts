@@ -5,6 +5,7 @@ import type { DatabaseEnv } from '../db/types.js';
 import { detectExampleDbKeys, resolveConnections } from '../db/env-parser.js';
 import { resolveProjectRoot } from '../core/root-resolver.js';
 import { Tier1Liaison, type Tier1LiaisonOptions } from '../core/tier1-liaison.js';
+import { attachActivityLog } from '../runner/activity-bridge.js';
 import {
   AgentSupervisor,
   type AgentSupervisorOptions,
@@ -45,6 +46,8 @@ import {
   handleTaskRuns,
   runView,
 } from './routes/task-routes.js';
+import { ActivityFeed } from './activity-feed.js';
+import { handleActivity, handleRunTranscript, handleTaskChanges } from './routes/activity-routes.js';
 import {
   describeWorktrees,
   handleWorktreeAction,
@@ -169,9 +172,14 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
     }
   });
 
+  const feed = new ActivityFeed(root, (count) => {
+    events.publishChange('activity_change', { at: new Date().toISOString(), count });
+  });
+
   // Background agent runs: lifecycle phases, stdout/stderr chunks and per-turn token usage
   // (native engine) fan out over /api/events.
   const supervisor = new AgentSupervisor({ ...options.supervisor, cwd: root });
+  attachActivityLog(supervisor, root);
   supervisor.on('runner_status', (record: RunnerRecord) => events.publish('runner_status', runView(record)));
   supervisor.on('runner_log', (entry: unknown) => events.publish('runner_log', entry));
   supervisor.on('runner_token_usage', (usage: RunnerTokenUsageEvent) => events.publish('runner_token_usage', usage));
@@ -247,6 +255,12 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, handleTaskRuns(supervisor, url.searchParams));
         case 'GET /api/pipeline/tasks/logs':
           return sendJson(res, 200, handleTaskLogs(supervisor, url.searchParams));
+        case 'GET /api/pipeline/activity':
+          return sendJson(res, 200, handleActivity(feed, url.searchParams));
+        case 'GET /api/pipeline/tasks/changes':
+          return sendJson(res, 200, await handleTaskChanges(root, url.searchParams));
+        case 'GET /api/pipeline/runs/transcript':
+          return sendJson(res, 200, handleRunTranscript(root, url.searchParams));
         case 'GET /api/pipeline/worktrees':
           return sendJson(res, 200, { ok: true, worktrees: await describeWorktrees(root) });
         case 'POST /api/pipeline/worktrees/action':
@@ -282,6 +296,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           '/api/pipeline/worktrees/action', '/api/pipeline/worktrees/diff', '/api/pipeline/benchmarks', '/api/pipeline/benchmarks/run',
           '/api/pipeline/telemetry/detailed', '/api/pipeline/escalations', '/api/pipeline/escalations/resolve',
           '/api/pipeline/triage/evaluate', '/api/pipeline/triage/status', '/api/pipeline/triage/config',
+          '/api/pipeline/activity', '/api/pipeline/tasks/changes', '/api/pipeline/runs/transcript',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);
@@ -300,6 +315,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
   const closeServer = server.close.bind(server);
   server.close = ((callback?: (err?: Error) => void) => {
     supervisor.shutdown('Studio server shutting down');
+    feed.close();
     events.close();
     return closeServer(callback);
   }) as typeof server.close;

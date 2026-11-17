@@ -13,6 +13,7 @@ import {
 } from '../../governor/index.js';
 import { withPlanLock } from '../../core/lock-manager.js';
 import { getPlanPath, ProposePatchOptions } from './task-common.js';
+import { emitTaskEvent } from './task-lifecycle.js';
 
 export async function runTaskEscalate(
   taskId: string,
@@ -32,7 +33,8 @@ export async function runTaskEscalate(
   const escType = (requestedType || 'architectural_ambiguity') as EscalationType;
 
   const { targetDir, planPath } = getPlanPath(targetDirArg);
-  return withPlanLock(planPath, (plan, ctx) => {
+  let escalated = false;
+  await withPlanLock(planPath, (plan, ctx) => {
     let foundTask: MasterPlanTask | null = null;
     for (const m of plan.milestones) {
       const t = m.tasks.find((task) => task.id === taskId);
@@ -76,6 +78,7 @@ export async function runTaskEscalate(
 
     foundTask.status = 'blocked';
     foundTask.notes = `Escalated [${escId}]: ${summary}`;
+    escalated = true;
 
     console.log(pc.bold(pc.yellow(`\n🚨 Task [${pc.bold(taskId)}] Escalated to the Architect!`)));
     console.log(pc.dim('  Escalation ID:      ') + pc.cyan(escId));
@@ -86,6 +89,7 @@ export async function runTaskEscalate(
     console.log(pc.dim('\nNext Step for the Architect:'));
     console.log(pc.white(`  Ask the architect agent (Claude Code, or Antigravity if that is your host) to review .ai/escalation.json, update the affected contracts, and unblock the task. \`nativ triage\` can assess it first.\n`));
   });
+  if (escalated) emitTaskEvent(targetDir, taskId, 'escalate');
 }
 
 export async function runTaskProposePatch(targetDirArg: string | undefined, options: ProposePatchOptions) {

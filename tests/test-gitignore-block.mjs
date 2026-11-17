@@ -89,7 +89,42 @@ assert.ok(!listGeneratedPaths(root).includes('/.mcp.json'));
 
 const shared = listGeneratedPaths(root, 'shared');
 assert.deepEqual(shared, ['/.nativ/*.local.json', '/.nativ/logs/', '/.nativ/*.log',
-  '/.nativ/notify-state.json', '/.nativ/runs/', '/.worktrees/']);
+  '/.nativ/notify-state.json', '/.nativ/runs/', '/.nativ/events/', '/.worktrees/']);
+
+// activity hooks: old two-event shape, five-event shape, async flag and changed matchers
+const hookKeys = (h) => Object.keys(h);
+assert.deepEqual(hookKeys(generated.hooks).sort(),
+  ['PostToolUse', 'PreToolUse', 'SessionStart', 'SubagentStart', 'SubagentStop']);
+const oldShape = {
+  ...generated,
+  hooks: {
+    PreToolUse: [{ ...generated.hooks.PreToolUse[0], matcher: 'Write|Edit|MultiEdit|NotebookEdit' }],
+    SessionStart: generated.hooks.SessionStart,
+  },
+};
+setSettings(oldShape);
+assert.ok(settingsListed());
+setSettings({ ...oldShape, hooks: { ...oldShape.hooks, PostToolUse: generated.hooks.PostToolUse } });
+assert.ok(settingsListed());
+// an older file's session-start pair only is fine; a changed matcher is not
+setSettings({ ...generated, hooks: { ...generated.hooks, PreToolUse: [
+  { ...generated.hooks.PreToolUse[0], matcher: 'Write|Edit' }] } });
+assert.ok(!settingsListed());
+setSettings({ ...generated, hooks: { ...generated.hooks, SubagentStop: [
+  { ...generated.hooks.SubagentStop[0], matcher: 'worker' }] } });
+assert.ok(!settingsListed());
+setSettings({ ...generated, hooks: { ...generated.hooks, PostToolUse: [
+  ...generated.hooks.PostToolUse,
+  { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo hi', timeout: 5 }] }] } });
+assert.ok(!settingsListed());
+// async flag dropped is still nativ's; a custom CLI is found from 'hook event' alone
+const noAsync = JSON.parse(JSON.stringify(generated));
+for (const g of noAsync.hooks.PostToolUse) for (const h of g.hooks) delete h.async;
+setSettings(noAsync);
+assert.ok(settingsListed());
+setSettings({ hooks: { PostToolUse: mergeClaudeSettings({}, npx).merged.hooks.PostToolUse } });
+assert.ok(settingsListed());
+assert.ok(JSON.stringify(generated.hooks.PostToolUse).includes('"async":true'));
 
 // tracked paths
 assert.deepEqual(trackedNativPaths(root, hidden), { tracked: [], command: '' });

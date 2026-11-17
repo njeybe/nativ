@@ -43,6 +43,7 @@ export interface NativeDriverContext {
   toolShell: string | boolean;
   appendLog: (run: ActiveRun, stream: 'stdout' | 'stderr', chunk: string) => void;
   onTurnUsage: (record: RunnerRecord, delta: ActualTokenUsage, model: string) => void;
+  onToolRun: (record: RunnerRecord, name: string, input: unknown, ok: boolean) => void;
 }
 
 export function readRoleGuide(rootDir: string, task: MasterPlanTask): string | null {
@@ -143,6 +144,7 @@ export async function runNativeLoop(
       const toolStartedAt = Date.now();
       const result = await executeNativeTool(ctx, run, block);
       results.push(result);
+      ctx.onToolRun(run.record, block.name, block.input, result.is_error !== true);
       run.transcript?.write('tool_result', {
         id: block.id,
         name: block.name,

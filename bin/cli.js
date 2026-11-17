@@ -22,6 +22,15 @@ if (group === 'hook' && (subcommand === 'check' || subcommand === 'context')) {
   }
   // No process.exit(): on Windows a pipe write is asynchronous and exiting here could cut the decision short.
   process.exitCode = 0;
+} else if (group === 'hook' && subcommand === 'event') {
+  // Same fast path; the activity recorder imports no CLI framework or database driver.
+  try {
+    const { runHookEvent } = await import('../dist/commands/hook-event.js');
+    await runHookEvent(rest.find((arg) => !arg.startsWith('-')));
+  } catch {
+    // Recording is best effort and silent.
+  }
+  process.exitCode = 0;
 } else {
   const { run } = await import('../dist/index.js');
   run().catch((err) => {

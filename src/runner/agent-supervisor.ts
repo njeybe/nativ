@@ -80,6 +80,7 @@ import { runTaskVerificationStep, mergeWorktreeStep, resetLogFile } from './run-
 import {
   DEFAULT_MAX_TRANSCRIPTS,
   TranscriptWriter,
+  type TranscriptPart,
   pruneTranscripts,
   streamLineParts,
   transcriptDir,
@@ -212,7 +213,9 @@ export class AgentSupervisor extends EventEmitter {
           );
         }
         const extraAllowed = [...parseRunnerAllowList(process.env.NATIV_RUNNER_ALLOW), ...(options.allowedTools ?? [])];
-        const settingsFile = writeRunnerSettings(this.runsDir, taskId, buildRunnerPermissions(task, this.rootDir, extraAllowed));
+        const settingsFile = writeRunnerSettings(
+          this.runsDir, taskId, buildRunnerPermissions(task, this.rootDir, extraAllowed, worktreeDir),
+        );
         rawCommand = buildDefaultClaudeCommand(task, requestedModel, settingsFile);
       }
       command = rawCommand
@@ -691,7 +694,19 @@ export class AgentSupervisor extends EventEmitter {
     if (parsed.model) run.streamModel = parsed.model;
     if (parsed.text) this.appendLog(run, 'stdout', parsed.text);
     if (parsed.result) this.recordStreamUsage(run, parsed.result);
-    run.transcript?.writeParts(streamLineParts(line));
+    const parts = streamLineParts(line);
+    run.transcript?.writeParts(parts);
+    this.emitStreamTools(run, parts);
+  }
+
+  private emitStreamTools(run: ActiveRun, parts: TranscriptPart[]): void {
+    const { runId, taskId, worktreeDir: cwd } = run.record;
+    for (const [type, f] of parts) {
+      if (type === 'tool_call') {
+        this.emit('runner_tool', { runId, taskId, cwd, id: f.id, name: f.name, input: f.input });
+      }
+      if (type === 'tool_result') this.emit('runner_tool', { runId, taskId, id: f.id, ok: !f.isError });
+    }
   }
 
   /** Claude Code reports the run's total cost and tokens once, in its final result event. */
@@ -777,6 +792,10 @@ export class AgentSupervisor extends EventEmitter {
           nativeAllowedCommands: this.nativeAllowedCommands,
           toolShell: this.toolShell,
           appendLog: (r, stream, chunk) => this.appendLog(r, stream, chunk),
+          onToolRun: (record, name, input, ok) => {
+            const { runId, taskId, worktreeDir: cwd } = record;
+            this.emit('runner_tool', { runId, taskId, cwd, name, input, ok });
+          },
           onTurnUsage: (record, delta, model) => {
             const event: RunnerTokenUsageEvent = {
               runId: record.runId,

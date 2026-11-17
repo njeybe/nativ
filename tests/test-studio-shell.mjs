@@ -127,12 +127,12 @@ const api = {
   const labels = [...html.matchAll(/nav-glabel">([^<]+)</g)].map((m) => m[1]);
   assert.deepEqual(labels, ['Now', 'Project', 'System']);
   const items = [...html.matchAll(/data-go="(\w+)"/g)].map((m) => m[1]);
-  assert.deepEqual(items, ['home', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database']);
+  assert.deepEqual(items, ['home', 'activity', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database']);
   assert.match(html, /data-go="tasks" aria-current="page"/);
   assert.match(html, /nav-badge warn">1</, 'needs-you badge on Home');
   assert.match(html, /data-go="tasks"[^>]*>.*?nav-badge run">\d+</, 'tasks count badge');
   const navItems = html.match(/<button[^>]*class="nav-item"[^>]*>/g);
-  assert.equal(navItems.length, 7);
+  assert.equal(navItems.length, 8);
   for (const b of navItems) assert.match(b, /aria-label="[^"]+"/, 'nav item aria-label');
   assert.match(renderStudioHtml({ version: '1.2.3' }),
     /@media \(max-width: 1023px\)[^{]*\{\s*:root \{ --sidebar-w: 56px/);
@@ -292,7 +292,7 @@ const api = {
 // 6. routing
 {
   const ctx = createStudio();
-  const ids = ['home', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database'];
+  const ids = ['home', 'activity', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database'];
   const hash = (h) => run(ctx, `Studio.resolveHash(${JSON.stringify(h)}, ${JSON.stringify(ids)})`);
   assert.equal(hash('#overview'), 'home');
   assert.equal(hash('#canvas'), 'flow');

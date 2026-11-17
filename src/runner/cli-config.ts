@@ -58,13 +58,14 @@ export function projectHasEnforcementHook(rootDir: string): boolean {
 }
 
 /**
- * Settings handed to a dispatched agent with `--settings`. The deny and ask rules and the enforcement hook come
- * from the same source as `nativ setup`, so a dispatched agent is guarded even in a project where setup never ran.
+ * Settings for a dispatched agent (`--settings`): deny and ask rules and the enforcement hook match `nativ setup`.
+ * The hook is judged by `startDir`, where the agent starts.
  */
 export function buildRunnerPermissions(
   task: Pick<MasterPlanTask, 'verificationCommand'>,
   rootDir: string,
   extraAllowed: readonly string[] = [],
+  startDir: string = rootDir,
 ): RunnerPermissions {
   const invocation = configuredInvocation(rootDir) ?? resolveCliInvocation({});
   const desired = buildDesiredConfig(invocation);
@@ -78,7 +79,7 @@ export function buildRunnerPermissions(
   ];
   return {
     permissions: { allow: [...new Set(allow)], deny: desired.deny, ask: desired.ask },
-    ...(projectHasEnforcementHook(rootDir)
+    ...(projectHasEnforcementHook(startDir)
       ? {}
       : { hooks: { PreToolUse: [{ matcher: desired.preToolUse.matcher, hooks: [{ type: 'command' as const, command: desired.preToolUse.command, timeout: desired.preToolUse.timeout }] }] } }),
   };

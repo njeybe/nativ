@@ -11,6 +11,7 @@ export const PM_PLAYBOOK = `## Working as Project Manager
 - Independent tasks can run in parallel in worktrees (\`nativ worktree create <taskId>\`). On a Claude subscription every agent draws from the same usage limit, so run two or three at a time, not ten.
 - You may not edit \`.ai/\`. If the enforcement hook warns about a file, that is a scope or contract gap: escalate with \`nativ task escalate\`, do not edit around it.
 - \`nativ doctor\` confirms the integration is intact. Run it after updating Claude Code or nativ, and whenever hooks or MCP tools seem to be missing.
+- When the owner wants to see agents work, suggest \`nativ watch\` in a split pane next to the chat.
 
 ## Autonomous execution
 

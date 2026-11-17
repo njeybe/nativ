@@ -3,7 +3,8 @@
  * Renders the Claude Code plugin (plugin/) and its marketplace entry (.claude-plugin/marketplace.json)
  * from the same sources `nativ setup` uses, so the two can never drift apart:
  *
- *   hooks and MCP server   <- buildDesiredConfig() in dist/core/setup-assets.js
+ *   hooks                  <- nativHookGroups() in dist/core/setup/config-merger.js
+ *   MCP server             <- buildDesiredConfig() in dist/core/setup/config-merger.js
  *   agents                 <- templates/claude-agents/*.md
  *   skill                  <- templates/AGENTS.md
  *   name, version, links   <- package.json
@@ -39,13 +40,24 @@ function parseRepository(pkg) {
   return match ? { url: `https://github.com/${match[1]}/${match[2]}`, owner: match[1] } : null;
 }
 
+/** One Claude Code hook group. The SessionStart flag keeps the plugin's copy silent when the project has its own. */
+function hookGroup(event, want) {
+  const command = event === 'SessionStart' ? `${want.command} --from-plugin` : want.command;
+  const hook = { type: 'command', command, timeout: want.timeout };
+  if (want.async !== undefined) hook.async = want.async;
+  return { matcher: want.matcher, hooks: [hook] };
+}
+
 /** Returns Map<repo-relative path, content> for every generated file. */
 export async function renderPlugin(root = repoRoot) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const { buildDesiredConfig, resolveCliInvocation } = await import(pathToFileURL(path.join(root, 'dist', 'core', 'setup-assets.js')).href);
+  const dist = (file) => pathToFileURL(path.join(root, 'dist', 'core', file)).href;
+  const { resolveCliInvocation } = await import(dist('setup-assets.js'));
+  const { buildDesiredConfig, nativHookGroups } = await import(dist('setup/config-merger.js'));
 
   // A plugin cannot know where nativ lives, so it always calls the bare `nativ` command (npm i -g @njeybe/nativ).
   const desired = buildDesiredConfig(resolveCliInvocation({ command: 'nativ' }));
+  const hookGroups = nativHookGroups(desired);
   const repo = parseRepository(pkg);
   const authorName = (typeof pkg.author === 'string' ? pkg.author : pkg.author?.name) || repo?.owner || null;
   const files = new Map();
@@ -65,16 +77,10 @@ export async function renderPlugin(root = repoRoot) {
     }),
   );
 
-  files.set(
-    `${PLUGIN_DIR}/hooks/hooks.json`,
-    json({
-      hooks: {
-        PreToolUse: [{ matcher: desired.preToolUse.matcher, hooks: [{ type: 'command', command: desired.preToolUse.command, timeout: desired.preToolUse.timeout }] }],
-        // The flag lets the plugin's copy stay silent when the project already has its own nativ hook.
-        SessionStart: [{ matcher: desired.sessionStart.matcher, hooks: [{ type: 'command', command: `${desired.sessionStart.command} --from-plugin`, timeout: desired.sessionStart.timeout }] }],
-      },
-    }),
+  const hooksByEvent = Object.fromEntries(
+    Object.entries(hookGroups).map(([event, want]) => [event, [hookGroup(event, want)]]),
   );
+  files.set(`${PLUGIN_DIR}/hooks/hooks.json`, json({ hooks: hooksByEvent }));
 
   files.set(`${PLUGIN_DIR}/.mcp.json`, json({ mcpServers: { [PLUGIN_NAME]: { command: desired.mcpServer.command, args: desired.mcpServer.args } } }));
 

@@ -9,8 +9,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NODE_SUITES = [
   'profiles', 'task-router', 'task-fields', 'design-templates', 'spec-slices', 'learnings', 'contract-generator',
   'verify-gatekeeper', 'mcp-server', 'data-studio', 'fragmented-env', 'env-example-detection', 'contract-governor',
-  'worktree-lifecycle', 'agent-supervisor', 'native-tools', 'concurrency-locks', 'task-claims',
-  'telemetry-engine', 'read-output-size', 'benchmark-suite', 'identity',
+  'worktree-lifecycle', 'agent-supervisor', 'runner-enforcement-hook', 'native-tools', 'concurrency-locks',
+  'task-claims',
+  'telemetry-engine', 'read-output-size', 'benchmark-suite', 'identity', 'activity-spawn-event',
+  'event-log', 'activity-normalize', 'hook-event', 'activity-hooks-setup', 'activity-gate-events',
+  'activity-bridge', 'activity-lanes', 'activity-git-changes', 'watch-render', 'activity-feed',
   'providers', 'tier1-liaison', 'enforcement', 'setup-doctor', 'update', 'validate', 'plugin-manifest', 'code-shape',
   'model-routing', 'notify', 'token-budget', 'transcript', 'v2-e2e',
   'taste-bundle', 'taste-digest', 'init-design', 'design-check',
@@ -24,6 +27,7 @@ const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',
   'studio-team', 'studio-redesign-e2e',
   'studio-brand', 'studio-topbar', 'studio-pulse', 'studio-inspector', 'studio-worktrees',
+  'studio-activity-api', 'studio-activity-shell', 'studio-activity', 'studio-activity-inspector',
 ];
 
 const filter = process.argv[2];
@@ -35,7 +39,8 @@ const suites = [
 // Strip the override, CI and host session variables so each suite sees a plain headless agent and no host project.
 // Suites that test the override or a project directory set those variables themselves.
 const env = { ...process.env };
-for (const key of ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE', 'CLAUDE_PROJECT_DIR']) {
+const HOST_KEYS = ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'NATIV_CI_OVERRIDE', 'NATIV_HEADLESS_OVERRIDE'];
+for (const key of [...HOST_KEYS, 'CLAUDE_PROJECT_DIR']) {
   delete env[key];
 }
 

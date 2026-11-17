@@ -19,6 +19,9 @@ import {
 import { loadPlan, withPlanLock } from '../../core/lock-manager.js';
 import { recordTaskStart, recordTaskComplete } from '../../core/telemetry.js';
 import { addTaskUnlock, removeTaskUnlock } from '../../core/enforcement.js';
+import { appendEvent } from '../../core/activity/event-log.js';
+import { cleanText } from '../../core/activity/normalize.js';
+import type { VerifyData } from '../../core/activity/event-types.js';
 import { refuseHeadless } from '../../core/human-gate.js';
 import { claimConflict, resolveAgentId, startRefusal } from '../../core/task-claims.js';
 import {
@@ -38,7 +41,8 @@ export async function runTaskStart(taskId: string, targetDirArg?: string, option
   if (options.force && refuseHeadless('nativ task start --force')) return;
   const { targetDir, planPath } = getPlanPath(targetDirArg);
   const agent = resolveAgentId(options.agent);
-  return withPlanLock(planPath, async (plan, ctx) => {
+  let started = false;
+  await withPlanLock(planPath, async (plan, ctx) => {
     let foundTask: MasterPlanTask | null = null;
     let foundMilestone: any = null;
 
@@ -95,8 +99,60 @@ export async function runTaskStart(taskId: string, targetDirArg?: string, option
     } catch {
       // Non-fatal
     }
+    started = true;
     console.log(pc.green(`\n✔ Task [${pc.bold(taskId)}] marked as `) + pc.yellow('▶ in_progress') + '\n');
   });
+  if (started) emitTaskEvent(targetDir, taskId, 'start', agent);
+}
+
+/** Appends a task lifecycle event; never throws, so it cannot change the command's result. */
+export function emitTaskEvent(
+  root: string,
+  taskId: string,
+  action: 'start' | 'complete' | 'block' | 'reclaim' | 'escalate',
+  agent?: string,
+): void {
+  try {
+    const by = cleanText(agent ?? resolveAgentId());
+    appendEvent(root, {
+      v: 1,
+      at: new Date().toISOString(),
+      src: 'cli',
+      lane: { id: `cli:${by ?? 'terminal'}` },
+      task: { id: taskId, via: 'command' },
+      kind: 'task',
+      data: { action, ...(by ? { by } : {}) },
+    });
+  } catch {
+    // Activity logging is best effort.
+  }
+}
+
+/** Counts only: no output, digest text or messages reach the log. */
+function emitVerifyEvent(root: string, taskId: string, r: VerificationResult): void {
+  try {
+    const failed = r.phases?.find((p) => !p.success);
+    const issues = r.codeShape?.issues ?? [];
+    const byKind: Record<string, number> = {};
+    for (const i of issues) byKind[i.kind] = (byKind[i.kind] ?? 0) + 1;
+    const data: VerifyData = { pass: r.success, durationMs: r.durationMs, exitCode: r.exitCode };
+    const phase = cleanText(failed?.name);
+    if (phase) data.failedPhase = phase;
+    if (r.skipped) data.skipped = true;
+    if (issues.length) data.shape = { issues: issues.length, byKind };
+    const by = cleanText(resolveAgentId());
+    appendEvent(root, {
+      v: 1,
+      at: new Date().toISOString(),
+      src: 'cli',
+      lane: { id: `cli:${by ?? 'terminal'}` },
+      task: { id: taskId, via: 'command' },
+      kind: 'verify',
+      data,
+    });
+  } catch {
+    // Activity logging is best effort.
+  }
 }
 
 export async function runTaskUnlock(taskId: string, targetDirArg?: string, options: TaskUnlockOptions = {}) {
@@ -215,6 +271,7 @@ export async function runTaskComplete(
   let vResult: VerificationResult | null = null;
   if (!options.skipVerify) {
     vResult = await runTaskVerification(foundTask, { cwd: targetDir, timeout: options.timeout, isolation });
+    emitVerifyEvent(targetDir, taskId, vResult);
     if (!vResult.success) {
       console.error(pc.red(`\n✖ Task [${pc.bold(taskId)}] verification FAILED with exit code ${vResult.exitCode}:`));
       const failedPhase = vResult.phases?.find((p) => !p.success);
@@ -276,6 +333,7 @@ export async function runTaskComplete(
   }
 
   let changed = false;
+  let written = false;
   await withPlanLock(planPath, (plan, ctx) => {
     let taskToComplete: MasterPlanTask | null = null;
     let milestoneToComplete: any = null;
@@ -314,6 +372,7 @@ export async function runTaskComplete(
     if (options.notes) {
       taskToComplete.notes = options.notes;
     }
+    written = true;
 
     // Check if milestone is completed
     const allMilestoneTasksDone = milestoneToComplete.tasks.every((t: MasterPlanTask) => t.status === 'completed');
@@ -333,6 +392,7 @@ export async function runTaskComplete(
     }
   });
   if (changed) return;
+  if (written) emitTaskEvent(targetDir, taskId, 'complete', agent);
 
   CircuitBreaker.recordSuccess(targetDir, taskId);
   CircuitBreaker.clearBaseline(targetDir, taskId);
@@ -355,8 +415,9 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
     return;
   }
 
-  const { planPath } = getPlanPath(targetDirArg);
-  return withPlanLock(planPath, (plan, ctx) => {
+  const { targetDir, planPath } = getPlanPath(targetDirArg);
+  let blocked = false;
+  await withPlanLock(planPath, (plan, ctx) => {
     let foundTask: MasterPlanTask | null = null;
 
     for (const m of plan.milestones) {
@@ -386,7 +447,9 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
 
     console.log(pc.yellow(`\n⚠ Task [${pc.bold(taskId)}] marked as `) + pc.red('✖ blocked'));
     console.log(pc.dim(`  Reason: ${foundTask.notes}\n`));
+    blocked = true;
   });
+  if (blocked) emitTaskEvent(targetDir, taskId, 'block');
 }
 
 /** Appends a record of a human override to the task; call it inside the plan lock. */

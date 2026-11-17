@@ -13,7 +13,10 @@ export const AGENT_FILES = ['architect.md', 'worker.md', 'verifier.md', 'explore
 export const MANAGED_PREFIX = '<!-- nativ:managed sha256=';
 export const MANAGED_PATTERN = /\n?<!-- nativ:managed sha256=([0-9a-f]{12}) -->\s*$/;
 
-export const PRE_TOOL_USE_MATCHER = 'Write|Edit|MultiEdit|NotebookEdit';
+// Agent|Task so hook check sees spawns: SubagentStart does not carry the model.
+export const PRE_TOOL_USE_MATCHER = 'Write|Edit|MultiEdit|NotebookEdit|Agent|Task';
+export const POST_TOOL_USE_MATCHER = 'Write|Edit|MultiEdit|NotebookEdit|Bash|Agent|Task|mcp__nativ__.*';
+export const SUBAGENT_MATCHER = '*';
 export const SESSION_START_MATCHER = 'startup|resume|clear|compact';
 export const HOOK_TIMEOUT_SECONDS = 10;
 

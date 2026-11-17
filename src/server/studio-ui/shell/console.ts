@@ -138,25 +138,70 @@ export const consoleScript = String.raw`  // ─── Live runner console drawe
     }).join('');
   }
 
-  function setDiffState(summary, files, bodyHtml, count) {
+  function setDiffState(summary, files, bodyHtml, count, filesHtml) {
     $('rc-diff-summary').innerHTML = summary;
-    $('rc-diff-files').innerHTML = (files || []).map(function (f) { return '<li title="' + esc(f) + '">' + esc(f) + '</li>'; }).join('');
+    var items = (files || []).map(function (f) { return '<li title="' + esc(f) + '">' + esc(f) + '</li>'; });
+    $('rc-diff-files').innerHTML = filesHtml != null ? filesHtml : items.join('');
     $('rc-diff-files').hidden = !(files && files.length);
     $('rc-diff-body').innerHTML = bodyHtml;
     $('rc-diff-count').textContent = count == null ? '-' : String(count);
   }
 
+  // Main-tree tasks (no agent worktree) read the working tree since task start.
+  var MAIN_TREE_LABEL = 'Changes in the working tree since task start';
+
+  /** An agent worktree for the task, read from the worktrees slice the shell already holds. */
+  function hasAgentWorktree(taskId) {
+    return pipe.worktrees.some(function (w) { return w.isAgentWorktree && w.taskId === taskId; });
+  }
+
+  /** Main-tree only once the worktrees slice has loaded cleanly and shows no agent worktree. */
+  function isMainTreeTask(taskId) {
+    return !!(pipe.loaded.worktrees && !pipe.errors.worktrees && !hasAgentWorktree(taskId));
+  }
+
+  function mainTreeFilesHtml(files) {
+    return files.map(function (f) {
+      return '<li title="' + esc(f.path) + '">' + esc(f.path) +
+        ' <span class="mono">+' + esc(f.added) + ' -' + esc(f.removed) + '</span></li>';
+    }).join('');
+  }
+
+  function showMainTreeChanges(body) {
+    var files = Array.isArray(body.files) ? body.files : [];
+    var paths = files.map(function (f) { return f.path; });
+    var empty = '<span class="rc-empty">No changes in the working tree since task start yet.</span>';
+    setDiffState(MAIN_TREE_LABEL, paths, body.diff ? diffToHtml(body.diff) : empty, files.length,
+      mainTreeFilesHtml(files));
+  }
+
+  function showMainTreeError(e) {
+    if (e.code === 'NO_BASELINE') {
+      var none = 'No start commit was recorded for this task.';
+      setDiffState(MAIN_TREE_LABEL, [], '<span class="rc-empty">' + none + '</span>', null);
+      return;
+    }
+    setDiffState('Could not load the diff', [], '<span class="rc-empty">' + esc(e.message) + '</span>', null);
+  }
+
   function loadConsoleDiff(taskId) {
     var seq = ++rc.diffSeq;
+    var mainTree = isMainTreeTask(taskId);
     $('rc-diff-refresh').disabled = true;
     if (!$('rc-diff-body').textContent) setDiffState('Loading worktree changes…', [], '<span class="rc-empty">Reading git status…</span>', null);
-    return api('/api/pipeline/worktrees/diff?taskId=' + encodeURIComponent(taskId)).then(function (body) {
+    // Worktree tasks keep their diff path; main-tree tasks use the start-commit diff.
+    var url = mainTree
+      ? '/api/pipeline/tasks/changes?taskId=' + encodeURIComponent(taskId) + '&full=1'
+      : '/api/pipeline/worktrees/diff?taskId=' + encodeURIComponent(taskId);
+    return api(url).then(function (body) {
       if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
+      if (mainTree) return showMainTreeChanges(body);
       var files = Array.isArray(body.filesChanged) ? body.filesChanged : [];
       var summary = '<code>' + esc(body.branch || '') + '</code>, ' + (body.hasChanges ? files.length + ' uncommitted file' + (files.length === 1 ? '' : 's') : 'working tree clean');
       setDiffState(summary, files, body.diff ? diffToHtml(body.diff) : '<span class="rc-empty">No uncommitted changes in this worktree yet.</span>', files.length);
     }, function (e) {
       if (seq !== rc.diffSeq || rc.taskId !== taskId) return;
+      if (mainTree) return showMainTreeError(e);
       var missing = e.code === 'WORKTREE_NOT_FOUND';
       setDiffState(missing ? 'No isolated worktree' : 'Could not load the diff',
         [], '<span class="rc-empty">' + esc(missing ? 'This task has no agent worktree. Dispatch it with Isolated Worktree on, or run nativ worktree create ' + taskId + '.' : e.message) + '</span>', null);

@@ -157,15 +157,15 @@ try {
   // 1. Served page: sidebar entries, removed pages, no simulation, scripts parse, no emojis, same origin.
   {
     const order = JSON.parse(/Studio\.order = (\[.*?\]);/.exec(served)[1]);
-    same(order.map((p) => p.id), ['home', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database'],
-      'seven sidebar entries');
+    same(order.map((p) => p.id), ['home', 'activity', 'tasks', 'flow', 'team', 'worktrees', 'benchmarks', 'database'],
+      'eight sidebar entries');
     same([...new Set(order.map((p) => p.group))].length, 3, 'three groups');
     const ctx = createStudio();
     loadModel(ctx, api);
     const side = run(ctx,
       'Studio.sidebarHtml({ model: Studio.model, view: "home", worktreeCount: 0, benchmarkText: "" })');
     same([...side.matchAll(/nav-glabel">([^<]+)</g)].map((m) => m[1]), ['Now', 'Project', 'System']);
-    eq((side.match(/data-go="/g) || []).length, 7, 'seven sidebar buttons');
+    eq((side.match(/data-go="/g) || []).length, 8, 'eight sidebar buttons');
     for (const gone of [
       'nav-pods', 'panel-pods', 'panel-canvas', 'nav-canvas', 'Play Simulation', '/api/pipeline/simulation/',
     ]) {
@@ -181,7 +181,7 @@ try {
     no(served, /(?:src|href|action)="https?:\/\//i, 'no attribute loads another origin');
     no(served, /url\(\s*['"]?(?:https?:)?\/\//i, 'no css url() from another origin');
     no(scripts.join('\n'), /fetch\(\s*['"]https?:/, 'client fetches only same-origin paths');
-    console.log('✔ Served page: 7 entries in 3 groups, removed pages gone, scripts parse, same origin');
+    console.log('✔ Served page: 8 entries in 3 groups, removed pages gone, scripts parse, same origin');
   }
 
   // 2. Tasks: active milestone, 5-card cap on Just finished, column contents.
