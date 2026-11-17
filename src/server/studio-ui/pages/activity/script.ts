@@ -118,7 +118,7 @@ export const activityScript = String.raw`  var esc = Studio.ui.esc;
     return '<section class="lane" data-lane-id="' + esc(l.id) + '"><div class="lane-main">' +
       '<div class="lane-l1"><b class="lbl">' + esc(l.label) + '</b><span class="mono model">' +
       esc(l.model || '-') + '</span>' +
-      task + '<span class="st st-' + st + '"><i class="dot"></i>' + STATUS[st] + '</span>' +
+      task + '<span class="act-st act-st-' + st + '"><i class="dot"></i>' + STATUS[st] + '</span>' +
       '<span class="mono time">' + elapsed(l.elapsedMs) + '</span></div>' +
       '<div class="lane-l2">' + last + '</div>' + fileLine(l) + '</div>' + actions(l) + '</section>';
   }

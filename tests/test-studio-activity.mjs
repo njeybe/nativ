@@ -69,7 +69,7 @@ const laneHtml = (id) => html.slice(html.indexOf('data-lane-id="' + id + '"')).s
 const a = laneHtml('a');
 assert.ok(a.includes('sonnet') && a.includes('task-121') && a.includes('Event &lt;log&gt; writer'), 'line 1');
 assert.ok(a.includes('title="Event &lt;log&gt; writer"') && a.includes('Active') && a.includes('04:12'), 'status');
-assert.ok(a.includes('st-active') && a.includes('12s ago') && a.includes('Edit src/x.ts +42 -3'), 'line 2');
+assert.ok(a.includes('act-st-active') && a.includes('12s ago') && a.includes('Edit src/x.ts +42 -3'), 'line 2');
 assert.ok(a.includes('3 files') && a.includes('event-log.ts +120 -0') && a.includes('c.ts +3 -4'), 'line 3');
 assert.ok(a.includes('tokens -'), 'unknown tokens');
 const b = laneHtml('b');
@@ -77,9 +77,14 @@ assert.ok(b.includes('main session') && b.includes('No task') && b.includes('2m 
 assert.ok(b.includes('>-<'), 'unknown model dash');
 assert.ok(b.includes('31:02') && !b.includes('class="lane-actions"'), 'no actions without task');
 const c = laneHtml('c');
-assert.ok(c.includes('tokens 31,004') && c.includes('Failed') && c.includes('st-failed'), 'runner lane');
-assert.ok(laneHtml('d').includes('Done') && laneHtml('d').includes('st-stopped'), 'stopped is Done');
+assert.ok(c.includes('tokens 31,004') && c.includes('Failed') && c.includes('act-st-failed'), 'runner lane');
+assert.ok(laneHtml('d').includes('Done') && laneHtml('d').includes('act-st-stopped'), 'stopped is Done');
 assert.ok(html.includes('1 file<'), 'singular file');
+
+// Status uses the Activity class, never the shell's st class (shell.ts .st is a 16px icon box)
+assert.ok(a.includes('<span class="act-st act-st-active">'), 'status uses act-st classes');
+assert.ok(!/class="st[ "]/.test(html), 'no shell st class on any lane');
+assert.ok(!/\.st[ {]/.test(activityCss), 'activity css has no bare .st selector');
 
 // Actions by lane kind
 const acts = (h) => [...h.matchAll(/data-act="(act-[a-z]+)"/g)].map((m) => m[1]);

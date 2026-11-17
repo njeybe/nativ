@@ -25,12 +25,12 @@ export const activityCss = String.raw`#panel-activity .act-head {
 #panel-activity .ttl { color: var(--fg-2); }
 #panel-activity .none, #panel-activity .ago, #panel-activity .hint { color: var(--fg-3); }
 #panel-activity .ago { margin-left: auto; white-space: nowrap; }
-#panel-activity .st { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
+#panel-activity .act-st { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
 #panel-activity .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-3); }
-#panel-activity .st-active .dot { background: var(--run); }
-#panel-activity .st-stopped .dot { background: var(--ok); }
-#panel-activity .st-failed .dot { background: var(--bad); }
-#panel-activity .st-paused .dot { background: var(--warn); }
+#panel-activity .act-st-active .dot { background: var(--run); }
+#panel-activity .act-st-stopped .dot { background: var(--ok); }
+#panel-activity .act-st-failed .dot { background: var(--bad); }
+#panel-activity .act-st-paused .dot { background: var(--warn); }
 #panel-activity .tok { margin-left: auto; }
 #panel-activity .lane-actions {
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
