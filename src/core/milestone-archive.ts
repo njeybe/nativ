@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseJsonLoose } from './enforcement.js';
 import { loadPlan, savePlan, withFileLock, writeJsonAtomicSync } from './lock-manager.js';
+import { isSettled } from './plan-status.js';
 import { resolveMainRoot } from './root-resolver.js';
 import { executeVerification } from './verifier/executor.js';
 import { digestOutput } from './verifier/output-digest.js';
@@ -55,7 +56,10 @@ export function archivedTaskIds(plan: MasterPlan): string[] {
 
 /** The plan as dependency checks should see it: archived tasks appear as completed. */
 export function withArchivedAsDone(plan: MasterPlan): MasterPlan {
-  const tasks = archivedTaskIds(plan).map((id) => ({ id, status: 'completed' }) as MasterPlanTask);
+  const dropped = new Set(plan.milestones.flatMap((m) => m.archived?.droppedTaskIds ?? []));
+  const tasks = archivedTaskIds(plan)
+    .filter((id) => !dropped.has(id))
+    .map((id) => ({ id, status: 'completed' }) as MasterPlanTask);
   const done: MasterPlanMilestone = { id: '', name: '', status: 'completed', tasks };
   return { ...plan, milestones: [...plan.milestones, done] };
 }
@@ -141,7 +145,7 @@ function assertArchivable(
   if (!milestone) throw new ArchiveRefusal(`Milestone "${id}" not found.`);
   if (milestone.archived) throw new ArchiveRefusal(`Milestone ${id} is already archived.`);
   if (!milestone.tasks.length) throw new ArchiveRefusal(`Milestone ${id} has no tasks to archive.`);
-  const open = milestone.tasks.filter((t) => t.status !== 'completed').map((t) => t.id);
+  const open = milestone.tasks.filter((t) => !isSettled(t)).map((t) => t.id);
   if (open.length) {
     throw new ArchiveRefusal(`Milestone ${id} has unfinished tasks: ${open.join(', ')}.`);
   }
@@ -217,6 +221,7 @@ function toStub(
   check: string,
   commit: string | null,
 ): MasterPlanMilestone {
+  const dropped = milestone.tasks.filter((t) => t.status === 'dropped').map((t) => t.id);
   const archived: MilestoneArchiveInfo = {
     summary: summary.trim(),
     commit,
@@ -224,6 +229,7 @@ function toStub(
     archivedAt: new Date().toISOString(),
     taskCount: milestone.tasks.length,
     taskIds: milestone.tasks.map((t) => t.id),
+    ...(dropped.length ? { droppedTaskIds: dropped } : {}),
     file: `.ai/archive/${milestone.id}.json`,
   };
   return { ...milestone, status: 'completed', tasks: [], archived };

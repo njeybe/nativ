@@ -9,10 +9,12 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
     telemetry: '/api/pipeline/telemetry/detailed',
     escalations: '/api/pipeline/escalations?status=pending_review',
     triage: '/api/pipeline/triage/status',
-    activity: '/api/pipeline/activity'
+    activity: '/api/pipeline/activity',
+    planChanges: '/api/pipeline/plan-changes?status=proposed',
+    session: '/api/pipeline/session'
   };
   var ALL_PARTS = ['status', 'tasks', 'worktrees', 'benchmarks', 'runs',
-    'telemetry', 'escalations', 'triage', 'activity'];
+    'telemetry', 'escalations', 'triage', 'activity', 'planChanges', 'session'];
   var REDUCED_MOTION = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
   var pipe = {
@@ -25,6 +27,9 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
     escalations: [],
     triage: null,
     activity: { lanes: [], events: [], cursor: null, truncated: false },
+    planChanges: [],
+    planUi: {},
+    session: { human: false },
     triageRunning: {},
     triageRecent: {},
     triageLast: null,
@@ -98,6 +103,11 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
         cursor: body.cursor || null,
         truncated: !!body.truncated
       };
+    } else if (part === 'planChanges') {
+      pipe.planChanges = Array.isArray(body.changes) ? body.changes : [];
+    } else if (part === 'session') {
+      pipe.session = { human: body.human === true };
+      if (typeof rc !== 'undefined' && rc.tab === 'heal') renderHeal();
     }
   }
 
@@ -109,6 +119,7 @@ export const pipelineStateScript = String.raw`  // ─── Pipeline state ─�
       telemetry: pipe.telemetry,
       runs: pipe.runs,
       escalations: pipe.escalations,
+      planChanges: pipe.planChanges,
       logTail: pipe.logTail
     }));
   }

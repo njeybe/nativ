@@ -199,10 +199,32 @@ export const triageScript = String.raw`  // ─── Tier 1 AI Strategist (/api
     '</article>';
   }
 
+  /** Without a Studio session key the console cannot decide: show the command and a Copy button. */
+  function noKeyActions(command) {
+    return '<div class="heal-actions no-key"><code class="mono">' + esc(command) + '</code>' +
+      '<span class="copy-wrap"><span class="tooltip">Copied!</span>' +
+      '<button class="rc-btn" type="button" data-heal-copy="' + esc(command) + '">Copy</button></span>' +
+      '<p class="heal-diag">Open Studio from your terminal to decide here.</p></div>';
+  }
+  function escalationCommand(escalation) { return 'nativ triage ' + escalation.id; }
+
   function decisionActions(escalation) {
+    if (!pipe.session.human) return noKeyActions(escalationCommand(escalation));
     return '<div class="heal-actions"><button class="rc-btn reject" type="button" data-heal="t1-dismiss">Dismiss Escalation</button>' +
       '<button class="rc-btn approve" type="button" data-heal="t1-decide">' + (escalation.proposedPatch ? 'Apply Proposal &amp; Unblock' : 'Unblock with This Decision') + '</button></div>';
   }
+
+  // The proposal body carries Approve and Reject; the same key rule hides them.
+  var healBodyWithButtons = healBody;
+  healBody = function (escalation, opts) {
+    var wanted = !(opts && opts.actions === false);
+    if (!wanted || pipe.session.human) return healBodyWithButtons(escalation, opts);
+    return healBodyWithButtons(escalation, { actions: false }) + noKeyActions(escalationCommand(escalation));
+  };
+  $('rc-heal').addEventListener('click', function (e) {
+    var copy = e.target.closest('[data-heal-copy]');
+    if (copy) copyText(copy.getAttribute('data-heal-copy'), copy);
+  });
 
   /** Sends the card choice (or custom instructions) as the resolution notes the unblocked agent reads. */
   function commitDecision(decision) {

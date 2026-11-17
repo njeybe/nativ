@@ -38,6 +38,21 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
     return t.durationMs ? fmt.dur(t.durationMs) : '';
   }
 
+  var MUTED = ' style="opacity:.6"';
+
+  function replacedBy(t) {
+    var by = t.status === 'dropped' && t.drop && t.drop.replacedBy;
+    return by ? ' <span class="faint">replaced by ' + ui.esc(by) + '</span>' : '';
+  }
+
+  // Dropped tasks never count toward "4 of 5" or any progress figure.
+  function liveCount(m) {
+    var live = m.tasks.filter(function (t) { return t.status !== 'dropped'; });
+    var done = live.filter(function (t) { return t.status === 'completed'; }).length;
+    var kept = m.archived ? (m.archived.taskCount || 0) : 0;
+    return { done: done + kept, total: live.length + kept };
+  }
+
   // Rows use data-tid, not data-task, so the nested Dispatch button gets its own click.
   function listRow(model, t, fmt) {
     var bucket = Studio.status.bucket(t);
@@ -45,18 +60,22 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
     var id = ui.esc(t.id);
     var go = Studio.status.isReady(t) ? '<button type="button" class="tdispatch" data-act="tasks-dispatch" data-tid="' +
       id + '">Dispatch</button>' : '';
-    return '<div class="trow" role="row" tabindex="0" data-act="tasks-open" data-tid="' + id + '">' +
+    var dropped = t.status === 'dropped';
+    return '<div class="trow' + (dropped ? ' dropped' : '') + '" role="row" tabindex="0"' + (dropped ? MUTED : '') +
+      ' data-act="tasks-open" data-tid="' + id + '">' +
       '<span class="c-id mono" role="cell">' + id + '</span>' +
-      '<span class="c-title" role="cell" title="' + ui.esc(t.title) + '">' + ui.esc(t.title) + '</span>' +
+      '<span class="c-title" role="cell" title="' + ui.esc(t.title) + '">' + ui.esc(t.title) +
+      replacedBy(t) + '</span>' +
       '<span class="c-agent" role="cell">' + ui.esc(Studio.agentInfo(t.agent).label) + '</span>' +
-      '<span class="c-status st-' + bucket + '" role="cell">' + Studio.status.word(bucket) +
+      '<span class="c-status st-' + bucket + '" role="cell">' + (dropped ? 'dropped' : Studio.status.word(bucket)) +
       (wait ? ' <span class="faint">' + ui.esc(wait) + '</span>' : '') + go + '</span>' +
       '<span class="c-time mono" role="cell">' + ui.esc(timeOf(t, fmt)) + '</span></div>';
   }
 
   function isOpen(m) {
     if (view.groups[m.id] != null) return view.groups[m.id];
-    return !(m.total > 0 && m.done === m.total);
+    var n = liveCount(m);
+    return !(n.total > 0 && n.done === n.total);
   }
 
   var THEAD = '<div class="trow thead" role="row"><span role="columnheader">Id</span>' +
@@ -65,12 +84,13 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
 
   function group(model, m, rows, fmt) {
     var open = isOpen(m);
+    var n = liveCount(m);
     var body = open ? THEAD + rows.map(function (t) { return listRow(model, t, fmt); }).join('') : '';
     return '<section class="tgroup" role="table" aria-label="' + ui.esc(m.name) + '">' +
       '<button type="button" class="tg-head" data-act="tasks-group" data-group="' + ui.esc(m.id) +
       '" aria-expanded="' + open + '"><span class="chev">' + ui.icon('chev', 2) + '</span>' +
       '<span class="mono faint">' + ui.esc(m.id) + '</span><span class="t" title="' + ui.esc(m.name) + '">' + ui.esc(m.name) + '</span>' +
-      '<span class="num faint">' + m.done + ' of ' + m.total + '</span></button>' + body + '</section>';
+      '<span class="num faint">' + n.done + ' of ' + n.total + '</span></button>' + body + '</section>';
   }
 
   function list(model, fmt) {
@@ -120,6 +140,7 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
   function byNewest(a, b) { return (b.endT || 0) - (a.endT || 0); }
 
   function metaHtml(t, fmt) {
+    if (t.status === 'dropped') return '<span>dropped</span>' + replacedBy(t);
     if (t.status === 'completed') {
       var took = t.durationMs ? '<span>took ' + ui.esc(fmt.dur(t.durationMs)) + '</span>' : '';
       return '<span>' + ui.esc(fmt.ago(t.endT)) + '</span>' + took;
@@ -136,7 +157,9 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
   }
 
   function card(t, fmt) {
-    return '<button type="button" class="tcard ' + ui.esc(t.status) + '" data-task="' + ui.esc(t.id) + '">' +
+    var mute = t.status === 'dropped' ? MUTED : '';
+    return '<button type="button" class="tcard ' + ui.esc(t.status) + '"' + mute +
+      ' data-task="' + ui.esc(t.id) + '">' +
       '<div class="l1">' + ui.statusIcon(t.status) + '<span class="mono faint">' + ui.esc(t.id) + '</span>' + ui.agentChip(t.agent) + '</div>' +
       '<div class="title">' + ui.esc(t.title) + '</div><div class="meta">' + metaHtml(t, fmt) + '</div></button>';
   }
@@ -150,7 +173,7 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
 
   function board(m, fmt) {
     var by = function (s) { return m.tasks.filter(function (t) { return t.status === s; }); };
-    var done = by('completed').reverse().sort(byNewest);
+    var done = by('completed').concat(by('dropped')).reverse().sort(byNewest);
     var shown = view.showAll ? done : done.slice(0, CAP);
     var more = done.length > CAP
       ? '<button type="button" class="more" data-act="tasks-more">' + (view.showAll ? 'Show fewer' : 'Show all ' + done.length) + '</button>' : '';
@@ -164,14 +187,15 @@ export const tasksScript = String.raw`  var ui = Studio.ui;
 
   function histRow(m, fmt) {
     var open = !!view.open[m.id];
-    var full = m.total > 0 && m.done === m.total;
+    var n = liveCount(m);
+    var full = n.total > 0 && n.done === n.total;
     var tasks = open ? '<div class="hist-tasks">' + m.tasks.slice().reverse().sort(byNewest).map(function (t) {
       return ui.taskRow(t, t.durationMs ? fmt.dur(t.durationMs) : '');
     }).join('') + '</div>' : '';
     return '<div><button type="button" class="hist-row" data-act="tasks-hist" data-ms-id="' + ui.esc(m.id) + '" aria-expanded="' + open + '">' +
       '<span class="chev">' + ui.icon('chev', 2) + '</span><span class="mono faint">' + ui.esc(m.id) + '</span>' +
       '<span class="t">' + ui.esc(m.short) + '</span>' +
-      '<span class="status-pill ' + (full ? 'completed' : 'in_progress') + '">' + m.done + '/' + m.total + '</span>' +
+      '<span class="status-pill ' + (full ? 'completed' : 'in_progress') + '">' + n.done + '/' + n.total + '</span>' +
       '<span class="faint num small">' + (m.lastEndT ? ui.esc(fmt.day(m.lastEndT)) : 'no timing') + '</span>' +
       '<span class="faint num small">' + (m.workMs ? ui.esc(fmt.dur(m.workMs)) + ' work' : '') + '</span>' +
       '<span class="faint num small">' + (m.costUsd != null ? ui.esc(fmt.money(m.costUsd)) : '') + '</span></button>' + tasks + '</div>';

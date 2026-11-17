@@ -31,6 +31,9 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
   var STATUS_BUCKET = { completed: 'done', in_progress: 'running', pending: 'next', blocked: 'stuck' };
   var STATUS_LABEL = {};
   Object.keys(STATUS_BUCKET).forEach(function (k) { STATUS_LABEL[k] = BUCKET_WORD[STATUS_BUCKET[k]]; });
+  // Dropped tasks list under Done but keep their own muted label.
+  STATUS_BUCKET.dropped = 'done';
+  STATUS_LABEL.dropped = 'dropped';
   var RUN_BUCKET = { spawning_worktree: 'running', running: 'running', verifying: 'running',
     merging: 'running', completed: 'done', failed: 'stuck', aborted: 'next' };
 
@@ -40,7 +43,7 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
       return t.status === 'pending' && (!!t.isAvailable || !(t.waitingOn || []).length);
     },
     bucket: function (t) {
-      if (t.status === 'completed') return 'done';
+      if (t.status === 'completed' || t.status === 'dropped') return 'done';
       if (t.status === 'in_progress') return t.stale ? 'next' : 'running';
       if (t.status === 'blocked') return 'stuck';
       return 'next';
@@ -121,14 +124,17 @@ export const formatScript = String.raw`  // ─── Studio client core: state,
     statusIcon: function (status) {
       var label = STATUS_LABEL[status] || 'Unknown';
       var mark = status === 'in_progress' ? '<span class="pulse"></span>' : (Studio.stSvg[status] || Studio.stSvg.pending);
-      return '<span class="st ' + esc(status) + '" title="' + esc(label) + '">' + mark + '</span>';
+      var muted = status === 'dropped' ? ' style="color:var(--fg-3)"' : '';
+      return '<span class="st ' + esc(status) + '"' + muted + ' title="' + esc(label) + '">' + mark + '</span>';
     },
     agentChip: function (agent) {
       var info = agentInfo(agent);
       return '<span class="agent" style="--c:var(' + info.token + ')"><i></i>' + esc(info.label) + '</span>';
     },
     pill: function (status, text) {
-      return '<span class="status-pill ' + esc(status) + '">' + esc(text || STATUS_LABEL[status] || status) + '</span>';
+      var muted = status === 'dropped' ? ' style="background:var(--surface-2);color:var(--fg-3)"' : '';
+      return '<span class="status-pill ' + esc(status) + '"' + muted + '>' +
+        esc(text || STATUS_LABEL[status] || status) + '</span>';
     },
     when: function (t) {
       if (!t) return '<time title="not recorded">time not recorded</time>';

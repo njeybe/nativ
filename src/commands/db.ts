@@ -6,7 +6,8 @@ import type { DatabaseEnv, TableSchema } from '../db/types.js';
 import { diffSchemas, loadContractTables } from '../db/diff.js';
 import { DEFAULT_STUDIO_PORT, startStudioServer, writeContractSchema } from '../server/studio-server.js';
 import { renderStudioHtml } from '../server/studio-ui.js';
-import { refuseHeadless } from '../core/human-gate.js';
+import { isInteractive, refuseHeadless } from '../core/human-gate.js';
+import { createStudioSession } from '../server/studio-session.js';
 import { resolveConnections } from '../db/env-parser.js';
 import { introspectEnv, keyFamily } from './db/db-introspect.js';
 import { printStatusLine, printDiff, printInspectTables } from './db/db-formatter.js';
@@ -195,9 +196,11 @@ export async function runDbUi(targetDirArg?: string, options: { port?: string; o
   }
 
   const version = packageVersion();
+  // Headless starts get no key, so decisions need a person at a terminal.
+  const human = createStudioSession({ headless: !isInteractive() });
   let handle;
   try {
-    handle = await startStudioServer({ port, cwd: targetDir, html: () => renderStudioHtml({ version }) });
+    handle = await startStudioServer({ port, cwd: targetDir, html: () => renderStudioHtml({ version }), human });
   } catch (err) {
     console.error(pc.red(`\n✖ Failed to start DB Studio: ${err instanceof Error ? err.message : String(err)}\n`));
     process.exitCode = 1;
@@ -222,7 +225,11 @@ export async function runDbUi(targetDirArg?: string, options: { port?: string; o
   console.log(pc.dim(`  Prod: ${conns.prod ? `${conns.prod.maskedUrl}${prodSource}` : 'not configured'}`));
   console.log(pc.dim('  Credentials stay in this process only. Press Ctrl+C to stop.\n'));
 
-  if (options.open !== false) openBrowser(handle.url);
+  const launchUrl = human.launchUrl(`http://127.0.0.1:${handle.port}/`);
+  console.log(`  Open: ${launchUrl}`);
+  if (!human.keyed) console.log(pc.dim('  Headless start: decisions stay with the CLI for this run.'));
+  console.log('');
+  if (options.open !== false) openBrowser(launchUrl);
 
   await new Promise<void>((resolve) => {
     const shutdown = () => {

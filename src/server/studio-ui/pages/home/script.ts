@@ -53,8 +53,129 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
       esc(copyCommand(item.command)) + '">Copy</button></span></div></div>';
   }
 
+  // ─── Plan change rows (ui_specs.md#plan-change-rows) ───
+  var REASON_LONG = 110;
+  var CLAMP = 'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden';
+  var DECISION_WORD = { approve: 'Approve', reject: 'Reject' };
+  var DECISION_BUSY = { approve: 'Approving...', reject: 'Rejecting...' };
+  var DECISION_DONE = { approve: ' approved', reject: ' rejected' };
+
+  function planUi(id) {
+    if (!pipe.planUi[id]) pipe.planUi[id] = { confirm: null, busy: null, more: false };
+    return pipe.planUi[id];
+  }
+
+  function planWords(c) {
+    var b = c.change || {};
+    var id = c.taskId;
+    if (b.drop) return 'Drop ' + id + (b.drop.replacedBy ? ', replaced by ' + b.drop.replacedBy : '');
+    var parts = [];
+    if ((b.addDependencies || []).length) parts.push('add ' + b.addDependencies.join(', '));
+    if ((b.removeDependencies || []).length) parts.push('remove ' + b.removeDependencies.join(', '));
+    if (b.release && !parts.length && b.notes == null) return 'Release ' + id;
+    if (b.release) parts.push('release');
+    if (b.notes != null) parts.push('new notes');
+    return id + ': ' + parts.join(', ');
+  }
+
+  function planEffects(c) {
+    var list = (c.effects && c.effects.rewired) || [];
+    return list.map(function (r) {
+      return '<span class="why">' + esc(r.taskId + ' will wait on ' + r.to + ' instead of ' + r.from) + '</span>';
+    }).join('');
+  }
+
+  function planReason(c, ui) {
+    var text = String(c.reason || '');
+    var clamp = ui.more ? '' : ' style="' + CLAMP + '"';
+    var long = text.length > REASON_LONG;
+    return '<span class="why"' + clamp + '>' + esc(text) + '</span>' + (long ?
+      '<button type="button" class="btn link" data-act="home-plan-more" data-id="' + esc(c.id) + '">' +
+      (ui.more ? 'Show less' : 'Show more') + '</button>' : '');
+  }
+
+  function planCommand(c) { return 'nativ plan approve ' + c.id; }
+
+  function planNoKey(c) {
+    var cmd = planCommand(c);
+    return '<code class="mono cmd">' + esc(cmd) + '</code>' +
+      '<span class="copy-wrap"><span class="tooltip">Copied!</span>' +
+      '<button type="button" class="btn" data-act="home-copy-style" data-cmd="' + esc(cmd) + '">Copy</button></span>' +
+      '<span class="why">Open Studio from your terminal to decide here.</span>';
+  }
+
+  function planBtn(act, c, label, cls, disabled) {
+    return '<button type="button" class="btn' + (cls ? ' ' + cls : '') + '" data-act="' + act + '" data-id="' +
+      esc(c.id) + '"' + (disabled ? ' disabled' : '') + '>' + esc(label) + '</button>';
+  }
+
+  function planKeyed(c, ui) {
+    var failed = !!(c.check && c.check.ok === false);
+    if (ui.busy) {
+      var a = ui.busy === 'approve' ? DECISION_BUSY.approve : 'Approve';
+      var r = ui.busy === 'reject' ? DECISION_BUSY.reject : 'Reject';
+      return planBtn('home-plan-ask-approve', c, a, 'primary', true) + planBtn('home-plan-ask-reject', c, r, '', true);
+    }
+    if (ui.confirm) {
+      return '<span class="why">' + esc(DECISION_WORD[ui.confirm] + ' ' + c.id + '?') + '</span>' +
+        planBtn('home-plan-confirm', c, 'Confirm', 'primary') + planBtn('home-plan-cancel', c, 'Cancel', '');
+    }
+    return planBtn('home-plan-ask-approve', c, 'Approve', 'primary', failed) +
+      planBtn('home-plan-ask-reject', c, 'Reject', '');
+  }
+
+  function planItem(item) {
+    var c = item.change;
+    var ui = planUi(c.id);
+    var bad = c.check && c.check.ok === false;
+    var why = bad ? c.check.reason || 'This change no longer applies.' : '';
+    var fail = bad ? '<span class="why" style="color:var(--danger)">' + esc(why) + '</span>' : '';
+    var by = c.proposedBy ? '<span class="why" style="color:var(--fg-3)">' +
+      esc('Proposed by ' + c.proposedBy) + '</span>' : '';
+    return '<div class="need" data-need="' + esc(item.key) + '"><div class="body">' +
+      '<div class="l1"><b>Plan change</b><span class="mono">' + esc(c.id) + '</span></div>' +
+      '<span class="why">' + esc(planWords(c)) + '</span>' + planReason(c, ui) + by + planEffects(c) + fail + '</div>' +
+      '<div class="acts">' + (pipe.session.human ? planKeyed(c, ui) : planNoKey(c)) + '</div></div>';
+  }
+
+  function planChangeById(id) {
+    return pipe.planChanges.filter(function (c) { return c.id === id; })[0] || null;
+  }
+
+  function askPlan(decision) {
+    return function (el) { planUi(el.getAttribute('data-id')).confirm = decision; Studio.repaint('home'); };
+  }
+  function cancelPlan(el) { planUi(el.getAttribute('data-id')).confirm = null; Studio.repaint('home'); }
+  function morePlan(el) {
+    var ui = planUi(el.getAttribute('data-id'));
+    ui.more = !ui.more;
+    Studio.repaint('home');
+  }
+
+  function confirmPlan(el) {
+    var id = el.getAttribute('data-id');
+    var c = planChangeById(id);
+    var ui = planUi(id);
+    if (!c || ui.busy || !ui.confirm) return;
+    var decision = ui.confirm;
+    ui.busy = decision;
+    Studio.repaint('home');
+    postJson('/api/pipeline/plan-changes/decide', { id: id, decision: decision, seen: c.seen }).then(function () {
+      pipe.planChanges = pipe.planChanges.filter(function (x) { return x.id !== id; });
+      delete pipe.planUi[id];
+      toast(id + DECISION_DONE[decision], 'ok');
+    }, function (e) {
+      ui.busy = null;
+      ui.confirm = null;
+      toast(e.message || 'Could not decide ' + id);
+    }).then(function () {
+      return fetchPipeline(['planChanges', 'tasks', 'status', 'escalations']);
+    });
+  }
+
   function needItem(item) {
     if (item.kind === 'style') return styleItem(item);
+    if (item.kind === 'plan') return planItem(item);
     var t = item.task;
     return '<div class="need" data-need="' + esc(t.id) + '"><div class="body">' +
       '<div class="l1"><b>Human Decision Required</b><span class="mono">' + esc(t.id) + '</span></div>' +
@@ -182,12 +303,14 @@ export const homeScript = String.raw`  var esc = Studio.ui.esc;
   }
 
   Studio.registerPage('home', {
-    deps: ['status', 'tasks', 'telemetry', 'runs', 'escalations'],
+    deps: ['status', 'tasks', 'telemetry', 'runs', 'escalations', 'planChanges', 'session'],
     render: render,
     skeleton: skeleton,
     actions: {
       'home-start': forward('start'), 'home-proposal': forward('proposal'), 'home-ask': forward('ask'),
-      'home-console': forward('logs'), 'home-copy-style': copyStyle, 'home-dispatch': forward('dispatch')
+      'home-console': forward('logs'), 'home-copy-style': copyStyle, 'home-dispatch': forward('dispatch'),
+      'home-plan-ask-approve': askPlan('approve'), 'home-plan-ask-reject': askPlan('reject'),
+      'home-plan-cancel': cancelPlan, 'home-plan-confirm': confirmPlan, 'home-plan-more': morePlan
     }
   });
 `;

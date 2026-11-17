@@ -1,4 +1,5 @@
 import type { MasterPlan, MasterPlanTask } from '../scanner/types.js';
+import { doneTaskIds } from './plan-status.js';
 
 /** A claim with no fresh `task start` for this long is presumed abandoned (crashed or closed agent). */
 export const DEFAULT_STALE_HOURS = 4;
@@ -19,14 +20,23 @@ export function isStaleClaim(task: { status: string; claimedAt?: string }, hours
   return task.status === 'in_progress' && age !== null && age >= hours;
 }
 
+/** Why no command may act on a dropped task, or null. Dropping is final, even with --force. */
+export function droppedRefusal(task: MasterPlanTask): string | null {
+  if (task.status !== 'dropped') return null;
+  const why = task.drop?.reason ? ` (${task.drop.reason})` : '';
+  return `Task [${task.id}] was dropped${why}. A dropped task is final; add a new task instead.`;
+}
+
 /** Why `task start` must not claim this task, or null when it may. */
 export function startRefusal(plan: MasterPlan, task: MasterPlanTask, agent: string | undefined, now = Date.now()): string | null {
+  const dropped = droppedRefusal(task);
+  if (dropped) return dropped;
   if (task.status === 'completed') return `Task [${task.id}] is already completed.`;
   if (task.status === 'blocked') {
     const why = task.notes ? ` (${task.notes})` : '';
     return `Task [${task.id}] is blocked${why}. Resolve it with \`nativ triage\` first; a human can override with \`nativ task start ${task.id} --force\`.`;
   }
-  const done = new Set(plan.milestones.flatMap((m) => m.tasks).filter((t) => t.status === 'completed').map((t) => t.id));
+  const done = doneTaskIds(plan);
   const waiting = (task.dependencies ?? []).filter((d) => !done.has(d));
   if (waiting.length) return `Task [${task.id}] waits on unfinished dependencies: ${waiting.join(', ')}.`;
   return claimConflict(task, agent, now);

@@ -6,7 +6,7 @@ import { resolveWorkerModel } from '../../core/model-routing.js';
 import { learningsForTask, type Learning } from '../../core/learnings.js';
 import { taskEscalationHistory } from '../../governor/index.js';
 import { buildStyleSlice } from '../../core/style/style-slice.js';
-import { archivedTaskIds } from '../../core/milestone-archive.js';
+import { doneTaskIds } from '../../core/plan-status.js';
 import { claimConflict, resolveAgentId } from '../../core/task-claims.js';
 import type { MasterPlanTask } from '../../scanner/types.js';
 import { getPlanPath, getRoleGuide, getRecommendedContractSlice } from './task-common.js';
@@ -30,14 +30,7 @@ export async function runTaskList(
     return;
   }
 
-  const completedTaskIds = new Set<string>(archivedTaskIds(plan));
-  for (const m of plan.milestones) {
-    for (const t of m.tasks) {
-      if (t.status === 'completed') {
-        completedTaskIds.add(t.id);
-      }
-    }
-  }
+  const completedTaskIds = doneTaskIds(plan);
 
   const results: Array<{
     task: MasterPlanTask;
@@ -119,6 +112,8 @@ export async function runTaskList(
         statusBadge = pc.yellow('▶ in_progress');
       } else if (t.status === 'blocked') {
         statusBadge = pc.red('✖ blocked');
+      } else if (t.status === 'dropped') {
+        statusBadge = pc.dim('⊘ dropped');
       }
 
       const readyBadge = isAvailable && t.status === 'pending' ? pc.bgGreen(pc.black(' READY ')) + ' ' : '';
@@ -138,12 +133,14 @@ export async function runTaskList(
   const inProgressCount = results.filter((r) => r.task.status === 'in_progress').length;
   const pendingCount = results.filter((r) => r.task.status === 'pending').length;
   const blockedCount = results.filter((r) => r.task.status === 'blocked').length;
+  const droppedCount = results.filter((r) => r.task.status === 'dropped').length;
 
   console.log(pc.dim(`Showing ${results.length} tasks: `) +
     pc.green(`${completedCount} completed`) + pc.dim(', ') +
     pc.yellow(`${inProgressCount} in progress`) + pc.dim(', ') +
     pc.gray(`${pendingCount} pending`) + pc.dim(', ') +
-    pc.red(`${blockedCount} blocked`) + '\n');
+    pc.red(`${blockedCount} blocked`) +
+    (droppedCount ? pc.dim(', ') + pc.dim(`${droppedCount} dropped`) : '') + '\n');
 }
 
 function briefTask(t: MasterPlanTask, milestoneId: string, isAvailable: boolean) {
@@ -158,6 +155,7 @@ function briefTask(t: MasterPlanTask, milestoneId: string, isAvailable: boolean)
     ...(t.targetFiles?.length ? { targetFiles: t.targetFiles } : {}),
     ...(t.fastPath ? { fastPath: true } : {}),
     ...(t.status === 'blocked' && t.notes ? { notes: t.notes } : {}),
+    ...(t.drop ? { drop: t.drop } : {}),
   };
 }
 
@@ -183,14 +181,7 @@ export async function runTaskNext(targetDirArg?: string, options: { json?: boole
 
   const agent = resolveAgentId();
   const now = Date.now();
-  const completedTaskIds = new Set<string>(archivedTaskIds(plan));
-  for (const m of plan.milestones) {
-    for (const t of m.tasks) {
-      if (t.status === 'completed') {
-        completedTaskIds.add(t.id);
-      }
-    }
-  }
+  const completedTaskIds = doneTaskIds(plan);
 
   // ── Prioritize Fast-Path tasks ─────────────────────────────────────────────
   let fastPathCandidate: { task: MasterPlanTask; milestone: any } | null = null;

@@ -4,6 +4,7 @@ import { parseJsonLoose } from './enforcement.js';
 import { getTemplatesDir, planTemplateFile } from './setup-assets.js';
 import { loadCodeStyle, styleStaleness } from './style/style-store.js';
 import { canonicalRole, listLearnings, loadLearnings } from './learnings.js';
+import { loadPlanChanges } from './plan-changes.js';
 
 /**
  * nativ · Checks that the harness itself is intact: nothing switches the guardrails off, no secret
@@ -17,7 +18,7 @@ export interface IntegrityFinding {
   status: CheckStatus;
   message: string;
   /** `guardrail` and `secret` findings decide whether doctor may report the harness as clean. */
-  category: 'guardrail' | 'secret' | 'roles' | 'learnings' | 'specs' | 'style';
+  category: 'guardrail' | 'secret' | 'roles' | 'learnings' | 'specs' | 'style' | 'plans';
 }
 
 /** Well-known credential shapes only; loose `password=` matches would flag every doc that mentions one. */
@@ -186,6 +187,26 @@ function checkLearnings(root: string): IntegrityFinding[] {
   return findings;
 }
 
+function checkPlanChanges(root: string): IntegrityFinding[] {
+  const findings: IntegrityFinding[] = [];
+  const { changes, unreadable } = loadPlanChanges(root);
+  const waiting = changes.filter((c) => c.status === 'proposed').length;
+  if (waiting) {
+    const message = `${waiting} plan changes wait for approval: nativ plan list --status proposed`;
+    findings.push({ id: 'plan-changes', status: 'info', category: 'plans', message });
+  }
+  if (unreadable) {
+    findings.push({
+      id: 'plan-changes:unreadable',
+      status: 'warn',
+      category: 'plans',
+      message: '.ai/plan_changes.json cannot be read, so proposed plan changes cannot be reviewed. '
+        + 'Fix the JSON or move the file.',
+    });
+  }
+  return findings;
+}
+
 function checkDesignProfile(specs: string | null): IntegrityFinding[] {
   if (specs === null || /^##\s+Design Profile\b/m.test(specs)) return [];
   return [{
@@ -250,6 +271,7 @@ export function checkHarnessIntegrity(root: string, options: { templatesDir?: st
     ...checkMissingRoleGuides(root),
     ...checkEditedRoleGuides(root, options.templatesDir ?? getTemplatesDir()),
     ...checkLearnings(root),
+    ...checkPlanChanges(root),
     ...checkUiSpecs(root, options.templatesDir ?? getTemplatesDir()),
     ...checkCodeStyle(root),
   ];

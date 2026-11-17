@@ -46,6 +46,7 @@ import {
   handleTaskRuns,
   runView,
 } from './routes/task-routes.js';
+import { handlePlanChangeDecide, handlePlanChanges } from './routes/plan-change-routes.js';
 import { ActivityFeed } from './activity-feed.js';
 import { handleActivity, handleRunTranscript, handleTaskChanges } from './routes/activity-routes.js';
 import {
@@ -66,6 +67,13 @@ import {
   runAutoTriageQueue,
   triageView,
 } from './routes/triage-routes.js';
+import {
+  acceptLaunchKey,
+  createStudioSession,
+  requireHuman,
+  sessionView,
+  type HumanSession,
+} from './studio-session.js';
 
 export const DEFAULT_STUDIO_PORT = 4983;
 
@@ -88,6 +96,8 @@ export interface StudioServerOptions {
   supervisor?: Omit<AgentSupervisorOptions, 'cwd'>;
   /** Tier 1 strategist transport (API key, model, fetch). Defaults to GEMINI_API_KEY and native fetch. */
   triage?: Tier1LiaisonOptions;
+  /** Session key for human decisions. Defaults to a headless session that refuses every decision. */
+  human?: HumanSession;
 }
 
 export interface StudioServerHandle {
@@ -144,6 +154,8 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
     initialMeta,
   );
 
+  const human = options.human ?? createStudioSession({ headless: true });
+
   const renderHtml = () => {
     if (typeof options.html === 'function') return options.html();
     return options.html ?? '<!doctype html><title>nativ DB Studio</title><p>Studio API is running. See /api/status.</p>';
@@ -199,6 +211,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
       switch (route) {
         case 'GET /':
         case 'GET /index.html': {
+          if (acceptLaunchKey(res, url, human)) return;
           const html = renderHtml();
           res.writeHead(200, {
             'Content-Type': 'text/html; charset=utf-8',
@@ -248,7 +261,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
         case 'POST /api/pipeline/tasks/action':
           return sendJson(res, 200, await handleTaskAction(root, await readJsonBody(req)));
         case 'POST /api/pipeline/tasks/dispatch':
-          return sendJson(res, 200, await handleTaskDispatch(supervisor, await readJsonBody(req)));
+          return sendJson(res, 200, await handleTaskDispatch(supervisor, await readJsonBody(req), root));
         case 'POST /api/pipeline/tasks/abort':
           return sendJson(res, 200, await handleTaskAbort(supervisor, await readJsonBody(req)));
         case 'GET /api/pipeline/tasks/runs':
@@ -275,7 +288,15 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           return sendJson(res, 200, handleTelemetryDetailed(root, supervisor));
         case 'GET /api/pipeline/escalations':
           return sendJson(res, 200, handleEscalations(root, url.searchParams));
+        case 'GET /api/pipeline/session':
+          return sendJson(res, 200, sessionView(req, human));
+        case 'GET /api/pipeline/plan-changes':
+          return sendJson(res, 200, handlePlanChanges(root, url.searchParams, req, human));
+        case 'POST /api/pipeline/plan-changes/decide':
+          requireHuman(req, human);
+          return sendJson(res, 200, handlePlanChangeDecide(root, await readJsonBody(req)));
         case 'POST /api/pipeline/escalations/resolve':
+          requireHuman(req, human);
           return sendJson(res, 200, await handleEscalationResolve(root, await readJsonBody(req)));
         case 'POST /api/pipeline/triage/evaluate':
           return sendJson(res, 200, await handleTriageEvaluate(root, liaison, triageInFlight, await readJsonBody(req)));
@@ -297,6 +318,7 @@ export function createStudioServer(options: StudioServerOptions = {}): http.Serv
           '/api/pipeline/telemetry/detailed', '/api/pipeline/escalations', '/api/pipeline/escalations/resolve',
           '/api/pipeline/triage/evaluate', '/api/pipeline/triage/status', '/api/pipeline/triage/config',
           '/api/pipeline/activity', '/api/pipeline/tasks/changes', '/api/pipeline/runs/transcript',
+          '/api/pipeline/session', '/api/pipeline/plan-changes', '/api/pipeline/plan-changes/decide',
         ];
         if (known.includes(url.pathname.replace(/\/+$/, ''))) throw new HttpError(405, 'METHOD_NOT_ALLOWED', `${req.method} not allowed on ${url.pathname}`);
         throw new HttpError(404, 'NOT_FOUND', `No route for ${url.pathname}`);

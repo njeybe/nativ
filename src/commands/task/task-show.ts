@@ -68,6 +68,10 @@ export async function runTaskShow(taskId: string, targetDirArg?: string, options
   console.log(pc.bold(pc.cyan(`\n[${task.id}] ${task.title}`)) + pc.dim(` (${where})`));
   console.log(`  Status: ${task.status} | Agent: ${task.assignedSubagent}`);
   console.log(`  Verify: \`${task.verificationCommand || 'none'}\``);
+  if (task.drop) {
+    const by = task.drop.replacedBy ? ` | Replaced by: ${task.drop.replacedBy}` : '';
+    console.log(`  Dropped: ${task.drop.reason}${by} | Change: ${task.drop.changeId}`);
+  }
   if (task.dependencies?.length) console.log(`  Depends on: ${task.dependencies.join(', ')}`);
   if (task.targetFiles?.length) console.log(`  Files: ${task.targetFiles.join(', ')}`);
   if (task.description) console.log(`\n${task.description}`);

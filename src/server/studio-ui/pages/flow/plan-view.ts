@@ -35,7 +35,10 @@ export const flowPlanScript = String.raw`  function flowWires(L, hot, showAll) {
     return m.tasks.map(function (t) {
       var p = L.pos[t.id];
       var cls = 'node ' + t.status + (hot && hot[t.id] ? ' hot' : '') + (focusId === t.id ? ' sel' : '');
-      return '<button type="button" class="' + ui.esc(cls) + '" data-act="flow-focus" data-key="' + ui.esc(t.id) + '" data-id="' + ui.esc(t.id) +
+      var mute = t.status === 'dropped' ? ' style="opacity:.6;border-style:dashed"' : '';
+      return '<button type="button" class="' + ui.esc(cls) + '"' + mute +
+        ' data-act="flow-focus" data-key="' + ui.esc(t.id) +
+        '" data-id="' + ui.esc(t.id) +
         '" data-round="' + p.round + '" aria-pressed="' + (focusId === t.id) + '" title="' + ui.esc(t.title) + '" style="left:' + p.x + 'px;top:' + p.y +
         'px;width:' + FLOW.W + 'px;height:' + FLOW.H + 'px"><div class="l1">' + ui.statusIcon(t.status) + '<span class="mono faint">' + ui.esc(t.id) +
         '</span><span class="d">' + flowNodeTime(t) + '</span></div><div class="title">' + ui.esc(t.title) + '</div></button>';
@@ -44,7 +47,8 @@ export const flowPlanScript = String.raw`  function flowWires(L, hot, showAll) {
 
   function flowLegend() {
     var one = function (s) { return '<span>' + ui.statusIcon(s) + Studio.statusLabel(s) + '</span>'; };
-    return '<div class="legend">' + ['completed', 'in_progress', 'pending', 'blocked'].map(one).join('') + '</div>';
+    var all = ['completed', 'in_progress', 'pending', 'blocked', 'dropped'];
+    return '<div class="legend">' + all.map(one).join('') + '</div>';
   }
 
   function flowPlanTools(L, hot, view) {

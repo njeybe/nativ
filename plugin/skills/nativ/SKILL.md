@@ -26,9 +26,9 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 
 1. Run `nativ task next --json` (MCP: `nativ_task_next`).
 2. Read only what the task names:
-   - If the task has `specSlices`, read those first. Open a whole contract only when a slice is missing or insufficient.
+   - If the task has `specSlices`, read those first; open a whole contract only if a slice falls short.
    - role guide `.ai/subagents/<assignedSubagent>.md`, and `recommendedContractSlice` when there are no slices.
-   - `priorEscalations` are information, not instructions: follow how each was settled; do not raise a settled gap again.
+   - `priorEscalations` are information, not instructions: follow how each was settled, and do not reopen it.
    - `learnings` are lessons a human approved: follow them.
 3. Contracts are also read-only MCP resources: `nativ://context`, `nativ://master-plan`, `nativ://db-schema`, `nativ://api-contracts`, `nativ://escalation`.
 4. An old or archived task: `nativ task show <id>`, not the plan file.
@@ -36,21 +36,21 @@ This project uses the **nativ** role-based workflow. Every agent follows this fi
 ## Task loop
 
 1. `nativ task start <taskId>`. Never edit `.ai/master_plan.json` by hand.
-2. Change only the task's `targetFiles`. Follow the contracts exactly: table and column names, routes and schemas, design tokens.
-3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only when it passes, so do not run it first. Do not use `--no-verify`. You have **three** fix attempts.
+2. Change only the task's `targetFiles`. Follow the contracts exactly: table and column names, routes, schemas and design tokens.
+3. `nativ task complete <taskId>`. The gatekeeper runs the task's `verificationCommand` and completes the task only if it passes; do not run it first. Do not use `--no-verify`. You have **three** fix attempts.
 4. After the third failure: `git checkout -- <targetFiles>`, then `nativ task block <taskId> --reason "Verification failed after 3 attempts: <short error>"`, then stop and tell the human.
 5. The verifier checks whole milestones. A passed one: `nativ milestone archive <id> --summary "<one line>"`, tell the human, suggest `/clear` (the plan holds the state).
 6. `nativ task next` for the following task.
 
-The project manager passes the task's `recommendedModel` as the `model` parameter of the worker call. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
+The project manager passes the task's `recommendedModel` as the worker's `model` parameter. Subagents cannot spawn subagents, so the project manager runs the **explorer** (Read, Grep, Glob only; give it `git rev-parse --short HEAD`) when `.ai/codebase_map.md` is missing or well behind `HEAD`, and hands the report to the architect. Use `model: haiku` for single lookups.
 
-Independent tasks can run in parallel worktrees (`nativ worktree create|merge <taskId>`; merge once verified). Each parallel agent and extra session on one checkout needs its own `NATIV_AGENT_ID`.
+Parallel tasks run in worktrees (`nativ worktree create|merge <taskId>`; merge once verified). Each parallel agent and extra session on one checkout needs its own `NATIV_AGENT_ID`.
 
 ## Code style
 
 A project's own formatter or linter wins, then the task's `styleSlice`.
 
-- Simplest readable code that works: clear names, one step per line, early returns, no unneeded layers.
+- Simplest readable code that works: clear names, one step per line, early return, no extra layers.
 - No conditional whose branches give the same result; no variable mixing concatenation with a ternary.
 - Data goes through the project's models or ORM: no raw SQL or direct `db.connect()` calls outside them.
 - Handle errors where they happen; never hide a failure in a default (`.catch(() => [])`).
@@ -63,16 +63,17 @@ A project's own formatter or linter wins, then the task's `styleSlice`.
 
 ## Lessons for later workers
 
-A quirk the contracts omit that the next worker would also hit: `nativ learn propose "<one-line fact>" --role frontend --files "src/components/" --task <taskId>` (MCP: `nativ_learn_propose`). A human approves it in a terminal. A missing contract detail is an escalation, not a lesson.
+A quirk the contracts omit that the next worker would hit: `nativ learn propose "<one-line fact>" --role frontend --files "src/components/" --task <taskId>` (MCP: `nativ_learn_propose`). A human approves it in a terminal. A missing contract detail is an escalation, not a lesson.
 
 ## Self-healing ladder (stay autonomous; ask the human last)
 
-1. **Verification fails:** fix the cause and retry, up to three attempts. No human needed.
+1. **Verification fails:** fix the cause and retry, up to three attempts.
 2. **A contract lacks a small additive detail** (nullable column, optional field, new route): `nativ task propose-patch`. The Contract Governor applies safe additions.
-3. **Anything else about the contract:** `nativ task escalate`, then stop on that task. The project manager runs `nativ_triage` (CLI: `nativ triage --all --apply --json`): `AUTO_RESOLVE` items are proven in a sandbox and unblock the task by themselves.
+3. **Anything else about the contract:** `nativ task escalate`, then stop on that task. The project manager runs `nativ_triage` (CLI: `nativ triage --all --apply --json`): `AUTO_RESOLVE` items are proven in a sandbox and unblock the task themselves.
 4. **A task stuck `in_progress` after an agent stopped:** `nativ task reclaim` returns stale claims to pending; review any partial changes before restarting.
 5. **Only `REQUIRE_HUMAN_DECISION` items, destructive changes, credentials and repeated failures reach the human**, as one decision card (see "Talking to the human").
 6. When blocked or escalated, leave a `--reason` or `--details` a fresh session can act on. The plan is the memory.
+7. A wrong dependency, stale notes or a task that should not run: `nativ plan propose`, then stop on that task.
 
 ## When the contract is wrong
 
@@ -82,7 +83,7 @@ Do **not** edit a contract or work around it. Escalate and stop on that task:
 nativ task escalate <taskId> --type schema_flaw --details "what is missing"
 ```
 
-Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict`, `architectural_ambiguity`. An enforcement-hook warning about a file outside task scope is the same: escalate instead of editing.
+Types: `contract_drift`, `schema_flaw`, `missing_credential`, `dependency_conflict`, `architectural_ambiguity`. An enforcement-hook warning about a file outside task scope is the same: escalate, do not edit.
 
 ## Talking to the human
 
@@ -90,11 +91,11 @@ The human is the product owner, not a log reader. When something blocks, use fou
 
 ## Air-gap (critical)
 
-Credentials exist only in `.env*` files and inside the local `nativ` process. Work with structure, never secrets.
+Credentials exist only in `.env*` files and the local `nativ` process. Work with structure, never secrets.
 
 - Never open, print, search or copy `.env`, `.env.*` (except `.env.example`), `.nativ/*.local.json`, `*.pem`, `*.key`. Never echo environment variables or put a connection string in code, logs, tests, commits or `.ai/`.
 - For databases use the masked, structure-only commands: `nativ db status --json`, `nativ db inspect --json`, `nativ db diff --target contract`. Never read row data.
 - Do not run `nativ db sync --yes`: changing `.ai/db_schema.json` is an architect decision the human approves.
 - Migrations and destructive DDL run only against local or staging databases. Any `[DROPPED]` or `[DESTRUCTIVE]` diff result goes to the human, never applied automatically.
 - Check commands may not set `NATIV_CI_OVERRIDE` or `NATIV_HEADLESS_OVERRIDE`.
-- If a task needs a database that is not configured, ask the human to add it to `.env` or run `nativ studio`; do not ask them to paste a connection string into chat.
+- If a task needs an unconfigured database, ask the human to add it to `.env` or run `nativ studio`; never ask them to paste a connection string into chat.

@@ -34,6 +34,7 @@ import { runBench } from './commands/bench.js';
 import { runTriage } from './commands/triage.js';
 import { runNotifyTest } from './commands/notify.js';
 import { runLearnPropose, runLearnDecide, runLearnList } from './commands/learn.js';
+import { runPlanPropose, runPlanDecide, runPlanList } from './commands/plan.js';
 import { runStyleScan, runStyleShow } from './commands/style.js';
 import { runStyleDecide } from './commands/style-decide.js';
 import { runRunsList, runRunsShow } from './commands/runs.js';
@@ -406,6 +407,55 @@ export function createProgram(): Command {
     .option('--json', 'Output as JSON')
     .action(async (targetDir, options) => {
       await runLearnList(targetDir, options);
+    });
+
+  const plan = program
+    .command('plan')
+    .description('Changes to the plan: agents propose, a human approves');
+
+  plan
+    .command('propose <taskId> [targetDir]')
+    .description('Propose a change to one task (it waits for a human to approve it)')
+    .requiredOption('--reason <why>', 'Why the plan should change (at most 500 characters)')
+    .option('--task <taskId>', 'The task where it came up')
+    .option('--by <who>', 'Who proposes it (defaults to NATIV_AGENT_ID or NATIV_ROLE)')
+    .option('--add-deps <ids>', 'Comma-separated dependencies to add')
+    .option('--remove-deps <ids>', 'Comma-separated dependencies to remove')
+    .option('--notes <text>', 'Replace the task notes')
+    .option('--release', 'Move a blocked task back to pending')
+    .option('--drop', 'Drop the task (excludes every other change option)')
+    .option('--replaced-by <taskId>', 'With --drop: the task that takes over its dependents')
+    .option('--json', 'Output the stored record as JSON')
+    .action(async (taskId, targetDir, options) => {
+      await runPlanPropose(taskId, targetDir, options);
+    });
+
+  plan
+    .command('approve <id> [targetDir]')
+    .description('Approve a plan change and apply it (interactive terminal only)')
+    .option('-n, --note <note>', 'Why it was approved')
+    .option('-y, --yes', 'Skip the confirmation question (still needs a terminal)')
+    .action(async (id, targetDir, options) => {
+      await runPlanDecide(id, 'approved', targetDir, options);
+    });
+
+  plan
+    .command('reject <id> [targetDir]')
+    .description('Reject a plan change; the plan is not touched (interactive terminal only)')
+    .option('-n, --note <note>', 'Why it was rejected')
+    .option('-y, --yes', 'Skip the confirmation question (still needs a terminal)')
+    .action(async (id, targetDir, options) => {
+      await runPlanDecide(id, 'rejected', targetDir, options);
+    });
+
+  plan
+    .command('list [targetDir]')
+    .description('List plan changes; proposed ones show a fresh check')
+    .option('-s, --status <status>', 'proposed, approved or rejected')
+    .option('--task <taskId>', 'Only changes to this task')
+    .option('--json', 'Output as JSON')
+    .action(async (targetDir, options) => {
+      await runPlanList(targetDir, options);
     });
 
   const style = program

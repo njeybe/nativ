@@ -14,6 +14,7 @@ import {
 import { withPlanLock } from '../../core/lock-manager.js';
 import { getPlanPath, ProposePatchOptions } from './task-common.js';
 import { emitTaskEvent } from './task-lifecycle.js';
+import { droppedRefusal } from '../../core/task-claims.js';
 
 export async function runTaskEscalate(
   taskId: string,
@@ -47,6 +48,14 @@ export async function runTaskEscalate(
     if (!foundTask) {
       ctx.abort();
       console.error(pc.red(`\n✖ Task [${taskId}] not found in .ai/master_plan.json\n`));
+      process.exitCode = 1;
+      return;
+    }
+
+    const why = droppedRefusal(foundTask);
+    if (why) {
+      ctx.abort();
+      console.error(pc.red(`\n✖ ${why}\n`));
       process.exitCode = 1;
       return;
     }

@@ -120,6 +120,16 @@ export async function runTaskAdd(title: string, targetDirArg?: string, options: 
       return failTaskAdd('UNKNOWN_DEPENDENCY', `Unknown dependency task ID(s): ${unknownDeps.join(', ')}`, options.json);
     }
 
+    const live = plan.milestones.flatMap((m) => m.tasks);
+    const droppedIds = new Set(live.filter((t) => t.status === 'dropped').map((t) => t.id));
+    for (const m of plan.milestones) for (const id of m.archived?.droppedTaskIds ?? []) droppedIds.add(id);
+    const droppedDeps = deps.filter((d) => droppedIds.has(d));
+    if (droppedDeps.length) {
+      ctx.abort();
+      const message = `Dependency on dropped task(s): ${droppedDeps.join(', ')}`;
+      return failTaskAdd('DROPPED_DEPENDENCY', message, options.json);
+    }
+
     const fastPath = options.fastPath === true;
     let milestone: MasterPlanMilestone | undefined;
     let createdMilestone = false;

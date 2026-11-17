@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
+import { countedTasks } from '../core/plan-status.js';
 import { MasterPlan } from '../scanner/types.js';
 import { loadCodeStyle, styleStaleness } from '../core/style/style-store.js';
 import { loadTelemetry, formatTelemetrySummary, recomputeTelemetrySummary } from '../core/telemetry.js';
@@ -42,19 +43,21 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     let completedTasks = 0;
     let inProgressTasks = 0;
     let blockedTasks = 0;
+    let droppedTasks = 0;
 
     for (const m of plan.milestones) {
       if (m.archived) {
         // Archived work still counts, so progress does not drop after archiving.
-        totalTasks += m.archived.taskCount;
-        completedTasks += m.archived.taskCount;
+        const kept = m.archived.taskCount - (m.archived.droppedTaskIds?.length ?? 0);
+        totalTasks += kept;
+        completedTasks += kept;
         const line = `🚩 Milestone [${m.id}]: ${m.name} (archived, ${m.archived.taskCount} tasks)`;
         console.log(pc.bold(`\n${line}`) + pc.dim(` - ${m.archived.summary}`));
         continue;
       }
       console.log(pc.bold(`\n🚩 Milestone [${m.id}]: ${m.name} (${m.status})`));
       for (const t of m.tasks) {
-        totalTasks++;
+        if (t.status !== 'dropped') totalTasks++;
         let statusBadge = pc.gray('○ pending');
         if (t.status === 'completed') {
           completedTasks++;
@@ -65,6 +68,9 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
         } else if (t.status === 'blocked') {
           blockedTasks++;
           statusBadge = pc.red('✖ blocked');
+        } else if (t.status === 'dropped') {
+          droppedTasks++;
+          statusBadge = pc.dim('⊘ dropped');
         }
 
         console.log(`  ${statusBadge} ${pc.bold(t.id)}: ${t.title}`);
@@ -77,6 +83,7 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
 
     const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     console.log(pc.bold(pc.cyan(`\n📈 Completion: ${completedTasks}/${totalTasks} tasks (${pct}%)`)));
+    if (droppedTasks > 0) console.log(pc.dim(`   ${droppedTasks} dropped (not counted)`));
 
     if (codeStyle) console.log(pc.dim(styleLine(codeStyle)) + '\n');
 
@@ -91,6 +98,10 @@ export async function runStatus(targetDirArg?: string, options: StatusOptions = 
     console.error(pc.red(`✖ Failed to read or parse .ai/master_plan.json: ${err.message}`));
     process.exitCode = 1;
   }
+}
+
+function archivedKept(a: { taskCount: number; droppedTaskIds?: string[] }): number {
+  return a.taskCount - (a.droppedTaskIds?.length ?? 0);
 }
 
 function buildStatusJson(plan: MasterPlan, telemetry: ReturnType<typeof loadTelemetry>, full: boolean) {
@@ -108,8 +119,8 @@ function buildStatusJson(plan: MasterPlan, telemetry: ReturnType<typeof loadTele
           id: m.id,
           name: m.name,
           status: m.status,
-          taskCount: m.archived.taskCount,
-          completedCount: m.archived.taskCount,
+          taskCount: archivedKept(m.archived),
+          completedCount: archivedKept(m.archived),
           archived: true,
           summary: m.archived.summary,
         }
@@ -119,8 +130,9 @@ function buildStatusJson(plan: MasterPlan, telemetry: ReturnType<typeof loadTele
           id: m.id,
           name: m.name,
           status: m.status,
-          taskCount: m.tasks.length,
+          taskCount: countedTasks(m.tasks).length,
           completedCount: m.tasks.filter((t) => t.status === 'completed').length,
+          droppedCount: m.tasks.length - countedTasks(m.tasks).length,
         }
   );
   return { ...base, milestones, telemetry: telemetry.summary };

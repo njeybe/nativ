@@ -12,6 +12,7 @@ import {
   cacheHitRate,
   loadTelemetry,
 } from '../../core/telemetry.js';
+import { countedTasks, doneTaskIds, isSettled } from '../../core/plan-status.js';
 import { loadCodeStyle } from '../../core/style/style-store.js';
 import { STYLE_RULES } from '../../core/style/style-types.js';
 import { HttpError } from '../http-utils.js';
@@ -87,7 +88,9 @@ export function handlePipelineStatus(root: string) {
   const tasks = milestones.flatMap((m) => m.tasks);
   const count = (items: Array<{ status: string }>, status: string) => items.filter((i) => i.status === status).length;
   // Archived tasks are gone from the plan but still count as done work.
-  const kept = archivedCount(milestones);
+  const archivedDropped = milestones.reduce((n, m) => n + (m.archived?.droppedTaskIds?.length ?? 0), 0);
+  const kept = archivedCount(milestones) - archivedDropped;
+  const counted = countedTasks(tasks).length + kept;
   const completedTasks = count(tasks, 'completed') + kept;
   const { summary, tasks: trackedTasks } = loadTelemetry(path.join(aiDir, 'telemetry.json'));
   const actual = aggregateActualUsage(trackedTasks);
@@ -105,12 +108,13 @@ export function handlePipelineStatus(root: string) {
         pending: count(milestones, 'pending'),
       },
       tasks: {
-        total: tasks.length + kept,
+        total: counted,
         completed: completedTasks,
         inProgress: count(tasks, 'in_progress'),
         pending: count(tasks, 'pending'),
         blocked: count(tasks, 'blocked'),
-        progressPercentage: percent(completedTasks, tasks.length + kept),
+        dropped: count(tasks, 'dropped') + archivedDropped,
+        progressPercentage: percent(completedTasks, counted),
       },
       telemetry: {
         totalTokens: finiteOr(summary?.estimatedTotalTokens, 0),
@@ -135,12 +139,7 @@ export function handlePipelineStatus(root: string) {
 export function handlePipelineTasks(root: string) {
   const plan = readPlan(root);
   const milestones = planMilestones(plan);
-  const completedIds = new Set(
-    [
-      ...milestones.flatMap((m) => m.tasks).filter((t) => t.status === 'completed').map((t) => t.id),
-      ...milestones.flatMap((m) => m.archived?.taskIds ?? []),
-    ],
-  );
+  const completedIds = plan ? doneTaskIds(plan) : new Set<string>();
   return {
     ok: true,
     projectName: plan?.projectName ?? null,
@@ -150,7 +149,10 @@ export function handlePipelineTasks(root: string) {
       ...m,
       progressPercentage: m.archived
         ? 100
-        : percent(m.tasks.filter((t) => t.status === 'completed').length, m.tasks.length),
+        : percent(
+            m.tasks.filter((t) => t.status === 'completed').length,
+            countedTasks(m.tasks).length,
+          ),
       tasks: m.tasks.map((t) => ({
         ...t,
         // Same readiness rule as `nativ task list --available`.
@@ -274,8 +276,14 @@ export function runView(run: RunnerRecord) {
  * POST /api/pipeline/tasks/dispatch: hands a task to a background runner, either the native
  * Messages API engine or a CLI command (Claude Code by default), in an isolated worktree.
  */
-export async function handleTaskDispatch(supervisor: AgentSupervisor, body: Record<string, unknown>) {
+export async function handleTaskDispatch(
+  supervisor: AgentSupervisor, body: Record<string, unknown>, root: string,
+) {
   const taskId = parseTaskId(body.taskId);
+  const live = findTask(readPlan(root), taskId);
+  if (live && isSettled(live)) {
+    throw new HttpError(400, 'INVALID_TRANSITION', `Task "${taskId}" is ${live.status} and cannot be dispatched`);
+  }
   const runnerEngine = parseRunnerEngine(body.runnerEngine);
   const runnerCommand = parseRunnerCommand(body.runnerCommand);
   const thinkingBudget = parseThinkingBudget(body.thinkingBudget);

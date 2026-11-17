@@ -9,6 +9,7 @@ import {
 import { EscalationRecord, EscalationType, isSubagentType, SubagentType } from '../scanner/types.js';
 import { withPlanLockSync } from '../core/lock-manager.js';
 import { recordCircuitBreakerTrip } from '../core/telemetry.js';
+import { isSettled } from '../core/plan-status.js';
 import { notifyHuman } from '../core/notify.js';
 import { appendEscalation, loadLedger, mutateLedger, type LedgerEntry } from './store.js';
 
@@ -382,6 +383,7 @@ export class CircuitBreaker {
         for (const milestone of plan.milestones) {
           const task = milestone.tasks.find((t) => t.id === taskId);
           if (task) {
+            if (isSettled(task)) break;
             task.status = 'blocked';
             task.notes = note;
             break;

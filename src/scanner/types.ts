@@ -54,9 +54,19 @@ export function isSubagentType(value: string): value is SubagentType {
   return (SUBAGENT_TYPES as readonly string[]).includes(value);
 }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'dropped';
 
-export const TASK_STATUSES: readonly TaskStatus[] = ['pending', 'in_progress', 'completed', 'blocked'];
+export const TASK_STATUSES: readonly TaskStatus[] = [
+  'pending', 'in_progress', 'completed', 'blocked', 'dropped',
+];
+
+/** Why and by which plan change a task was dropped. */
+export interface TaskDrop {
+  reason: string;
+  replacedBy?: string;
+  changeId: string;
+  at: string;
+}
 
 export interface MasterPlanTask {
   id: string;
@@ -85,6 +95,8 @@ export interface MasterPlanTask {
   claimedAt?: string;
   /** Human overrides that changed this task: what was bypassed, when, and by whom. */
   overrides?: TaskOverride[];
+  /** Set only on dropped tasks. */
+  drop?: TaskDrop;
 }
 
 export type TaskOverrideAction = 'start --force' | 'complete --no-verify' | 'reclaim --force';
@@ -157,7 +169,19 @@ export function validateMasterPlanTask(task: unknown): string[] {
   if (t.overrides !== undefined && !(Array.isArray(t.overrides) && t.overrides.every(isTaskOverride))) {
     errors.push(`${label}: "overrides" must be an array of { action, at, by? } entries`);
   }
+  errors.push(...validateDrop(t, label));
   return errors;
+}
+
+function validateDrop(t: Record<string, unknown>, label: string): string[] {
+  if (t.status !== 'dropped') {
+    return t.drop === undefined ? [] : [`${label}: "drop" is only allowed on dropped tasks`];
+  }
+  const d = t.drop as Record<string, unknown> | undefined;
+  if (!d || typeof d !== 'object' || typeof d.reason !== 'string' || !d.reason.trim()) {
+    return [`${label}: a dropped task needs "drop.reason"`];
+  }
+  return [];
 }
 
 /** What the plan keeps about a milestone whose tasks moved to an archive file. */
@@ -168,6 +192,8 @@ export interface MilestoneArchiveInfo {
   archivedAt: string;
   taskCount: number;
   taskIds: string[];
+  /** Ids in taskIds that were dropped; they do not count as done. */
+  droppedTaskIds?: string[];
   file: string;
 }
 

@@ -23,7 +23,8 @@ import { appendEvent } from '../../core/activity/event-log.js';
 import { cleanText } from '../../core/activity/normalize.js';
 import type { VerifyData } from '../../core/activity/event-types.js';
 import { refuseHeadless } from '../../core/human-gate.js';
-import { claimConflict, resolveAgentId, startRefusal } from '../../core/task-claims.js';
+import { claimConflict, droppedRefusal, resolveAgentId, startRefusal } from '../../core/task-claims.js';
+import { isSettled, settleMilestone } from '../../core/plan-status.js';
 import {
   getPlanPath,
   TaskUnlockOptions,
@@ -63,6 +64,11 @@ export async function runTaskStart(taskId: string, targetDirArg?: string, option
         : `Task [${taskId}] not found in .ai/master_plan.json`;
       console.error(pc.red(`\n✖ ${why}\n`));
       process.exitCode = 1;
+      return;
+    }
+
+    if (refuseDropped(foundTask)) {
+      ctx.abort();
       return;
     }
 
@@ -226,6 +232,7 @@ export async function runTaskComplete(
   }
 
   const agent = resolveAgentId();
+  if (refuseDropped(foundTask)) return;
   if (refuseOnClaim(foundTask, agent)) return;
   const seen = { status: foundTask.status, claimedBy: foundTask.claimedBy };
 
@@ -354,6 +361,12 @@ export async function runTaskComplete(
       return;
     }
 
+    if (refuseDropped(taskToComplete)) {
+      ctx.abort();
+      changed = true;
+      return;
+    }
+
     const why = changedDuringVerification(taskToComplete, seen, agent);
     if (why) {
       ctx.abort();
@@ -374,19 +387,13 @@ export async function runTaskComplete(
     }
     written = true;
 
-    // Check if milestone is completed
-    const allMilestoneTasksDone = milestoneToComplete.tasks.every((t: MasterPlanTask) => t.status === 'completed');
-    if (allMilestoneTasksDone) {
-      milestoneToComplete.status = 'completed';
+    // Completed and dropped tasks both settle a milestone
+    if (milestoneToComplete.tasks.every(isSettled)) {
+      const { next } = settleMilestone(plan, milestoneToComplete);
       console.log(pc.green(`\n🏁 Milestone [${pc.bold(milestoneToComplete.id)}] completed!`));
-
-      // Find next milestone
-      const nextMilestone = plan.milestones.find((m) => m.status !== 'completed');
-      if (nextMilestone) {
-        plan.activeMilestoneId = nextMilestone.id;
-        console.log(pc.cyan(`▶ Active milestone advanced to: [${nextMilestone.id}] ${nextMilestone.name}`));
+      if (next) {
+        console.log(pc.cyan(`▶ Active milestone advanced to: [${next.id}] ${next.name}`));
       } else {
-        plan.overallStatus = 'completed';
         console.log(pc.bold(pc.green('🎉 All project milestones completed!')));
       }
     }
@@ -435,7 +442,7 @@ export async function runTaskBlock(taskId: string, reason: string, targetDirArg?
       return;
     }
 
-    if (refuseOnClaim(foundTask, resolveAgentId())) {
+    if (refuseDropped(foundTask) || refuseOnClaim(foundTask, resolveAgentId())) {
       ctx.abort();
       return;
     }
@@ -457,6 +464,15 @@ export function recordOverride(task: MasterPlanTask, action: TaskOverrideAction,
   const by = resolvePerson(root);
   const entry: TaskOverride = { action, at: new Date().toISOString(), ...(by ? { by } : {}) };
   task.overrides = [...(task.overrides ?? []), entry];
+}
+
+/** Prints and flags a dropped task; true when the caller must stop. */
+function refuseDropped(task: MasterPlanTask): boolean {
+  const why = droppedRefusal(task);
+  if (!why) return false;
+  console.error(pc.red(`\n✖ ${why}\n`));
+  process.exitCode = 1;
+  return true;
 }
 
 /** Prints and flags a fresh claim held by another explicit id; true when the caller must stop. */

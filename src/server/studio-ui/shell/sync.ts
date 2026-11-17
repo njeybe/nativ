@@ -5,7 +5,7 @@ export const syncScript = String.raw`  // ─── Real-time sync: EventSource 
   // Keys are SSE event names on the wire; values are the pipeline slices each one invalidates.
   var EVENT_PARTS = {
     // .ai/escalation.json writes (circuit-breaker trips, resolutions) arrive as plan changes.
-    'plan_change': ['status', 'tasks', 'worktrees', 'escalations', 'triage'],
+    'plan_change': ['status', 'tasks', 'worktrees', 'escalations', 'triage', 'planChanges'],
     // The server also reports .ai/benchmark_report.json writes (e.g. a CLI "nativ bench") as telemetry changes.
     'telemetry_change': ['status', 'benchmarks', 'telemetry'],
     'benchmark_change': ['benchmarks'],

@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { CircuitBreaker } from '../../governor/circuit-breaker.js';
+
+const DIFF_LIMIT = 1024 * 1024;
 
 export type ChangeStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
 
@@ -17,6 +19,7 @@ export interface TaskChanges {
   base: string | null;
   files: ChangedFile[];
   diff?: string;
+  diffTruncated?: boolean;
 }
 
 export class GitChangesError extends Error {
@@ -34,6 +37,51 @@ function git(cwd: string, args: string[]): Promise<string> {
         else resolve(stdout);
       });
   });
+}
+
+/** Streams a diff and keeps at most DIFF_LIMIT bytes, cut at a line end. */
+function gitDiff(cwd: string, args: string[]): Promise<{ text: string; truncated: boolean }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let truncated = false;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      if (truncated) return;
+      timedOut = true;
+      child.kill();
+    }, 10_000);
+    child.stdout.on('data', (chunk: Buffer) => {
+      if (truncated) return;
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total > DIFF_LIMIT) {
+        truncated = true;
+        child.kill();
+      }
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(new GitChangesError('GIT_ERROR', `git ${args[0]} failed: ${err.message}`));
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (timedOut) return reject(new GitChangesError('GIT_ERROR', 'git diff timed out after 10 s'));
+      if (!truncated && code !== 0) {
+        return reject(new GitChangesError('GIT_ERROR', `git diff failed with exit code ${code}`));
+      }
+      resolve(cutAtLineEnd(Buffer.concat(chunks), truncated));
+    });
+  });
+}
+
+function cutAtLineEnd(buf: Buffer, truncated: boolean) {
+  if (!truncated) return { text: buf.toString('utf8'), truncated: false };
+  const head = buf.subarray(0, DIFF_LIMIT);
+  const end = head.lastIndexOf(10);
+  const kept = end === -1 ? head.subarray(0, 0) : head.subarray(0, end + 1);
+  return { text: kept.toString('utf8'), truncated: true };
 }
 
 const slash = (p: string) => p.replace(/\\/g, '/');
@@ -118,6 +166,10 @@ export async function taskChanges(
     files.push({ path: file, added: countLines(path.join(cwd, raw)), removed: 0, status: 'untracked' });
   }
   const result: TaskChanges = { scope, base, files };
-  if (opts.full) result.diff = await git(cwd, ['diff', base, '--']);
+  if (opts.full) {
+    const diff = await gitDiff(cwd, ['diff', base, '--']);
+    result.diff = diff.text;
+    if (diff.truncated) result.diffTruncated = true;
+  }
   return result;
 }

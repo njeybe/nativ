@@ -20,6 +20,7 @@ export const detailViewScript = String.raw`  // ─── Task detail panel (pur
 
   function detailActions(t, env) {
     var b = env.busy ? 'task-' + env.busy : null;
+    if (t.status === 'dropped') return '';
     if (t.status === 'blocked') {
       var out = dBtn('task-output', 'Show check output', { primary: true, busy: b }) + dBtn('task-start', 'Try again', { busy: b });
       if (t.hasProposal) return out + dBtn('task-proposal', 'Review proposal', { busy: b });
@@ -35,6 +36,17 @@ export const detailViewScript = String.raw`  // ─── Task detail panel (pur
       return dBtn('task-start', 'Start', { primary: true, busy: b }) + dBtn('task-dispatch', 'Dispatch', { busy: b });
     }
     return '';
+  }
+
+  function droppedBlock(t) {
+    if (t.status !== 'dropped') return '';
+    var d = t.drop || {};
+    var by = d.replacedBy ? '<div>Replaced by <button type="button" class="chip" data-task="' + esc(d.replacedBy) +
+      '"><span class="mono">' + esc(d.replacedBy) + '</span></button></div>' : '';
+    var change = d.changeId ? '<div class="faint">by plan change <span class="mono">' +
+      esc(d.changeId) + '</span></div>' : '';
+    return '<div class="dropped-block"><div class="dlabel">Dropped</div><div class="reason">' +
+      esc(d.reason || 'No reason recorded.') + '</div>' + by + change + '</div>';
   }
 
   function detailTook(t) {
@@ -68,7 +80,8 @@ export const detailViewScript = String.raw`  // ─── Task detail panel (pur
     var files = t.files.map(function (f) { return '<span class="chip mono">' + esc(f) + '</span>'; }).join('') || '<span class="faint">None listed.</span>';
     return '<div class="drawer-head">' + ui.statusIcon(t.status) + '<span class="mono faint">' + esc(t.id) + '</span>' +
       ui.pill(t.status) + '<button type="button" class="btn ghost close" data-act="close-detail" aria-label="Close">' + ui.icon('x') + '</button></div>' +
-      '<div class="drawer-body"><h3>' + esc(t.title) + '</h3>' + reason + (actions ? '<div class="chips">' + actions + '</div>' : '') + step +
+      '<div class="drawer-body"><h3>' + esc(t.title) + '</h3>' + reason + droppedBlock(t) +
+      (actions ? '<div class="chips">' + actions + '</div>' : '') + step +
       detailFacts(t, model) +
       chipList('Needs first', t.deps.length ? t.deps.map(function (d) { return depChip(model, d); }).join('') : '<span class="faint">Nothing. It can start right away.</span>') +
       chipList('Unblocks', t.children.length ? t.children.map(function (d) { return depChip(model, d); }).join('') : '<span class="faint">No later task depends on this.</span>') +

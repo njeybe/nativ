@@ -75,4 +75,35 @@ const byPath = (res) => Object.fromEntries(res.files.map((f) => [f.path, f]));
   console.log('  ok main task');
 }
 
+// Diff over 1 MB: cut at a line end, flagged, file list still complete
+{
+  const root = makeRepo();
+  fs.writeFileSync(path.join(root, 'big.txt'), 'seed\n');
+  git(root, 'add', '-A');
+  git(root, 'commit', '-qm', 'big seed');
+  CircuitBreaker.recordBaseline(root, 'task-3', git(root, 'rev-parse', 'HEAD'));
+  const line = 'x'.repeat(99) + '\n';
+  fs.writeFileSync(path.join(root, 'big.txt'), line.repeat(15000));
+  const res = await taskChanges(root, 'task-3', { full: true });
+  assert.equal(res.diffTruncated, true);
+  assert.ok(Buffer.byteLength(res.diff) <= 1024 * 1024);
+  assert.ok(res.diff.endsWith('\n'));
+  assert.ok(res.diff.includes('+' + 'x'.repeat(99)));
+  const f = byPath(res);
+  assert.equal(f['big.txt'].added, 15000);
+  assert.equal(f['big.txt'].status, 'modified');
+  console.log('  ok diff over limit is truncated');
+}
+
+// Diff within the limit: flag absent
+{
+  const root = makeRepo();
+  CircuitBreaker.recordBaseline(root, 'task-4', git(root, 'rev-parse', 'HEAD'));
+  fs.writeFileSync(path.join(root, 'a.txt'), 'one\n');
+  const res = await taskChanges(root, 'task-4', { full: true });
+  assert.equal(res.diffTruncated, undefined);
+  assert.ok(res.diff.includes('-two'));
+  console.log('  ok small diff is not truncated');
+}
+
 console.log('Git changes tests passed');

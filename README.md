@@ -168,6 +168,9 @@ Every command takes an optional `[targetDir]` (default: the current directory) a
 | [`learn propose`](#nativ-learn-propose) | Propose a lesson for later workers | Agent |
 | [`learn list`](#nativ-learn-list) | List lessons | You, Agent |
 | [`learn approve` / `reject`](#nativ-learn-approve--reject) | Decide on a lesson | *You only* |
+| [`plan propose`](#nativ-plan) | Ask for a change to a task: dependencies, notes, release or drop | Agent |
+| [`plan list`](#nativ-plan) | List plan changes by status or task | You, Agent |
+| [`plan approve` / `reject`](#nativ-plan) | Decide on a plan change | *You only* |
 | [`triage`](#nativ-triage) | Evaluate pending escalations; decision cards for you | You |
 | [`notify test`](#nativ-notify-test) | Check the webhook or command that tells you a decision is waiting | You |
 | [`db status` / `inspect` / `diff`](#nativ-db-status--inspect--diff) | Masked, structure-only database checks | You, Agent |
@@ -324,7 +327,11 @@ The task lifecycle lives in `.ai/master_plan.json`. Never edit it by hand; these
                          │
                          ├──block──────> blocked
                          └──escalate───> blocked  ──(architect resolves)──> pending
+
+ pending or blocked ──plan change (approved)──> dropped   (final)
 ```
+
+`dropped` is final: a dropped task is never picked or started, never satisfies a dependency, settles its milestone, and is left out of progress totals. Only a person approves a drop, through [`plan approve`](#nativ-plan).
 
 #### `nativ task next`
 
@@ -494,6 +501,27 @@ nativ task propose-patch <taskId> --target db_schema --op ADD \
 nativ task unlock <taskId> [targetDir] -r "refactor touches a shared file"
 nativ task unlock <taskId> --revoke
 ```
+
+#### `nativ plan`
+
+Agents cannot change the plan by hand, and a blocked task should not wait for a person to edit JSON. An agent files a change; you approve or reject it. One task per proposal:
+
+```bash
+nativ plan propose <taskId> --add-deps task-12,task-13 --reason "<why>"
+nativ plan propose <taskId> --remove-deps task-12 --reason "<why>"
+nativ plan propose <taskId> --notes "<text>" --reason "<why>"
+nativ plan propose <taskId> --release --reason "<why>"              # blocked to pending
+nativ plan propose <taskId> --drop --replaced-by task-14 --reason "<why>"
+nativ plan approve <id>        # you only, interactive terminal
+nativ plan reject <id>         # you only, interactive terminal
+nativ plan list [--status proposed|approved|rejected] [--task <taskId>] [--json]
+```
+
+At least one change is required, and `--reason` is required (at most 500 characters). `--drop` takes no other change option. Agents also have the MCP tool `nativ_plan_propose`; there is no approve or reject tool.
+
+Every change is checked when filed and again when you approve it, against the live plan: unknown or archived tasks, cycles, dependencies on dropped tasks, releasing a task that is not blocked, and dropping a completed task are refused. Approval re-checks under the plan lock, then applies and records who decided. Dropping a task that others depend on rewires them to the replacement, and the approval shows that before you confirm. A plan change never blocks a task, and triage never applies one.
+
+You decide in the Studio too, but only when it was started from your own terminal, which holds a session key. A Studio started by an agent shows the command to copy instead. The same key guards escalation approvals. Records live in `.ai/plan_changes.json`; `nativ doctor` reports how many wait for approval.
 
 [Back to contents](#contents)
 
@@ -914,7 +942,7 @@ Credentials exist only in `.env*` files and inside the local nativ process. Agen
 
 ### Human gate
 
-Human-only commands (`task complete --no-verify`, `task start --force`, `task unlock`, `task reclaim --force`, `learn approve` and `reject`, `style decide`, `db sync`) run only in an interactive terminal. `CI`, `GITHUB_ACTIONS` and `GITLAB_CI` do not open the gate. The one documented override is `NATIV_HEADLESS_OVERRIDE` set to `1` or `true`; `NATIV_CI_OVERRIDE` stays as an alias and accepts only `1` or `true`. The limit is honest: an agent with a shell could still set the override on purpose. The gate, the deny rules and the directive are layers, not a sandbox.
+Human-only commands (`task complete --no-verify`, `task start --force`, `task unlock`, `task reclaim --force`, `learn approve` and `reject`, `plan approve` and `reject`, `style decide`, `db sync`) run only in an interactive terminal. `CI`, `GITHUB_ACTIONS` and `GITLAB_CI` do not open the gate. The one documented override is `NATIV_HEADLESS_OVERRIDE` set to `1` or `true`; `NATIV_CI_OVERRIDE` stays as an alias and accepts only `1` or `true`. The limit is honest: an agent with a shell could still set the override on purpose. The gate, the deny rules and the directive are layers, not a sandbox.
 
 These actions record who did them from `git config user.name`: a lesson's `decidedBy` (shown in `learn list`), a style decision's `decidedBy` (shown in the previous-choice line of `style decide`), and an unlock entry's `by` in `.nativ/unlocks.json`. The field is optional and the email is never stored.
 
@@ -966,6 +994,7 @@ A deterministic firewall between agents and the contracts:
 | `.ai/escalation.json` | `task escalate`, triage | Escalations and how they were settled |
 | `.ai/code_style.json` | `nativ style scan`, `style decide`, architect | Learned style traits, formatters, rule decisions and patterns |
 | `.ai/learnings.json` | `nativ learn` | Proposed, approved and rejected lessons |
+| `.ai/plan_changes.json` | `nativ plan` | Proposed, approved and rejected plan changes |
 | `.nativ/unlocks.json` | `nativ task unlock` | Unlocked tasks: task id, time, reason and, when a git name exists, who unlocked |
 | `.ai/telemetry.json` | nativ | Durations, costs, pass rates, role violations |
 | `.nativ/runs/transcripts/<runId>.jsonl` | Studio runs | One turn-by-turn record per agent run. See [`nativ runs`](#nativ-runs) |

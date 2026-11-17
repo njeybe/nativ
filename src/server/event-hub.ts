@@ -13,6 +13,7 @@ export type PipelineEventName = 'plan_change' | 'telemetry_change' | 'activity_c
 export const WATCHED_FILES = new Map<string, PipelineEventName>([
   ['master_plan.json', 'plan_change'],
   ['escalation.json', 'plan_change'],
+  ['plan_changes.json', 'plan_change'],
   ['.governor_ledger.json', 'plan_change'],
   ['context.md', 'plan_change'],
   ['db_schema.json', 'plan_change'],

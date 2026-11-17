@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 // Run with `npx tsx tests/test-studio-pipeline-api.mjs`: the studio server is imported from
 // TypeScript source so the Mission Control endpoints are verified without a build step.
 import { startStudioServer } from '../src/server/studio-server.ts';
+import { createStudioSession } from '../src/server/studio-session.ts';
 import { ContractGovernor } from '../src/governor/index.ts';
 import { runTriage } from '../src/commands/triage.ts';
 
@@ -299,10 +300,10 @@ async function withTimeout(promise, ms, label) {
   }
 }
 
-async function requestJson(baseUrl, method, pathname, payload) {
-  const init = { method };
+async function requestJson(baseUrl, method, pathname, payload, extraHeaders = {}) {
+  const init = { method, headers: { ...extraHeaders } };
   if (payload !== undefined) {
-    init.headers = { 'Content-Type': 'application/json' };
+    init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(payload);
   }
   const res = await withTimeout(fetch(`${baseUrl}${pathname}`, init), 60_000, `${method} ${pathname}`);
@@ -504,11 +505,14 @@ const settle = () => delay(400);
 
 try {
   const fullDir = createFixture('nativ-studio-pipeline-', { full: true });
+  const human = createStudioSession();
+  const humanKey = new URL(human.launchUrl('http://127.0.0.1:1/')).searchParams.get('key');
   const studio = await startStudioServer({
     port: 0,
     cwd: fullDir,
     connections: { dev: null, prod: null },
     supervisor: { anthropicClientFactory: fakeAnthropicClient },
+    human,
   });
   servers.push(studio);
   console.log('✔ Studio server started against pipeline fixture:', studio.url);
@@ -530,7 +534,7 @@ try {
     assert.deepEqual(pipeline.milestones, { total: 3, completed: 1, inProgress: 1, pending: 1 });
 
     const { progressPercentage, ...taskCounts } = pipeline.tasks;
-    assert.deepEqual(taskCounts, { total: 8, completed: 2, inProgress: 1, pending: 4, blocked: 1 });
+    assert.deepEqual(taskCounts, { total: 8, completed: 2, inProgress: 1, pending: 4, blocked: 1, dropped: 0 });
     assert.equal(typeof progressPercentage, 'number', 'tasks.progressPercentage must be a number');
     assert.ok(Math.abs(progressPercentage - 25) <= 0.5, `2/8 tasks completed → ~25%, got ${progressPercentage}`);
 
@@ -750,7 +754,7 @@ try {
   {
     const { pipeline } = await getOk(studio.url, '/api/pipeline/status');
     const { progressPercentage, ...taskCounts } = pipeline.tasks;
-    assert.deepEqual(taskCounts, { total: 8, completed: 3, inProgress: 1, pending: 2, blocked: 2 });
+    assert.deepEqual(taskCounts, { total: 8, completed: 3, inProgress: 1, pending: 2, blocked: 2, dropped: 0 });
     assert.ok(
       Math.abs(progressPercentage - 37.5) <= 0.5,
       `3/8 tasks completed → ~37.5%, got ${progressPercentage}`,
@@ -1147,6 +1151,10 @@ try {
 
   // 18. Dual-mode dispatch: the native engine streams runner_token_usage and grounds telemetry in API usage
   {
+    // Dispatch refuses completed tasks, so reopen task-c (completed at step 8) for this block.
+    const reopened = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+    reopened.milestones.flatMap((m) => m.tasks).find((t) => t.id === 'task-c').status = 'pending';
+    writeJsonAtomic(planPath, { ...reopened, lastUpdated: new Date().toISOString() });
     assertContractError(
       'dispatch with an unknown runnerEngine',
       await dispatch({ taskId: 'task-c', runnerEngine: 'gpt' }),
@@ -1164,6 +1172,9 @@ try {
       }),
     );
     assert.equal(nativeRequests.length, 0, 'rejected native dispatches must never reach the Claude API');
+    const refused = await dispatch({ taskId: 'task-a', runnerEngine: 'native' });
+    assert.equal(refused.status, 400, 'a completed task cannot be dispatched');
+    assert.equal(refused.body.code, 'INVALID_TRANSITION');
 
     await settle();
     const mark = alpha.events.length;
@@ -1302,7 +1313,9 @@ try {
       ],
     });
     const listEscalations = (query = '') => getOk(studio.url, `/api/pipeline/escalations${query}`);
-    const resolve = (payload) => requestJson(studio.url, 'POST', '/api/pipeline/escalations/resolve', payload);
+    const resolveRoute = '/api/pipeline/escalations/resolve';
+    const keyCookie = { Cookie: `nativ_studio_key=${humanKey}` };
+    const resolve = (payload) => requestJson(studio.url, 'POST', resolveRoute, payload, keyCookie);
     const trip = async (taskId, column) => {
       for (let i = 0; i < 3; i++) {
         ContractGovernor.evaluate(fullDir, {
@@ -1364,6 +1377,14 @@ try {
       await resolve({ escalationId: escF.id, decision: 'approve', notes: 5 }),
     );
 
+    // Without the launch-link cookie a decision is refused and the escalation file stays byte-identical.
+    const escFile = path.join(fullDir, '.ai', 'escalation.json');
+    const escBytes = fs.readFileSync(escFile);
+    const anon = await requestJson(studio.url, 'POST', resolveRoute, { escalationId: escF.id, decision: 'approve' });
+    assert.equal(anon.status, 403, `resolve without cookie → HTTP ${anon.status}: ${JSON.stringify(anon.body)}`);
+    assert.equal(anon.body.code, 'HUMAN_KEY_REQUIRED', 'the refusal names the missing human key');
+    assert.ok(fs.readFileSync(escFile).equals(escBytes), 'a refused resolve leaves escalation.json unchanged');
+
     // Approve: the proven candidate is applied, the breaker reset and the task unblocked — streamed as plan_change.
     await settle();
     const mark = alpha.events.length;
@@ -1415,7 +1436,7 @@ try {
     assert.equal(closed.length, 2, '"resolved" lists every closed escalation');
     assert.equal(closed.find((e) => e.id === escH.id).status, 'dismissed');
 
-    const wrongMethod = await requestJson(studio.url, 'GET', '/api/pipeline/escalations/resolve');
+    const wrongMethod = await requestJson(studio.url, 'GET', resolveRoute, undefined, keyCookie);
     assert.equal(wrongMethod.status, 405, 'GET on the resolve route is a method error, not a 404');
     console.log(
       '✔ Escalations list sandbox-verified proposals; approve applies + ' +

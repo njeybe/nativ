@@ -76,7 +76,8 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       run: run,
       latestLog: lastLine(index.logTail[t.id]),
       escalation: esc1,
-      hasProposal: !!(esc1 && esc1.proposedPatch)
+      hasProposal: !!(esc1 && esc1.proposedPatch),
+      drop: t.drop || null
     };
   }
 
@@ -96,10 +97,15 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     return index;
   }
 
+  // Dropped tasks are replaced, so they do not count toward milestone totals.
+  function countLive(tasks) {
+    return tasks.filter(function (t) { return t.status !== 'dropped'; }).length;
+  }
+
   function finishMilestone(m) {
     // An archived milestone keeps its task count, so overall progress does not drop.
     var kept = m.archived ? (m.archived.taskCount || 0) : 0;
-    m.total = m.tasks.length + kept;
+    m.total = countLive(m.tasks) + kept;
     m.done = m.tasks.filter(function (t) { return t.status === 'completed'; }).length + kept;
     var ends = m.tasks.map(function (t) { return t.endT || 0; });
     m.lastEndT = Math.max.apply(null, [0].concat(ends)) || null;
@@ -119,7 +125,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     });
   }
 
-  function needsYouItems(tasks, byId, escalations, styleDecisions) {
+  function needsYouItems(tasks, byId, escalations, styleDecisions, planChanges) {
     var seen = {}, items = [];
     var add = function (t) {
       seen[t.id] = true;
@@ -131,7 +137,10 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       var pending = e && (!e.status || e.status === 'pending_review');
       var t = pending && byId[e.taskId];
       // A completed task answered its own question; a left-over pending record is not a request for you.
-      if (t && t.status !== 'completed' && !seen[e.taskId]) add(t);
+      if (t && t.status !== 'completed' && t.status !== 'dropped' && !seen[e.taskId]) add(t);
+    });
+    (planChanges || []).forEach(function (c) {
+      if (c && c.status === 'proposed') items.push({ kind: 'plan', key: 'plan:' + c.id, change: c });
     });
     styleDecisions.forEach(function (d) {
       items.push({ kind: 'style', key: 'style:' + d.rule, rule: d.rule, title: d.title,
@@ -147,6 +156,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
     var contracts = api.status && api.status.contracts;
     var kept = milestones.reduce(function (n, m) { return n + (m.archived ? m.archived.taskCount || 0 : 0); }, 0);
     var done = tasks.filter(function (t) { return t.status === 'completed'; }).length + kept;
+    var total = countLive(tasks) + kept;
     return {
       spendUsd: pick(act && act.spendUsd, st && st.actualSpendUsd),
       cacheHitRate: pick(act && act.cacheHitRate, st && st.cacheHitRate),
@@ -155,13 +165,14 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       contractsTotal: 5,
       milestonesTotal: milestones.length,
       milestonesDone: milestones.filter(function (m) { return m.total > 0 && m.done === m.total; }).length,
-      tasksTotal: tasks.length + kept,
+      tasksTotal: total,
       tasksDone: done,
-      tasksLeft: tasks.length + kept - done
+      tasksLeft: total - done
     };
   }
 
-  /** api = { milestones, status, telemetry, runs, escalations, logTail }, the raw slices from the server. */
+  /** api = { milestones, status, telemetry, runs, escalations, planChanges, logTail },
+   *  the raw slices from the server. */
   function buildModel(api) {
     api = api || {};
     var index = indexApi(api);
@@ -196,7 +207,7 @@ export const modelScript = String.raw`  // ─── Studio client model: buildM
       activeMilestoneId: active,
       running: tasks.filter(function (t) { return t.status === 'in_progress' && !t.stale; }),
       stuck: tasks.filter(function (t) { return t.status === 'blocked'; }),
-      needsYou: needsYouItems(tasks, byId, api.escalations, styleDecisions),
+      needsYou: needsYouItems(tasks, byId, api.escalations, styleDecisions, api.planChanges),
       summary: summaryOf(api, milestones, tasks)
     };
   }

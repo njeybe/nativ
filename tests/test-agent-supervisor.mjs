@@ -175,7 +175,7 @@ function createFixture() {
       'let n = 0;',
       'const timer = setInterval(() => {',
       "  process.stdout.write(`agent: step ${++n}\\n`);",
-      '  if (n === 10) { clearInterval(timer); process.exit(0); }',
+      '  if (n === 30) { clearInterval(timer); process.exit(0); }',
       '}, 250);',
     ].join('\n'),
     'utf8',
@@ -1054,11 +1054,23 @@ try {
   const idleRun = await idleFailed;
   assert.equal(idleRun.timedOut, true);
   assert.match(idleRun.error, /no output for 1s/, 'a silent runner is stopped long before the hard cap');
-  const chattyDone = waitForStatus(idleSup, 'task-chatty', ['completed', 'failed'], 20_000);
-  await idleSup.dispatch({ taskId: 'task-chatty', runnerCommand: mockCommand(dir, 'chatty.mjs'), useWorktree: false, timeoutSeconds: 60 });
+  // The busy runner gets a wider window so slow process start-up cannot trip it under load.
+  const chattySup = new AgentSupervisor({ cwd: dir, killGraceMs: 200, idleTimeoutSeconds: 3 });
+  const chattyDone = waitForStatus(chattySup, 'task-chatty', ['completed', 'failed'], 20_000);
+  await chattySup.dispatch({
+    taskId: 'task-chatty',
+    runnerCommand: mockCommand(dir, 'chatty.mjs'),
+    useWorktree: false,
+    timeoutSeconds: 60,
+  });
   const chattyRun = await chattyDone;
-  assert.equal(chattyRun.status, 'completed', `a runner that keeps talking must outlive the idle window: ${chattyRun.error}`);
+  assert.equal(
+    chattyRun.status,
+    'completed',
+    `a runner that keeps talking must outlive the idle window: ${chattyRun.error}`,
+  );
   idleSup.shutdown();
+  chattySup.shutdown();
   console.log('✔ A silent runner was stopped by the watchdog; a busy one ran past the idle window.');
 
   // ── 23. Claude Code stream-json becomes readable logs and grounded usage ──

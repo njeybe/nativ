@@ -32,6 +32,7 @@ import {
 import { runDbStatus, runDbInspect, runDbDiff } from '../commands/db.js';
 import { runVerify } from '../commands/verify.js';
 import { runLearnPropose } from '../commands/learn.js';
+import { isRefusal, proposePlanChange } from '../core/plan-changes.js';
 import { runTestGen } from '../commands/test-gen.js';
 import { runBench } from '../commands/bench.js';
 import { TEST_FRAMEWORKS } from '../core/test-generator-types.js';
@@ -81,7 +82,10 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       description: 'List project tasks from .ai/master_plan.json with optional filters (JSON summary; full for every field).',
       inputSchema: {
         available: z.boolean().optional().describe('Only tasks that are unblocked and ready for execution'),
-        status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional().describe('Filter by task status'),
+        status: z
+          .enum(['pending', 'in_progress', 'completed', 'blocked', 'dropped'])
+          .optional()
+          .describe('Filter by task status'),
         milestone: z.string().optional().describe('Filter by milestone ID or name'),
         fastPath: z.boolean().optional().describe('Only fast-path tasks'),
         full: z.boolean().optional().describe('Return every task field; the default is a short summary per task'),
@@ -295,6 +299,37 @@ export function createMcpServer(targetDirArg?: string): McpServer {
       captureOutput(() =>
         runLearnPropose(insight, targetDir, { details, role, files: files?.join(','), task: taskId, json: true }),
       ),
+  );
+
+  registerNativTool(
+    'plan_propose',
+    {
+      description:
+        'Propose a change to one task in the plan: dependencies, notes, release a blocked task, or drop it. ' +
+        'It waits for a human to approve it in a terminal; there is no tool to approve.',
+      inputSchema: {
+        taskId: z.string().min(1).describe('The task the change is for'),
+        addDependencies: z.array(z.string()).optional().describe('Task ids to add as dependencies'),
+        removeDependencies: z.array(z.string()).optional().describe('Task ids to remove from dependencies'),
+        notes: z.string().optional().describe('Replaces the task notes'),
+        release: z.boolean().optional().describe('Move a blocked task back to pending'),
+        drop: z.boolean().optional().describe('Drop the task; excludes every other change'),
+        replacedBy: z.string().optional().describe('With drop: the task that replaces it'),
+        reason: z.string().min(1).max(500).describe('Why the change is needed'),
+        fromTask: z.string().optional().describe('The task where it came up'),
+      },
+    },
+    async (args) => {
+      const { drop, replacedBy, reason, ...rest } = args;
+      const result = proposePlanChange(targetDir, {
+        ...rest,
+        reason,
+        ...(drop ? { drop: { reason, replacedBy } } : {}),
+      });
+      const failed = isRefusal(result);
+      const text = isRefusal(result) ? result.message : JSON.stringify(result, null, 2);
+      return { content: [{ type: 'text' as const, text }], isError: failed || undefined };
+    },
   );
 
   registerNativTool(

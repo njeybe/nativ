@@ -22,6 +22,8 @@ const NODE_SUITES = [
   'style-store', 'style-sources', 'style-measure-js', 'style-measure-python', 'style-formatters', 'style-aggregate',
   'style-scan', 'style-health', 'init-style', 'style-conflicts', 'style-status',
   'style-decide', 'style-delivery', 'style-prompt', 'style-templates', 'style-drift',
+  'plan-status', 'plan-changes', 'plan-command', 'dropped-lifecycle', 'dropped-readers', 'mcp-plan-propose',
+  'plan-change-gate', 'studio-session', 'studio-plan-changes-api', 'studio-plan-changes-ui', 'studio-dropped-ui',
 ];
 const TSX_SUITES = [
   'studio-pipeline-api', 'studio-light-ui', 'studio-shell', 'studio-home', 'studio-tasks-view', 'studio-flow',

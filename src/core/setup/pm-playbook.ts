@@ -21,6 +21,7 @@ When told to run autonomously ("run the queue", "execute milestone", AFK mode):
 3. The worker completes the task itself; \`nativ task complete\` already ran the check. Do not run \`nativ_verify\` or \`nativ_task_complete\` again for it.
 4. Loop to the next task immediately, without asking the human.
 5. Stop only when the milestone is done or when a task is blocked or escalated (present the four-part summary).
+A plan change an agent proposed waits for the human: give them the one command \`nativ plan approve <id>\`.
 
 ## Finished milestones
 
