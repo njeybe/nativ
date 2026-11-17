@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, type SpawnOptions } from 'node:child_process';
 import pc from 'picocolors';
 import type { DatabaseEnv, TableSchema } from '../db/types.js';
 import { diffSchemas, loadContractTables } from '../db/diff.js';
@@ -170,19 +170,46 @@ export async function runDbSync(targetDirArg?: string, options: { source?: strin
   console.log(pc.green(`✔ Wrote ${count} ${entityWord} (structure only, no credentials) to ${path.relative(targetDir, filePath)}\n`));
 }
 
+export interface BrowserCommand {
+  command: string;
+  args: string[];
+  options: SpawnOptions;
+}
+
+// Windows: cmd joins args raw, so the quoted title and URL must not be re-escaped.
+export function browserCommand(url: string, platform: NodeJS.Platform): BrowserCommand {
+  const base: SpawnOptions = { stdio: 'ignore', detached: true, windowsHide: true };
+  if (platform === 'win32') {
+    return {
+      command: 'cmd',
+      args: ['/c', 'start', '""', `"${url}"`],
+      options: { ...base, windowsVerbatimArguments: true },
+    };
+  }
+  const command = platform === 'darwin' ? 'open' : 'xdg-open';
+  return { command, args: [url], options: base };
+}
+
+export function launchLines(url: string, keyed: boolean): string[] {
+  const lines = ['  Open the Studio:', url];
+  if (!keyed) lines.push(pc.dim('  Headless start: decisions stay with the CLI for this run.'));
+  return lines;
+}
+
 function openBrowser(url: string): void {
-  const [cmd, args] =
-    process.platform === 'win32'
-      ? ['cmd', ['/c', 'start', '""', url]]
-      : process.platform === 'darwin'
-        ? ['open', [url]]
-        : ['xdg-open', [url]];
+  let reported = false;
+  const onFailure = (): void => {
+    if (reported) return;
+    reported = true;
+    console.log('  Could not open a browser. Open the link above.');
+  };
   try {
-    const child = spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true });
-    child.on('error', () => undefined);
+    const { command, args, options } = browserCommand(url, process.platform);
+    const child = spawn(command, args, options);
+    child.on('error', onFailure);
     child.unref();
   } catch {
-    // Headless environment — the URL is printed anyway.
+    onFailure();
   }
 }
 
@@ -226,8 +253,7 @@ export async function runDbUi(targetDirArg?: string, options: { port?: string; o
   console.log(pc.dim('  Credentials stay in this process only. Press Ctrl+C to stop.\n'));
 
   const launchUrl = human.launchUrl(`http://127.0.0.1:${handle.port}/`);
-  console.log(`  Open: ${launchUrl}`);
-  if (!human.keyed) console.log(pc.dim('  Headless start: decisions stay with the CLI for this run.'));
+  for (const line of launchLines(launchUrl, human.keyed)) console.log(line);
   console.log('');
   if (options.open !== false) openBrowser(launchUrl);
 
